@@ -185,11 +185,41 @@ function enumValues(prop) {
   return [...found]
 }
 
+/** the parameter names fal endpoints use for a reference image, most common first */
+const IMAGE_INPUT_KEYS = [
+  'image_url',
+  'image_urls',
+  'image',
+  'input_image',
+  'image_reference',
+  'reference_image',
+  'init_image',
+]
+
+/** Which of a model's parameters takes the reference image, if any. */
+function imageParamFor(props) {
+  for (const key of IMAGE_INPUT_KEYS) {
+    const prop = props?.[key]
+    if (!prop) continue
+    return { key, isArray: prop.type === 'array' || Boolean(prop.items) }
+  }
+  // A wider net for unusual spellings, but never a counter or a sizing option:
+  // num_images and image_size are not image inputs.
+  const match = Object.keys(props || {}).find(
+    (k) => /(^|_)images?(_|$)/.test(k) && !/num|count|size|format|strength|checker|per/.test(k),
+  )
+  if (match) {
+    const prop = props[match]
+    return { key: match, isArray: prop?.type === 'array' || Boolean(prop?.items) }
+  }
+  return null
+}
+
 /**
  * Build the smallest body the model actually understands: prompt always, the
  * rest only when the schema declares it.
  */
-async function buildBody(model, { prompt, count, size, schemaUrl }) {
+async function buildBody(model, { prompt, count, size, imageUrl, schemaUrl }) {
   const schema = await schemaFor(model, schemaUrl)
   const props = schema?.properties || {}
   const body = { prompt }
@@ -219,6 +249,24 @@ async function buildBody(model, { prompt, count, size, schemaUrl }) {
   if (props.enable_safety_checker) {
     // stay on fal's default; recorded in the log so the behaviour is inspectable
     applied.push('safety checker: fal default')
+  }
+
+  // a reference image turns this into an edit: the same user text is the prompt
+  if (imageUrl) {
+    const param = imageParamFor(props)
+    if (!param) {
+      return {
+        body,
+        applied,
+        schema,
+        error:
+          `${model} does not accept a reference image, so it cannot edit one. Pick an image-to-image ` +
+          'model in Settings → Images.',
+      }
+    }
+    body[param.key] = param.isArray ? [imageUrl] : imageUrl
+    // never log the data URI itself, only how big it is
+    applied.push(`${param.key}=reference image (${Math.round(String(imageUrl).length / 1024)} KB inline)`)
   }
 
   return { body, applied, schema }
@@ -267,6 +315,7 @@ async function generate({
   prompt,
   count = 1,
   size,
+  imageUrl,
   imagesDir,
   endpoints,
   onProgress = () => {},
@@ -274,19 +323,34 @@ async function generate({
   const ep = { ...DEFAULT_ENDPOINTS, ...(endpoints || {}) }
   if (!key) return { ok: false, error: 'No fal.ai API key saved yet. Add one in Settings → Images.' }
   if (!model) return { ok: false, error: 'No fal.ai model selected. Pick one in Settings → Images.' }
-  if (!prompt || !prompt.trim()) return { ok: false, error: 'Nothing to draw — the prompt was empty.' }
+  if (!prompt || !prompt.trim()) {
+    return {
+      ok: false,
+      error: imageUrl
+        ? 'Tell me what to change about the image — the instruction was empty.'
+        : 'Nothing to draw — the prompt was empty.',
+    }
+  }
 
-  const { body, applied } = await buildBody(model, {
+  const { body, applied, error: bodyError } = await buildBody(model, {
     prompt: prompt.trim(),
     count,
     size,
+    imageUrl,
     schemaUrl: ep.schema,
   })
+  if (bodyError) return { ok: false, error: bodyError }
   onProgress({ phase: 'submitting', detail: `sending to ${model}` })
 
   const submit = await falFetch(`${ep.queue}/${model}`, { key, method: 'POST', body, timeout: 60000 })
   if (!submit.ok) {
-    return { ok: false, error: describeError(submit.status, submit.json || submit.text), status: submit.status }
+    let error = describeError(submit.status, submit.json || submit.text)
+    // a reference that fal will not take is the likeliest cause of a rejected edit
+    if (imageUrl && submit.status === 422) {
+      error +=
+        ' The reference image may be too large, or this endpoint may want a hosted URL rather than inline data — try another edit model in Settings → Images.'
+    }
+    return { ok: false, error, status: submit.status }
   }
 
   const { request_id, status_url, response_url } = submit.json || {}
@@ -359,6 +423,8 @@ module.exports = {
   generate,
   schemaFor,
   persistImage,
+  buildBody,
+  imageParamFor,
   SIZE_PRESETS,
   describeError,
   pricingMap,

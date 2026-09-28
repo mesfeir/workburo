@@ -75,6 +75,8 @@ export interface ZenApi {
       prompt: string
       count: number
       size: string
+      /** a reference image as a data URI, which turns this into an edit */
+      imageUrl?: string
     }) => Promise<ImageGenResult>
     saveAs: (file: string) => Promise<{ ok: boolean; path?: string; error?: string; canceled?: boolean }>
     openFolder: () => Promise<{ ok: boolean; error: string | null }>

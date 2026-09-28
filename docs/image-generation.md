@@ -39,6 +39,33 @@ there is no CORS to negotiate. Specifically:
   back to the reply, which is why the key never reaches the renderer. Progress (queued → generating
   → downloading) streams onto the tool row while fal works.
 
+### Reference edits (image-to-image)
+
+Attaching a picture changes the shape of the request, and the trigger is the attachment itself
+rather than a mode you switch on:
+
+- **Your words are the prompt.** When a message carries an image, the picture and the text you
+  typed go to an edit endpoint together. Nothing rewrites the instruction — the model is not
+  consulted, so there is no "here is what I see in your image" step and no re-described prompt.
+  The reply is fal's picture, or fal's reason.
+- **Which endpoint** is `editModel`, chosen in Settings → Images from fal's own `image-to-image`
+  list; the default is `fal-ai/flux/dev/image-to-image`.
+- **Which parameter** the reference goes in comes from that endpoint's schema, not from a guess:
+  `image_url`, `image_urls` (a one-item list), `image`, `input_image`, `init_image` and similar are
+  probed in that order, and counters or sizing options (`num_images`, `image_size`) are explicitly
+  never mistaken for an image input. An endpoint that declares no image parameter is refused with
+  *"…does not accept a reference image"* rather than being sent a prompt-only draw.
+- **The reference travels inline** as a data URI, re-encoded in the main process with Electron's
+  `nativeImage` and capped at 1536px on the long edge (and again at 1024px if the JPEG still
+  exceeds 4 MB). A hard-to-decode reference fails the request outright — it never silently becomes a
+  text-to-image draw.
+- **An empty instruction is refused** before anything is sent: an edit with no change described has
+  nothing to do.
+- **The switch beside the thumbnail** ("Edit image" / "Ask about it") keeps the ordinary vision path
+  reachable — attaching a picture to ask *what is in it* still works, it is just no longer the
+  default gesture. The switch resets to **Edit image** when the attachments are cleared.
+- **Cost** is the same per-megapixel rate as generation, billed on the output.
+
 ### Cost, for reference
 
 fal prices by the megapixel, rounded up, so the floor matters more than the model choice:

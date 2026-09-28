@@ -426,6 +426,30 @@ async function run({ win, apiKey, toggle, hide, isVisible, isRegistered, readBou
     'image thumbnail',
   )
   await shot(win, '05-image-attached')
+
+  // An attachment now defaults to a fal edit, so this check has to ask for the model
+  // explicitly — which is also the only place the "Ask about it" escape hatch is
+  // exercised end to end.
+  const askedSwitch = await inPage(win, function () {
+    const box = document.querySelector('[data-refmode]')
+    if (!box) return false
+    const b = Array.from(box.querySelectorAll('button')).find(
+      (x) => (x.textContent || '').trim() === 'Ask about it',
+    )
+    if (b) b.click()
+    return Boolean(b)
+  })
+  await sleep(300)
+  const askHint = await inPage(win, function () {
+    const h = document.querySelector('[data-refhint]')
+    return h ? (h.textContent || '').trim() : null
+  })
+  record(
+    'the Ask switch hands the picture back to the model',
+    askedSwitch === true && /the model reads the image/i.test(askHint || ''),
+    `clicked=${askedSwitch} hint="${askHint}"`,
+  )
+
   await inPage(win, pageSend)
   const turnsBefore = await inPage(win, pageAssistantTurns)
   await waitFor(
@@ -475,6 +499,16 @@ async function run({ win, apiKey, toggle, hide, isVisible, isRegistered, readBou
   await inPage(win, pageType, ['hello'])
   await inPage(win, pagePasteImage, [testImageDataUrl])
   await sleep(1200)
+  // an attachment defaults to a fal edit now, so ask for the model explicitly here:
+  // the point of this check is the chat model's own refusal, not fal's
+  await inPage(win, function () {
+    const box = document.querySelector('[data-refmode]')
+    const b = box
+      ? Array.from(box.querySelectorAll('button')).find((x) => (x.textContent || '').trim() === 'Ask about it')
+      : null
+    if (b) b.click()
+  })
+  await sleep(300)
   await inPage(win, pageSend)
   await waitFor(
     win,
@@ -803,6 +837,202 @@ async function run({ win, apiKey, toggle, hide, isVisible, isRegistered, readBou
     console.log('SKIP  drawing for real (no ZEN_FAL_KEY in the environment)')
   }
   await shot(win, '15-image-tool')
+
+  // ---------- 14c. a reference image is edited at fal — no model in the loop
+  // Attaching a picture and typing an instruction must send BOTH to fal: the user's
+  // own words are the prompt, the picture is the reference. If a chat model produced
+  // that reply it would show up as prose under the relay's model id, so the saved
+  // message is the ground truth here — its model must be a fal endpoint and its text
+  // must be empty.
+  const { nativeImage } = require('electron')
+  const bgra = Buffer.alloc(8 * 8 * 4)
+  for (let i = 0; i < bgra.length; i += 4) {
+    bgra[i] = 200 // B
+    bgra[i + 1] = 120 // G
+    bgra[i + 2] = 40 // R
+    bgra[i + 3] = 255
+  }
+  const refPng = `data:image/png;base64,${nativeImage
+    .createFromBitmap(bgra, { width: 8, height: 8 })
+    .toPNG()
+    .toString('base64')}`
+
+  await inPage(win, function () {
+    const b = Array.from(document.querySelectorAll('button')).find(
+      (x) => (x.textContent || '').trim() === 'New chat',
+    )
+    if (b) b.click()
+  })
+  await sleep(700)
+  const beforeEdit = await inPage(win, pageAssistantTurns)
+  // the fal path deliberately does not set the streaming flag, so "idle" in the DOM
+  // means nothing here — the store's finished fal replies are the real completion signal
+  const falBefore = await inPage(win, function () {
+    return window.zen.store.get().then((s) =>
+      (s.conversations || []).reduce(
+        (n, c) =>
+          n +
+          (c.messages || []).filter((m) => String(m.model || '').startsWith('fal-ai/') && m.finished).length,
+        0,
+      ),
+    )
+  })
+
+  const pastedRef = await inPage(win, pagePasteImage, [refPng])
+  await sleep(600)
+  const refUi = await inPage(win, function () {
+    const seg = document.querySelector('[data-refmode]')
+    const hint = document.querySelector('[data-refhint]')
+    return {
+      // the composer thumbnails are the 64px previews; allow for rounding and zoom
+      thumbs: Array.from(document.querySelectorAll('img')).filter(
+        (i) => i.clientWidth >= 50 && i.clientWidth <= 72,
+      ).length,
+      seg: seg ? (seg.innerText || '').replace(/\s+/g, ' ').trim() : null,
+      hint: hint ? (hint.textContent || '').trim() : null,
+    }
+  })
+  record(
+    'attaching a picture offers edit-or-ask and starts on edit',
+    pastedRef === true &&
+      refUi.thumbs === 1 &&
+      /Edit image/.test(refUi.seg || '') &&
+      /Ask about it/.test(refUi.seg || '') &&
+      /fal prompt/.test(refUi.hint || ''),
+    `thumbs=${refUi.thumbs} seg="${refUi.seg}" hint="${refUi.hint}"`,
+  )
+
+  const EDIT_ASK = 'make the sky orange and remove the car'
+  await inPage(win, pageType, [EDIT_ASK])
+  await inPage(win, pageSend)
+
+  if (hasFalKey) {
+    const editLanded = await waitFor(
+      win,
+      new Function(
+        `return function(){ return window.zen.store.get().then(function(s){ return (s.conversations||[]).reduce(function(n,c){ return n + (c.messages||[]).filter(function(m){ return String(m.model||'').startsWith('fal-ai/') && m.finished }).length }, 0) > ${falBefore} }) }`,
+      )(),
+      300000,
+      700,
+      'the reference edit to finish',
+    )
+    record(
+      'the edit request reaches fal and comes back finished',
+      editLanded === true,
+      `finished fal replies before=${falBefore}`,
+    )
+    await sleep(1200)
+    const editReply = await inPage(win, function () {
+      return window.zen.store.get().then((s) => {
+        const c = (s.conversations || [])[0]
+        if (!c) return null
+        const m = c.messages[c.messages.length - 1]
+        const u = c.messages[c.messages.length - 2]
+        return {
+          role: m ? m.role : null,
+          model: m ? m.model : null,
+          content: String((m && m.content) || ''),
+          images: m && m.images ? m.images.length : 0,
+          error: (m && m.error) || null,
+          ask: String((u && u.content) || ''),
+          askImages: u && u.images ? u.images.length : 0,
+        }
+      })
+    })
+    record(
+      'the attachment is edited at fal, with the instruction sent as typed',
+      Boolean(editReply) &&
+        editReply.role === 'assistant' &&
+        String(editReply.model || '').startsWith('fal-ai/') &&
+        editReply.ask === EDIT_ASK &&
+        editReply.askImages === 1,
+      `model=${editReply && editReply.model} ask="${editReply && editReply.ask}" refImgs=${editReply && editReply.askImages}`,
+    )
+    record(
+      'no chat model wrote that reply — it is fal’s picture or fal’s own reason',
+      Boolean(editReply) &&
+        editReply.content === '' &&
+        (editReply.images > 0 || /fal|balance|locked|credit|reference/i.test(editReply.error || '')),
+      `images=${editReply && editReply.images} text=${JSON.stringify((editReply && editReply.content) || '').slice(0, 60)} error="${String((editReply && editReply.error) || '').slice(0, 130)}"`,
+    )
+    const edited = await inPage(win, function () {
+      const all = document.querySelectorAll('[data-msg]')
+      const wrap = all[all.length - 1]
+      return {
+        imgs: wrap ? wrap.querySelectorAll('img').length : 0,
+        toolRows: wrap ? wrap.querySelectorAll('[data-tools] button').length : 0,
+        text: (wrap ? wrap.innerText || '' : '').replace(/\s+/g, ' ').slice(0, 220),
+      }
+    })
+    record(
+      'the reply shows the edited picture, or says why it could not be made',
+      edited.imgs > 0 || /balance|locked|credit|Settings → Images/i.test(edited.text),
+      `imgs=${edited.imgs} toolRows=${edited.toolRows} text="${edited.text.slice(0, 160)}"`,
+    )
+  } else {
+    // No key: the app must say so and must NOT quietly hand the picture to the
+    // chat model as a vision question instead.
+    await sleep(1200)
+    const refused = await inPage(win, function () {
+      return {
+        toast: /No fal\.ai key saved/i.test(document.body.innerText || ''),
+        turns: document.querySelectorAll('.prose-zen').length,
+      }
+    })
+    record(
+      'with no fal key the edit is refused and points at Settings',
+      refused.toast === true,
+      JSON.stringify(refused),
+    )
+    record(
+      'and nothing was sent to the chat model in its place',
+      refused.turns === beforeEdit,
+      `turns ${beforeEdit} -> ${refused.turns}`,
+    )
+  }
+  await shot(win, '16-reference-edit')
+
+  // ---------- 14d. the edit endpoint really is choosable, and the Images tab renders
+  // The Images tab shipped once with the tab missing from a hardcoded strip, so it is
+  // checked rather than assumed: the new picker must exist and offer the default.
+  await inPage(win, function () {
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: ',', ctrlKey: true, bubbles: true }))
+  })
+  await sleep(900)
+  const imagesTab = await inPage(win, function () {
+    const t = Array.from(document.querySelectorAll('button')).find(
+      (b) => (b.textContent || '').trim() === 'Images',
+    )
+    if (t) t.click()
+    return Boolean(t)
+  })
+  await sleep(1200)
+  const editPicker = await inPage(win, function () {
+    const sel = document.querySelector('[data-fal-editmodel]')
+    if (!sel) return null
+    const opts = Array.from(sel.options).map((o) => o.value)
+    return {
+      value: sel.value,
+      options: opts.length,
+      hasDefault: opts.includes('fal-ai/flux/dev/image-to-image'),
+      allImageToImage: opts.every((v) => /image-to-image|\/edit$|-edit/.test(v)),
+    }
+  })
+  record(
+    'the edit endpoint is choosable in Settings → Images, defaulting to flux/dev/i2i',
+    imagesTab === true && Boolean(editPicker) && editPicker.hasDefault,
+    JSON.stringify(editPicker),
+  )
+  record(
+    'the picker offers image-to-image endpoints, not text-to-image ones',
+    Boolean(editPicker) && editPicker.allImageToImage,
+    JSON.stringify((editPicker && editPicker.options) || 0),
+  )
+  await shot(win, '17-images-tab')
+  await inPage(win, function () {
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  })
+  await sleep(700)
 
   // ---------- 15. the off switch really turns tools off
   await inPage(win, function () {

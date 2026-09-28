@@ -127,6 +127,8 @@ function defaultStore() {
         provider: 'fal',
         falKey: '',
         model: 'fal-ai/flux/schnell',
+        // used when a message carries a reference image
+        editModel: 'fal-ai/flux/dev/image-to-image',
         count: 1,
         size: 'square_hd',
       },
@@ -1476,15 +1478,67 @@ ipcMain.handle('window:resetBounds', () => {
 ipcMain.handle('app:openStore', () => shell.showItemInFolder(storePath()))
 
 /* ------------------------------------------------------------ IPC: images */
-// Hosted generation via fal.ai. The key never leaves the main process, and a
-// prompt only ever goes to fal when the user has switched image mode on.
+// Hosted generation via fal.ai. The key never leaves the main process. Text-to-image
+// is driven by the model's own tool call; an edit is driven by the user attaching a
+// reference image, with their words sent to fal as the prompt.
 
 ipcMain.handle('images:options', () => ({ sizes: falImages.SIZE_PRESETS }))
 
 ipcMain.handle('images:models', async (_e, { key }) => falImages.listModels(String(key || '')))
 
+/**
+ * A pasted screenshot can be many megabytes, and the reference travels inline as a
+ * data URI, so shrink the long edge and re-encode before it goes on the wire.
+ */
+function prepareReference(raw) {
+  const src = String(raw || '')
+  if (!src) return ''
+  let img
+  try {
+    img = src.startsWith('data:')
+      ? nativeImage.createFromDataURL(src)
+      : nativeImage.createFromPath(src.replace(/^file:\/+/, ''))
+  } catch {
+    return ''
+  }
+  if (!img || img.isEmpty()) return ''
+  const size = img.getSize()
+  const long = Math.max(size.width, size.height)
+  let out = img
+  if (long > 1536) {
+    const scale = 1536 / long
+    out = img.resize({
+      width: Math.max(1, Math.round(size.width * scale)),
+      height: Math.max(1, Math.round(size.height * scale)),
+      quality: 'good',
+    })
+  }
+  let buf = out.toJPEG(92)
+  if (buf.length > 4 * 1024 * 1024) {
+    const s = out.getSize()
+    const scale = 1024 / Math.max(s.width, s.height)
+    out = out.resize({
+      width: Math.max(1, Math.round(s.width * scale)),
+      height: Math.max(1, Math.round(s.height * scale)),
+      quality: 'good',
+    })
+    buf = out.toJPEG(88)
+  }
+  return `data:image/jpeg;base64,${buf.toString('base64')}`
+}
+
 ipcMain.handle('images:generate', async (_e, req) => {
-  const { key, model, prompt, count, size, requestId } = req || {}
+  const { key, model, prompt, count, size, requestId, imageUrl } = req || {}
+  // A reference that cannot be decoded must fail loudly. Falling back to a plain
+  // text-to-image draw here would silently ignore the picture the user attached.
+  const reference = prepareReference(imageUrl)
+  if (imageUrl && !reference) {
+    return {
+      ok: false,
+      error:
+        'That reference image could not be read, so there was nothing to edit. Attach it again as a PNG or JPEG.',
+    }
+  }
   try {
     return await falImages.generate({
       key: String(key || ''),
@@ -1492,6 +1546,8 @@ ipcMain.handle('images:generate', async (_e, req) => {
       prompt: String(prompt || ''),
       count: Number(count) || 1,
       size: String(size || ''),
+      // absent for text-to-image, present when the message carried a reference
+      imageUrl: reference,
       imagesDir: imagesDir(),
       onProgress: (p) => sendToRenderer('images:progress', { requestId, ...p }),
     })

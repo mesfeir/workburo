@@ -103,6 +103,8 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null)
   /** composer is aimed at the image generator instead of the chat model */
   const [imageMode, setImageMode] = useState(false)
+  /** a reference image is edited at fal by default, or read by the model on request */
+  const [refEdit, setRefEdit] = useState(true)
   /** which settings tab to open on, when something other than us asks for it */
   const [settingsTab, setSettingsTab] = useState<SettingsTab | undefined>(undefined)
   /** live image requests -> the message they will fill in */
@@ -372,12 +374,109 @@ export default function App() {
     [],
   )
 
+  /**
+   * Edit a reference image at fal: the attached image is the reference and the user's
+   * own words are the prompt. No chat model is involved, so nothing gets re-described
+   * and no tool call is needed — the change the user typed is what fal is asked for.
+   */
+  const runFalEdit = useCallback(async (convId: string, prompt: string, refUrl: string) => {
+    const cfg = configRef.current
+    const im = cfg.imageGen
+    const model = im?.editModel || 'fal-ai/flux/dev/image-to-image'
+    const asstId = uid()
+    const placeholder: ChatMessage = {
+      id: asstId,
+      role: 'assistant',
+      content: '',
+      images: [],
+      model,
+      note: 'fal · starting',
+      createdAt: Date.now(),
+      streaming: false,
+      finished: false,
+    }
+
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id !== convId
+          ? c
+          : { ...c, messages: [...c.messages, placeholder], updatedAt: Date.now() },
+      ),
+    )
+    setBusy(true)
+
+    const requestId = uid()
+    genRef.current.set(requestId, { convId, msgId: asstId })
+
+    let res
+    try {
+      res = await window.zen.images.generate({
+        requestId,
+        key: im?.falKey || '',
+        model,
+        prompt,
+        count: 1,
+        size: im?.size || '',
+        imageUrl: refUrl,
+      })
+    } catch (err) {
+      res = { ok: false, error: (err as Error)?.message || 'The edit failed.' }
+    }
+    genRef.current.delete(requestId)
+    setBusy(false)
+
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id !== convId
+          ? c
+          : {
+              ...c,
+              updatedAt: Date.now(),
+              messages: c.messages.map((m) =>
+                m.id !== asstId
+                  ? m
+                  : {
+                      ...m,
+                      images: res.ok
+                        ? (res.images || []).map((g) => ({
+                            name: g.name,
+                            url: g.url,
+                            path: g.path,
+                            width: g.width,
+                            height: g.height,
+                            bytes: g.bytes,
+                          }))
+                        : [],
+                      error: res.ok ? null : res.error || 'The edit failed.',
+                      note: res.ok ? `fal · ${((res.tookMs || 0) / 1000).toFixed(1)}s` : 'fal · reference',
+                      finished: true,
+                    },
+              ),
+            },
+      ),
+    )
+  }, [])
+
   const send = useCallback(
     (overrideText?: string) => {
       const cfg = configRef.current
       const text = (overrideText ?? input).trim()
       const attached = overrideText ? [] : images
       if ((!text && attached.length === 0) || busy) return
+
+      // An attached reference is an edit request: it goes to fal with the user's own
+      // words. The "Ask about it" switch keeps the ordinary vision path available.
+      const editing = attached.length > 0 && refEdit
+      if (editing && !text) {
+        setToast('Say what to change about the image — that text becomes the fal prompt.')
+        setTimeout(() => setToast(null), 5000)
+        return
+      }
+      if (editing && !cfg.imageGen?.falKey) {
+        setToast('No fal.ai key saved — add one in Settings → Images to edit an image.')
+        setTimeout(() => setToast(null), 5000)
+        return
+      }
 
       const userMsg: ChatMessage = {
         id: uid(),
@@ -423,16 +522,22 @@ export default function App() {
       setInput('')
       setImages([])
 
-      // does the chosen model take images? warn early instead of burning a call
+      // does the chosen model take images? warn early instead of burning a call.
+      // An edit never reaches the chat model, so it is not affected either way.
       const vision = cfg.modelPrefs?.[cfg.model]?.vision
-      if (attached.length > 0 && vision === 'no') {
+      if (attached.length > 0 && vision === 'no' && !editing) {
         setToast(`${cfg.model} is marked text-only — the image may be rejected.`)
         setTimeout(() => setToast(null), 5000)
       }
 
+      if (editing) {
+        void runFalEdit(convId, text, attached[0]?.url || '')
+        return
+      }
+
       runRequest(convId, history)
     },
-    [input, images, busy, activeId, conversations, runRequest],
+    [input, images, busy, activeId, conversations, runRequest, refEdit, runFalEdit],
   )
 
   /* ---------------------------------------------------- image generation */
@@ -461,6 +566,11 @@ export default function App() {
   useEffect(() => {
     if (!config.imageGen?.enabled && imageMode) setImageMode(false)
   }, [config.imageGen?.enabled, imageMode])
+
+  // the edit/ask switch belongs to the attached reference and starts on "edit"
+  useEffect(() => {
+    if (images.length === 0 && !refEdit) setRefEdit(true)
+  }, [images.length, refEdit])
 
   const generateImage = useCallback(async () => {
     const cfg = configRef.current
@@ -902,6 +1012,8 @@ export default function App() {
           imageMode={imageMode}
           onToggleImageMode={() => setImageMode((v) => !v)}
           imageModeAvailable={Boolean(config.imageGen?.enabled)}
+          refEdit={refEdit}
+          onSetRefEdit={setRefEdit}
           modelLabel={modelLabel}
         />
       </main>

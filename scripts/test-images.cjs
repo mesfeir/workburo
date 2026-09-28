@@ -120,6 +120,39 @@ const SCHEMA_MIN = {
   components: { schemas: { BareInput: { type: 'object', required: ['prompt'], properties: { prompt: { type: 'string' } } } } },
 }
 
+/** an edit endpoint: takes a single reference image */
+const SCHEMA_EDIT = {
+  components: {
+    schemas: {
+      EditInput: {
+        type: 'object',
+        required: ['prompt', 'image_url'],
+        properties: {
+          prompt: { type: 'string' },
+          image_url: { type: 'string' },
+          strength: { type: 'number', default: 0.95 },
+        },
+      },
+    },
+  },
+}
+
+/** an edit endpoint that takes a list of reference images */
+const SCHEMA_EDIT_MANY = {
+  components: {
+    schemas: {
+      EditManyInput: {
+        type: 'object',
+        required: ['prompt', 'image_urls'],
+        properties: {
+          prompt: { type: 'string' },
+          image_urls: { type: 'array', items: { type: 'string' } },
+        },
+      },
+    },
+  },
+}
+
 function startServer(port) {
   return new Promise((resolve) => {
     let polls = 0
@@ -131,6 +164,8 @@ function startServer(port) {
       }
       if (url.pathname === '/schema') return send(SCHEMA_FULL)
       if (url.pathname === '/schema-min') return send(SCHEMA_MIN)
+      if (url.pathname === '/schema-edit') return send(SCHEMA_EDIT)
+      if (url.pathname === '/schema-edit-many') return send(SCHEMA_EDIT_MANY)
       if (url.pathname === '/img.png') {
         res.writeHead(200, { 'Content-Type': 'image/png' })
         return res.end(PNG)
@@ -236,6 +271,108 @@ async function offline() {
   seen.submit = null
   const noKey = await images.generate({ key: '', model: 'fal-ai/stub/model', prompt: 'x', imagesDir: outDir })
   check('a missing key is refused before any network call', noKey.ok === false && /No fal\.ai API key/.test(noKey.error), noKey.error)
+
+  /* ------------------------ an attached reference, i.e. image-to-image */
+
+  // a real (tiny) JPEG data URI, the shape a pasted image takes
+  const REF = `data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]).toString('base64')}`
+  const INSTRUCTION = 'make the sky orange and remove the car'
+
+  seen.submit = null
+  const edited = await images.generate({
+    key: 'stub-key',
+    model: 'fal-ai/stub/edit',
+    prompt: INSTRUCTION,
+    count: 1,
+    size: 'square_hd',
+    imageUrl: REF,
+    imagesDir: outDir,
+    endpoints: { queue, schema: `${queue}/schema-edit` },
+  })
+  check('an edit runs through the same pipeline', edited.ok === true, edited.error || '')
+  check(
+    'the reference is sent in the parameter the model declares',
+    seen.submit?.body?.image_url === REF,
+    Object.keys(seen.submit?.body || {}).join(', '),
+  )
+  check(
+    'the instruction is sent verbatim — nothing re-described it on the way out',
+    seen.submit?.body?.prompt === INSTRUCTION,
+    String(seen.submit?.body?.prompt),
+  )
+  check(
+    'a text-to-image model is never handed an image parameter',
+    images.imageParamFor(SCHEMA_FULL.components.schemas.StubInput.properties) === null,
+  )
+
+  const reported = (edited.params || []).join(' | ')
+  check(
+    'the log reports the reference by name and size, never by content',
+    /image_url=reference image/.test(reported) && !/base64|data:image/.test(reported),
+    reported,
+  )
+
+  // a model that wants a list of images still takes a single reference
+  seen.submit = null
+  await images.generate({
+    key: 'stub-key',
+    model: 'fal-ai/stub/edit-many',
+    prompt: INSTRUCTION,
+    count: 1,
+    imageUrl: REF,
+    imagesDir: outDir,
+    endpoints: { queue, schema: `${queue}/schema-edit-many` },
+  })
+  check(
+    'a list-style endpoint gets a one-item list',
+    JSON.stringify(seen.submit?.body?.image_urls) === JSON.stringify([REF]),
+    JSON.stringify(seen.submit?.body?.image_urls || null).slice(0, 60),
+  )
+
+  // a text-only model must refuse, not quietly drop the picture
+  seen.submit = null
+  const noRef = await images.generate({
+    key: 'stub-key',
+    model: 'fal-ai/stub/min',
+    prompt: INSTRUCTION,
+    count: 1,
+    imageUrl: REF,
+    imagesDir: outDir,
+    endpoints: { queue, schema: `${queue}/schema-min` },
+  })
+  check(
+    'a model that cannot take a reference is refused, not ignored',
+    noRef.ok === false && /does not accept a reference image/.test(noRef.error) && seen.submit === null,
+    noRef.error,
+  )
+
+  // attaching a picture with no instruction has nothing to do
+  const noText = await images.generate({
+    key: 'stub-key',
+    model: 'fal-ai/stub/edit',
+    prompt: '   ',
+    count: 1,
+    imageUrl: REF,
+    imagesDir: outDir,
+    endpoints: { queue, schema: `${queue}/schema-edit` },
+  })
+  check(
+    'an empty instruction is refused with something the user can act on',
+    noText.ok === false && /what to change/i.test(noText.error),
+    noText.error,
+  )
+
+  // the matcher itself
+  check('image_url is found by name', images.imageParamFor({ image_url: { type: 'string' } })?.key === 'image_url')
+  check(
+    'a list parameter is recognised as a list',
+    images.imageParamFor({ image_urls: { type: 'array', items: { type: 'string' } } })?.isArray === true,
+  )
+  check(
+    'an unusual name is still found, but sizing is not mistaken for an image',
+    images.imageParamFor({ input_image: { type: 'string' } })?.key === 'input_image' &&
+      images.imageParamFor({ prompt: { type: 'string' }, image_size: { type: 'string' } }) === null,
+  )
 
   server.close()
   fs.rmSync(outDir, { recursive: true, force: true })

@@ -17,6 +17,8 @@ export default function Composer({
   imageMode,
   onToggleImageMode,
   imageModeAvailable,
+  refEdit,
+  onSetRefEdit,
   modelLabel,
   disabled,
 }: {
@@ -36,6 +38,9 @@ export default function Composer({
   onToggleImageMode: () => void
   /** only offered when a hosted image provider is configured and switched on */
   imageModeAvailable: boolean
+  /** with a reference attached: edit it at fal, or let the model read it */
+  refEdit: boolean
+  onSetRefEdit: (v: boolean) => void
   modelLabel: string
   disabled?: boolean
 }) {
@@ -79,7 +84,7 @@ export default function Composer({
     <div className="px-4 pb-2">
       <div className="mx-auto w-full max-w-[768px]">
         {images.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-2 px-1">
+          <div className="mb-2 flex flex-wrap items-center gap-2 px-1">
             {images.map((im, i) => (
               <div key={i} className="group relative">
                 <img
@@ -95,6 +100,31 @@ export default function Composer({
                 </button>
               </div>
             ))}
+
+            {/* what happens to the reference: fal edits it, or the model reads it */}
+            <div data-refmode className="flex items-center gap-0.5 rounded-full border border-white/15 p-0.5">
+              <button
+                onClick={() => onSetRefEdit(true)}
+                title="Send this image and your words straight to fal.ai to be changed"
+                className={`rounded-full px-2.5 py-1 text-[12px] transition ${
+                  refEdit ? 'bg-[#20365a] text-[#dfeaff]' : 'text-faint hover:bg-white/10'
+                }`}
+              >
+                Edit image
+              </button>
+              <button
+                onClick={() => onSetRefEdit(false)}
+                title="Let the chat model look at the image instead of editing it"
+                className={`rounded-full px-2.5 py-1 text-[12px] transition ${
+                  !refEdit ? 'bg-white/10 text-ink' : 'text-faint hover:bg-white/10'
+                }`}
+              >
+                Ask about it
+              </button>
+            </div>
+            <span data-refhint className="text-[11.5px] text-faint">
+              {refEdit ? 'your words become the fal prompt' : 'the model reads the image'}
+            </span>
           </div>
         )}
 
@@ -119,7 +149,13 @@ export default function Composer({
                 if (canSend) onSend()
               }
             }}
-            placeholder={imageMode ? 'Describe the image you want' : 'Ask anything'}
+            placeholder={
+              imageMode
+                ? 'Describe the image you want'
+                : refEdit && images.length > 0
+                  ? 'Describe the change you want'
+                  : 'Ask anything'
+            }
             className="max-h-[208px] flex-1 resize-none bg-transparent px-1 py-[9px] text-[15.5px] leading-[1.5] placeholder:text-[#9a9a9a] disabled:opacity-60"
           />
 

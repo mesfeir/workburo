@@ -78,6 +78,12 @@ look complete.
   [fal.ai](https://fal.ai/dashboard/keys) key once (Settings → Images) and that is the whole setup.
 - **It writes its own prompt.** The model expands your words into a proper visual description —
   subject, style, lighting, framing — because that text is the only instruction the image model gets.
+- **Attach a picture and that picture gets edited.** Paste or drop an image, type the change you
+  want — *"make the sky orange and remove the car"* — and the picture and your words go straight
+  to an image-to-image endpoint on fal. Your instruction is the prompt, verbatim: no chat model
+  reads the image, rewrites your sentence or re-describes what it sees. The switch next to the
+  thumbnail flips to **Ask about it** when you actually want the model to look at the image and
+  answer in words instead.
 - **Still a tool, so it is yours to control.** It sits in Settings → Tools beside web search and
   weather and can be switched off there, and there is an optional manual **Image** button in the
   composer if you would rather send a prompt straight to the generator.
@@ -282,8 +288,10 @@ npx electron . --capture <api-key>
   spike and why hosted fal.ai was chosen for the first cut. The numbers and the design for a
   local sidecar are in [`docs/image-generation.md`](docs/image-generation.md). Local would mean a
   model download with its encoder and VAE, so it is deliberately not the first thing shipped.
-- **Image-to-image / editing** — the picker already lists fal's edit endpoints; wiring the
-  attached image through to them is the next step.
+- **Image-to-image is built**: attaching a reference sends it to an edit endpoint with your words
+  as the prompt. The reference travels inline as a data URI, capped at 1536px on the long edge, so
+  a very large photo is shrunk before it is sent. Hosted-URL upload is not wired up, so if an
+  endpoint insists on a URL rather than inline data, the failure is reported rather than retried.
 - **Encrypted key storage** (Windows DPAPI).
 - **Voice input**, and the **Library / Scheduled / Plugins / Projects** entries — currently
   disabled and labelled *coming soon*.
@@ -301,6 +309,9 @@ npx electron . --capture <api-key>
 - **Image generation is hosted only.** There is no local pipeline yet, so it needs a fal.ai key
   and an account with credit, and your prompts leave the machine when you use it. Generated
   pictures are kept as files beside the store and are not cleaned up automatically.
+- **Editing sends the image itself to fal.** A reference edit uploads the picture inline with
+  your instruction, so the image leaves your machine exactly as a prompt does. Only the first
+  attached image is used as the reference.
 - **The fal key is stored in the same plain-text JSON** as the chat key.
 
 ## FAQ

@@ -99,6 +99,8 @@ export interface ImageGenConfig {
   falKey: string
   /** fal endpoint id, e.g. fal-ai/flux/schnell */
   model: string
+  /** fal endpoint used when a message carries a reference image to edit */
+  editModel?: string
   /** images per prompt */
   count: number
   /** size preset id, used only when the model declares image_size */

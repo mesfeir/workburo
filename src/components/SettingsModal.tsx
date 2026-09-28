@@ -181,7 +181,15 @@ export default function SettingsModal({
 
   const imageGen =
     config.imageGen ||
-    ({ enabled: false, provider: 'fal' as const, falKey: '', model: '', count: 1, size: 'square_hd' })
+    ({
+      enabled: false,
+      provider: 'fal' as const,
+      falKey: '',
+      model: '',
+      editModel: 'fal-ai/flux/dev/image-to-image',
+      count: 1,
+      size: 'square_hd',
+    })
   const setImageGen = (patch: Partial<typeof imageGen>) =>
     onConfig({ imageGen: { ...imageGen, ...patch } })
 
@@ -396,6 +404,25 @@ export default function SettingsModal({
     return m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q)
   })
   const selectedFal = falModels.find((m) => m.id === imageGen.model) || null
+
+  // Endpoints that take a reference image. The chosen one is always offered, even
+  // before the catalogue is loaded, so a saved choice is never silently dropped.
+  const editChoices = (() => {
+    const ids = new Set(
+      falModels.filter((m) => m.category === 'image-to-image').map((m) => m.id),
+    )
+    const cur = imageGen.editModel || 'fal-ai/flux/dev/image-to-image'
+    if (cur) ids.add(cur)
+    return [...ids].map(
+      (id) =>
+        falModels.find((m) => m.id === id) || {
+          id,
+          name: id,
+          description: '',
+          category: 'image-to-image',
+        },
+    )
+  })()
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" onMouseDown={onClose}>
@@ -1106,6 +1133,29 @@ export default function SettingsModal({
                       })}
                     </div>
                   )}
+                </Field>
+
+                <Field
+                  label="Reference edit model"
+                  hint="Attach an image with an instruction and your words go straight to this endpoint as the prompt — no chat model in between, nothing re-described."
+                >
+                  <select
+                    data-fal-editmodel
+                    className={inputCls}
+                    value={imageGen.editModel || 'fal-ai/flux/dev/image-to-image'}
+                    onChange={(e) => setImageGen({ editModel: e.target.value })}
+                  >
+                    {editChoices.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} — {m.id}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="mt-1.5 text-[11.5px] text-faint">
+                    {falModels.length === 0
+                      ? 'Load models above to choose from fal’s image-to-image endpoints.'
+                      : `${editChoices.length} endpoint${editChoices.length === 1 ? '' : 's'} here accept a reference image.`}
+                  </div>
                 </Field>
 
                 <div className="grid grid-cols-2 gap-3">
