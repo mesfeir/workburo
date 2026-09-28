@@ -809,6 +809,10 @@ const TOOL_HINTS = /tool_calls|tool_choice|"tools"|tools are not supported|tool.
 
 const { chatToolDefs, responsesToolDefs, executeTool, ALL_TOOLS, REGISTRY } = require('./tools.cjs')
 
+// Stored conversation -> API payload lives in its own file, so its rules — above all "an
+// assistant turn never carries an image" — can be tested directly instead of assumed.
+const { toChatMessages, toResponsesInput } = require('./messages.cjs')
+
 // Pictures are a tool, not a mode: the model reaches for it as soon as the user
 // asks to see something. Saying so up front is what turns "show me what that
 // would look like" into a call instead of a paragraph of description.
@@ -820,44 +824,12 @@ const IMAGE_TOOL_NOTE =
 
 /* ---------------------------------------------------------------- request */
 
-function toChatMessages(messages, systemPrompt) {
-  const out = []
-  if (systemPrompt) out.push({ role: 'system', content: systemPrompt })
-  for (const m of messages) {
-    // entries the tool loop appends internally
-    if (m.role === 'tool') {
-      out.push({ role: 'tool', tool_call_id: m.id, content: m.content || '' })
-      continue
-    }
-    if (m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length) {
-      out.push({
-        role: 'assistant',
-        content: m.content || null,
-        tool_calls: m.tool_calls.map((tc) => ({
-          id: tc.id,
-          type: 'function',
-          function: { name: tc.name, arguments: tc.arguments || '{}' },
-        })),
-      })
-      continue
-    }
-    const imgs = (m.images || []).filter(Boolean)
-    if (!imgs.length) {
-      out.push({ role: m.role, content: m.content || '' })
-      continue
-    }
-    const parts = []
-    if (m.content) parts.push({ type: 'text', text: m.content })
-    for (const url of imgs) parts.push({ type: 'image_url', image_url: { url } })
-    out.push({ role: m.role, content: parts })
-  }
-  return out
-}
+// toChatMessages lives in ./messages.cjs — see the note there about images on assistant turns.
 
 function buildChatBody(cfg, messages, withReasoning, systemPrompt, tools = {}) {
   const body = {
     model: cfg.model,
-    messages: toChatMessages(messages, systemPrompt),
+    messages: toChatMessages(messages, systemPrompt, visionFor(cfg)),
     stream: cfg.stream !== false,
   }
   // reasoning models consume max_tokens silently on hidden thinking, so keep a floor
@@ -879,43 +851,12 @@ function buildChatBody(cfg, messages, withReasoning, systemPrompt, tools = {}) {
   return body
 }
 
-function toResponsesInput(messages) {
-  const out = []
-  for (const m of messages) {
-    // the Responses API takes tool calls and their results as separate items
-    if (m.role === 'tool') {
-      out.push({ type: 'function_call_output', call_id: m.id, output: m.content || '' })
-      continue
-    }
-    if (m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length) {
-      if (m.content) out.push({ role: 'assistant', content: m.content })
-      for (const tc of m.tool_calls) {
-        out.push({
-          type: 'function_call',
-          call_id: tc.id,
-          name: tc.name,
-          arguments: tc.arguments || '{}',
-        })
-      }
-      continue
-    }
-    const imgs = (m.images || []).filter(Boolean)
-    if (!imgs.length) {
-      out.push({ role: m.role, content: m.content || '' })
-      continue
-    }
-    const parts = []
-    if (m.content) parts.push({ type: m.role === 'assistant' ? 'output_text' : 'input_text', text: m.content })
-    for (const url of imgs) parts.push({ type: 'input_image', image_url: url })
-    out.push({ role: m.role, content: parts })
-  }
-  return out
-}
+// toResponsesInput lives in ./messages.cjs — same rules as the chat mapping above.
 
 function buildResponsesBody(cfg, messages, systemPrompt, tools = {}) {
   const body = {
     model: cfg.model,
-    input: toResponsesInput(messages),
+    input: toResponsesInput(messages, visionFor(cfg)),
     stream: cfg.stream !== false,
     max_output_tokens: Number(cfg.maxTokens) || 4096,
   }
@@ -1016,24 +957,88 @@ function normalizeUsage(u) {
 
 /* ---------------------------------------------------------------- streaming */
 
-async function openStream({ protocol, base, cfg, messages, systemPrompt, withReasoning, signal, tools = {} }) {
+/**
+ * Whether a model can be sent pictures.
+ *
+ * 'unknown' must not be treated as a yes. A model that cannot read pictures rejects the request,
+ * and because the picture stays in the conversation history, every later message in that
+ * conversation fails the same way — which is exactly how one attached picture kills a chat.
+ * What is learned here is kept in memory as well as in the store, so a stale renderer copy of
+ * the settings cannot undo it mid-session.
+ */
+const learnedVision = new Map()
+
+function visionFor (cfg) {
+  return learnedVision.get(cfg.model) || cfg.modelPrefs?.[cfg.model]?.vision || 'unknown'
+}
+
+/** the same settings, with this model marked as unable to read pictures */
+function blindConfig (cfg) {
+  return {
+    ...cfg,
+    modelPrefs: {
+      ...(cfg.modelPrefs || {}),
+      [cfg.model]: { ...((cfg.modelPrefs || {})[cfg.model] || {}), vision: 'no' },
+    },
+  }
+}
+
+function rememberVision (model, vision) {
+  learnedVision.set(model, vision)
+  try {
+    const store = readStore()
+    const prefs = { ...(store.config.modelPrefs || {}) }
+    if ((prefs[model] || {}).vision === vision) return
+    prefs[model] = { ...(prefs[model] || {}), vision }
+    writeStore({ ...store, config: { ...store.config, modelPrefs: prefs } })
+  } catch {
+    // remembering is a nicety: a turn must never fail because it could not be written down
+  }
+}
+
+async function openStream({ protocol, base, cfg, messages, systemPrompt, withReasoning, signal, tools = {}, notify }) {
   const url = endpointFor(base, protocol)
-  const body =
+  const build = (config) =>
     protocol === 'responses'
-      ? buildResponsesBody(cfg, messages, systemPrompt, tools)
-      : buildChatBody(cfg, messages, withReasoning, systemPrompt, tools)
+      ? buildResponsesBody(config, messages, systemPrompt, tools)
+      : buildChatBody(config, messages, withReasoning, systemPrompt, tools)
+  const post = (payload) =>
+    fetch(url, {
+      method: 'POST',
+      headers: headersFor(cfg, cfg.stream !== false ? 'text/event-stream' : 'application/json'),
+      body: JSON.stringify(payload),
+      signal,
+    })
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: headersFor(cfg, cfg.stream !== false ? 'text/event-stream' : 'application/json'),
-    body: JSON.stringify(body),
-    signal,
-  })
+  const vision = visionFor(cfg)
+  const body = build(cfg)
+  const carriedPictures = JSON.stringify(body).includes('"image_url"') || JSON.stringify(body).includes('"input_image"')
 
+  let res = await post(body)
   if (!res.ok) {
     const text = await res.text().catch(() => '')
+
+    // A model that cannot read pictures fails the whole conversation, not just the turn that
+    // carried one. So when a model not confirmed as able to read them rejects a request that
+    // carried a picture, the request is made again with the picture described in words, and the
+    // model is remembered as text-only rather than being asked again next time.
+    if (carriedPictures && vision !== 'no' && [400, 413, 422].includes(res.status)) {
+      const blind = await post(build(blindConfig(cfg)))
+      if (blind.ok) {
+        if (vision === 'unknown') {
+          rememberVision(cfg.model, 'no')
+          notify?.(
+            `${cfg.model} could not take the picture, so it answered without it. This model is now remembered as text-only — attach the picture to a model that reads images, or ask for an edit.`
+          )
+        }
+        return { ok: true, res: blind }
+      }
+    }
     return { ok: false, err: extractError(res.status, text) }
   }
+
+  // a request that carried a picture and came back fine settles the question the other way
+  if (carriedPictures && vision === 'unknown') rememberVision(cfg.model, 'yes')
   return { ok: true, res }
 }
 
@@ -1121,7 +1126,7 @@ async function runRound({ protocol, base, cfg, messages, systemPrompt, send, ac,
 
   for (let r = 0; r < 2; r++) {
     if (ac.signal.aborted) break
-    const opened = await openStream({ protocol, base, cfg, messages, systemPrompt, withReasoning, signal: ac.signal, tools })
+    const opened = await openStream({ protocol, base, cfg, messages, systemPrompt, withReasoning, signal: ac.signal, tools, notify: (value) => send({ type: 'notice', value }) })
 
     if (!opened.ok) {
       lastErr = opened.err
@@ -1619,7 +1624,15 @@ ipcMain.handle('models:probe', async (_e, { cfg, model, testImage }) => {
 
 ipcMain.handle('store:get', () => readStore())
 ipcMain.handle('store:save', (_e, data) => {
-  scheduleSave(data)
+  // what was learned about a model's picture support must survive a renderer save that was
+  // built from a stale copy of the settings
+  const config = { ...((data && data.config) || {}) }
+  if (learnedVision.size) {
+    const prefs = { ...(config.modelPrefs || {}) }
+    for (const [model, vision] of learnedVision) prefs[model] = { ...(prefs[model] || {}), vision }
+    config.modelPrefs = prefs
+  }
+  scheduleSave({ ...data, config })
   return true
 })
 ipcMain.handle('store:flush', (_e, data) => writeStore(data))
@@ -1744,6 +1757,26 @@ function prepareReference(raw) {
   }
   return `data:image/jpeg;base64,${buf.toString('base64')}`
 }
+
+/**
+ * A picture on disk as a data URL, so the renderer can hand it straight back to fal as the
+ * reference for the next edit. The store keeps paths; fal wants bytes.
+ */
+function fileToDataUrl (file) {
+  const abs = path.resolve(String(file || ''))
+  const bytes = fs.readFileSync(abs)
+  const ext = path.extname(abs).toLowerCase()
+  const mime = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : ext === '.webp' ? 'image/webp' : 'image/png'
+  return `data:${mime};base64,${bytes.toString('base64')}`
+}
+
+ipcMain.handle('images:dataUrl', (_e, { path: file }) => {
+  try {
+    return { ok: true, url: fileToDataUrl(file) }
+  } catch (err) {
+    return { ok: false, error: err?.message || 'That image could not be read.' }
+  }
+})
 
 ipcMain.handle('images:generate', async (_e, req) => {
   const { key, model, prompt, count, size, requestId, imageUrl } = req || {}

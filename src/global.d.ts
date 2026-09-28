@@ -79,6 +79,8 @@ export interface ZenApi {
       imageUrl?: string
     }) => Promise<ImageGenResult>
     saveAs: (file: string) => Promise<{ ok: boolean; path?: string; error?: string; canceled?: boolean }>
+    /** a picture on disk as a data URL, for handing straight back to fal as a reference */
+    dataUrl: (path: string) => Promise<{ ok: boolean; url?: string; error?: string }>
     openFolder: () => Promise<{ ok: boolean; error: string | null }>
     onProgress: (handler: (p: { requestId: string; phase: string; detail?: string }) => void) => () => void
   }

@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('zen', {
     models: (key) => ipcRenderer.invoke('images:models', { key }),
     options: () => ipcRenderer.invoke('images:options'),
     generate: (req) => ipcRenderer.invoke('images:generate', req),
+    dataUrl: (path) => ipcRenderer.invoke('images:dataUrl', { path }),
     saveAs: (file) => ipcRenderer.invoke('images:saveAs', { file }),
     openFolder: () => ipcRenderer.invoke('images:openFolder'),
     onProgress: (handler) => {

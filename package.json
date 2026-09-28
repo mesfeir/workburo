@@ -15,7 +15,8 @@
     "dist:dir": "npm run build && electron-builder --win --dir && node scripts/apply-icon.cjs",
     "selftest": "electron . --selftest",
     "test:images": "node scripts/test-images.cjs",
-    "test:agent": "node scripts/test-agent.cjs"
+    "test:agent": "node scripts/test-agent.cjs",
+    "test:messages": "node scripts/test-messages.cjs"
   },
   "dependencies": {
     "highlight.js": "^11.10.0",

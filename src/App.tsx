@@ -423,6 +423,23 @@ export default function App() {
   )
 
   /**
+   * After a picture is made or edited it becomes the reference for whatever is said next, so
+   * "make it bigger" or "change the colours" edits that picture at fal: the user's own words go
+   * straight to the image endpoint, and the chat model is never asked about a picture it may not
+   * even be able to see. The thumbnail in the composer shows it is armed, and it can be removed.
+   */
+  const referenceLastImage = useCallback(async (made: { name?: string; path?: string }[]) => {
+    const first = (made || []).find((m) => m && m.path)
+    if (!first?.path) return
+    const r = await window.zen.images.dataUrl(first.path)
+    if (!r?.ok || !r.url) return
+    setImages([{ name: first.name || 'last-image.png', url: r.url }])
+    setRefEdit(true)
+    setToast('That picture is now the reference — say what to change about it.')
+    setTimeout(() => setToast(null), 6000)
+  }, [])
+
+  /**
    * Edit a reference image at fal: the attached image is the reference and the user's
    * own words are the prompt. No chat model is involved, so nothing gets re-described
    * and no tool call is needed — the change the user typed is what fal is asked for.
@@ -472,6 +489,9 @@ export default function App() {
     }
     genRef.current.delete(requestId)
     setBusy(false)
+
+    // the edited picture is now the thing "it" refers to in the next message
+    if (res.ok && res.images?.length) void referenceLastImage(res.images)
 
     setConversations((prev) =>
       prev.map((c) =>
@@ -688,6 +708,9 @@ export default function App() {
     genRef.current.delete(requestId)
     setBusy(false)
 
+    // a freshly made picture is now the thing "it" refers to in the next message
+    if (res.ok && res.images?.length) void referenceLastImage(res.images)
+
     setConversations((prev) =>
       prev.map((c) =>
         c.id !== convId
@@ -718,7 +741,7 @@ export default function App() {
             },
       ),
     )
-  }, [input, busy, activeId, conversations])
+  }, [input, busy, activeId, conversations, referenceLastImage])
 
   // the composer's send goes to whichever mode is armed
   const submit = useCallback(() => {
