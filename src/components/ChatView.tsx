@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowDown, Sparkles } from 'lucide-react'
 import Message from './Message'
-import type { Conversation, Config } from '../types'
+import type { Attachment, Conversation, Config } from '../types'
 
 const SUGGESTIONS = [
   'Explain this code and find the bug',
@@ -54,6 +54,7 @@ export default function ChatView({
   imageMode,
   onRetry,
   onPickSuggestion,
+  onUseImage,
 }: {
   conversation: Conversation | null
   config: Config
@@ -61,6 +62,8 @@ export default function ChatView({
   imageMode?: boolean
   onRetry: (messageId: string) => void
   onPickSuggestion: (text: string) => void
+  /** put a picture from the transcript into the composer so the next message changes it */
+  onUseImage: (im: Attachment) => void
 }) {
   const scroller = useRef<HTMLDivElement>(null)
   const [stuck, setStuck] = useState(false)
@@ -192,6 +195,7 @@ export default function ChatView({
                 msg={m}
                 showUsage={Boolean(config.showUsage)}
                 onRetry={m.role === 'assistant' ? () => onRetry(m.id) : undefined}
+                onUseImage={onUseImage}
               />
             ))}
             <div className="h-6" />

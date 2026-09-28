@@ -152,3 +152,66 @@
 .thinking-dots span:nth-child(3) {
   animation-delay: 0.4s;
 }
+
+/* a picture being drawn: a tile that keeps catching the light, so the wait reads as work in
+   progress rather than a number that looks like a countdown or a queue position */
+.drawing-tile {
+  position: relative;
+  display: block;
+  height: 42px;
+  width: 42px;
+  flex: none;
+  overflow: hidden;
+  border-radius: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(135deg, #1d1d24 0%, #2a2a34 50%, #1d1d24 100%);
+}
+.drawing-tile::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.16) 45%,
+    rgba(255, 255, 255, 0.05) 55%,
+    transparent 80%
+  );
+  transform: translateX(-100%);
+  animation: sweep 1.6s ease-in-out infinite;
+}
+.drawing-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.35;
+}
+.drawing-title {
+  font-size: 13.5px;
+  color: #e8e8e8;
+  animation: breathe 2.4s ease-in-out infinite;
+}
+.drawing-phase {
+  font-size: 11.5px;
+  color: var(--muted-foreground, #8a8a8a);
+}
+@keyframes sweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.62;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .drawing-tile::after,
+  .drawing-title {
+    animation: none;
+  }
+}

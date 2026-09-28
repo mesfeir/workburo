@@ -18,6 +18,7 @@ import type {
   StoreShape,
   ToolActivity,
 } from './types'
+import type { Speed } from './types'
 import type { HotkeyStatus } from './global'
 
 /**
@@ -103,6 +104,11 @@ interface StreamState {
   sources: Source[]
   /** pictures the model drew with the generate_image tool, mid-answer */
   genImages: Attachment[]
+  /** when the first token arrived, for the speed readout; null until one does */
+  firstTokenAt: number | null
+  /** characters streamed so far — the honest basis for the live estimate */
+  chars: number
+  speed?: Speed
 }
 
 function titleFrom(text: string, images: number) {
@@ -132,6 +138,7 @@ export default function App() {
   const [imageMode, setImageMode] = useState(false)
   /** a reference image is edited at fal by default, or read by the model on request */
   const [refEdit, setRefEdit] = useState(true)
+  const [focusNonce, setFocusNonce] = useState(0)
   /** which settings tab to open on, when something other than us asks for it */
   const [settingsTab, setSettingsTab] = useState<SettingsTab | undefined>(undefined)
   const [galleryOpen, setGalleryOpen] = useState(false)
@@ -238,6 +245,7 @@ export default function App() {
                         tools: [...s.tools],
                         sources: [...s.sources],
                         images: s.genImages.length ? [...s.genImages] : m.images,
+                        ...(s.speed ? { speed: s.speed } : {}),
                       },
                 ),
               },
@@ -252,10 +260,17 @@ export default function App() {
       if (!s) return
 
       switch (ev.type) {
-        case 'text':
+        case 'text': {
           s.text += ev.value
+          // Speed: an estimate while it streams (from the characters that have arrived), replaced
+          // by the endpoint's own token count when the answer ends. Marked ≈ while it is estimated.
+          if (s.firstTokenAt == null) s.firstTokenAt = Date.now()
+          s.chars += String(ev.value || '').length
+          const secs = (Date.now() - s.firstTokenAt) / 1000
+          if (secs > 0.35) s.speed = { tps: s.chars / 4 / secs, estimated: true }
           flush(s)
           break
+        }
         case 'reasoning':
           s.reasoning += ev.value
           flush(s)
@@ -326,6 +341,14 @@ export default function App() {
             activeRequest.current = null
             setBusy(false)
           }
+          const streamSecs = s.firstTokenAt ? (Date.now() - s.firstTokenAt) / 1000 : 0
+          const completion = Number(s.usage?.completion || 0)
+          // the endpoint's own count over the time it actually spent generating, so the number on
+          // screen is measured rather than guessed. Falls back to the estimate if it never reports.
+          const speed: Speed | undefined =
+            completion > 0 && streamSecs > 0.3
+              ? { tps: completion / streamSecs, estimated: false }
+              : s.speed
           const finished: Partial<ChatMessage> = {
             content: s.text,
             reasoning: s.reasoning,
@@ -338,6 +361,7 @@ export default function App() {
             elapsedMs: Date.now() - s.startedAt,
             tools: [...s.tools],
             sources: [...s.sources],
+            ...(speed ? { speed } : {}),
             ...(s.genImages.length ? { images: [...s.genImages] } : {}),
           }
           setConversations((prev) =>
@@ -391,6 +415,8 @@ export default function App() {
         tools: [],
         sources: [],
         genImages: [],
+        firstTokenAt: null,
+        chars: 0,
       }
       streams.current.set(requestId, state)
       activeRequest.current = requestId
@@ -445,6 +471,33 @@ export default function App() {
     },
     [],
   )
+
+  /**
+   * Put a picture that is already in the conversation back into the composer as the reference, so
+   * the next thing typed changes it rather than drawing something new. A picture the assistant
+   * drew has no URL in the store — its bytes are on disk — so it is read back from the file;
+   * without that the composer would be handed an empty image and the edit would draw a blank.
+   */
+  const useImageAsReference = useCallback(async (im: Attachment) => {
+    let url = im.url || ''
+    if (!url && im.path) {
+      try {
+        const r = await window.zen.images.dataUrl(im.path)
+        if (r?.ok && r.url) url = r.url
+      } catch {}
+    }
+    if (!url) {
+      setToast('That picture could not be read from disk — try making it again.')
+      setTimeout(() => setToast(null), 6000)
+      return
+    }
+    setImages([{ ...im, url }])
+    setImageMode(false)
+    setRefEdit(true)
+    setFocusNonce((n) => n + 1)
+    setToast('Picture attached as the reference — say what to change, then press Enter.')
+    setTimeout(() => setToast(null), 6000)
+  }, [])
 
   /**
    * After a picture is made or edited it becomes the reference for whatever is said next, so
@@ -1084,6 +1137,7 @@ export default function App() {
           config={config}
           imageMode={imageMode}
           onRetry={regenerate}
+          onUseImage={useImageAsReference}
           onPickSuggestion={(t) => {
             setInput(t)
           }}
@@ -1106,6 +1160,8 @@ export default function App() {
           imageModeAvailable={Boolean(config.imageGen?.enabled)}
           refEdit={refEdit}
           onSetRefEdit={setRefEdit}
+          speed={active?.messages.filter((m) => m.streaming).slice(-1)[0]?.speed || null}
+          focusNonce={focusNonce}
           agentMode={agentMode}
           onToggleAgent={() =>
             patchConfig({

@@ -1180,6 +1180,91 @@ async function run({
     window.dispatchEvent(new KeyboardEvent('keydown', { key: ',', ctrlKey: true, bubbles: true }))
   })
   await sleep(900)
+  // ---------- 14d. a picture already in the conversation can be changed from the picture itself
+  // The gap this closes: a picture the assistant drew had no way back into the conversation, so
+  // "add a hat to it" could only ever draw something new. The button on the picture hands it to
+  // the composer as the reference, and the composer switches to "describe the change".
+  await inPage(win, function () {
+    const pill = Array.from(document.querySelectorAll('[data-modes] button')).find(
+      (b) => (b.textContent || '').trim() === 'Image',
+    )
+    if (pill) pill.click()
+    const ta = document.querySelector('textarea')
+    if (ta) {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set
+      setter.call(ta, 'a wide calm sea at dawn')
+      ta.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    return true
+  })
+  await sleep(400)
+  await inPage(win, function () {
+    const ta = document.querySelector('textarea')
+    if (ta) ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    return true
+  })
+  // inside the queue phase, which is exactly where fal reports position 0
+  await sleep(1200)
+  const drawingNow = await inPage(win, function () {
+    const d = document.querySelector('[data-drawing]')
+    const phase = document.querySelector('[data-drawing-phase]')
+    return {
+      present: !!d,
+      kind: d ? d.getAttribute('data-drawing') : '',
+      words: d ? String(d.innerText || '').replace(/\s+/g, ' ').trim() : '',
+      phaseText: phase ? String(phase.innerText || '').trim() : '',
+      tiles: d ? d.querySelectorAll('.drawing-tile').length : 0,
+    }
+  })
+  record(
+    'the Image switch shows an animated, worded state — never a bare number',
+    drawingNow.present &&
+      drawingNow.tiles === 1 &&
+      drawingNow.phaseText.length > 3 &&
+      !/^-?[0-9]+$/.test(drawingNow.phaseText) &&
+      /Creating the image/.test(drawingNow.words),
+    JSON.stringify(drawingNow),
+  )
+  await shot(win, '16-drawing-state')
+
+  await sleep(7000)
+  const drawnNow = await inPage(win, function () {
+    const use = document.querySelector('[data-use-image]')
+    return {
+      pictures: Array.from(document.querySelectorAll('img')).filter((i) =>
+        String(i.getAttribute('src') || '').startsWith('data:'),
+      ).length,
+      hasUse: !!use,
+      label: use ? String(use.innerText || '').replace(/\s+/g, ' ').trim() : '',
+    }
+  })
+  record(
+    'a picture the assistant drew offers to be changed, on the picture itself',
+    drawnNow.pictures > 0 && drawnNow.hasUse && /change this image/i.test(drawnNow.label),
+    JSON.stringify(drawnNow),
+  )
+
+  const pressed = await inPage(win, function () {
+    const b = document.querySelector('[data-use-image]')
+    if (!b) return false
+    b.click()
+    return true
+  })
+  await sleep(1200)
+  const composerNow = await inPage(win, function () {
+    const ta = document.querySelector('textarea')
+    return {
+      placeholder: ta ? String(ta.getAttribute('placeholder') || '') : '',
+      focused: document.activeElement === ta,
+    }
+  })
+  record(
+    'pressing it puts that picture into the composer, caret ready to describe the change',
+    pressed === true && /change/i.test(composerNow.placeholder),
+    JSON.stringify(composerNow),
+  )
+  await shot(win, '17-change-this-image')
+
   const imagesTab = await inPage(win, function () {
     const t = Array.from(document.querySelectorAll('button')).find(
       (b) => (b.textContent || '').trim() === 'Images',

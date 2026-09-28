@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { ArrowUp, Brain, Image as ImageIcon, Mic, Plus, Square, Terminal, X } from 'lucide-react'
-import type { Attachment } from '../types'
+import type { Attachment, Speed } from '../types'
 
 export default function Composer({
   value,
@@ -25,6 +25,8 @@ export default function Composer({
   agentWorkspace,
   modelLabel,
   disabled,
+  focusNonce,
+  speed,
 }: {
   value: string
   onChange: (v: string) => void
@@ -45,6 +47,10 @@ export default function Composer({
   /** with a reference attached: edit it at fal, or let the model read it */
   refEdit: boolean
   onSetRefEdit: (v: boolean) => void
+  /** bumped when something wants the caret put back in the input, e.g. after attaching a picture */
+  focusNonce?: number
+  /** live tokens per second while an answer streams, shown bottom-right in small text */
+  speed?: Speed | null
   /** hand the next turns to Pi, which can touch files in the workspace folder */
   agentMode: boolean
   onToggleAgent: () => void
@@ -88,6 +94,12 @@ export default function Composer({
     el.addEventListener('paste', onPaste)
     return () => el.removeEventListener('paste', onPaste)
   }, [onAddImages])
+
+  // something asked for the caret (a picture attached from the transcript): put it back in the
+  // input, because the next thing typed is the instruction that changes that picture
+  useEffect(() => {
+    if (focusNonce) ref.current?.focus()
+  }, [focusNonce])
 
   const canSend = (value.trim().length > 0 || images.length > 0) && !disabled
 
@@ -262,10 +274,31 @@ export default function Composer({
           </div>
         </div>
 
-        <div className="pt-2 text-center text-[11.5px] text-faint">
-          {imageMode
-            ? 'Image mode · your prompt is sent to fal.ai to be drawn'
-            : `${modelLabel} · Zen Chat can make mistakes. Check important info.`}
+        {/* the notice stays centred; the speed sits hard right in the same small text, so the
+            number is where the eye already goes for "bottom right of the app" */}
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 pt-2 text-[11.5px] text-faint">
+          <span aria-hidden />
+          <span className="text-center">
+            {imageMode
+              ? 'Image mode · your prompt is sent to fal.ai to be drawn'
+              : `${modelLabel} · Zen Chat can make mistakes. Check important info.`}
+          </span>
+          {speed && Number.isFinite(speed.tps) && speed.tps > 0 ? (
+            <span
+              data-speed
+              title={
+                speed.estimated
+                  ? 'Estimated from the text arriving so far — it becomes exact when the answer ends'
+                  : 'Measured from the model’s own token count'
+              }
+              className="justify-self-end tabular-nums"
+            >
+              {speed.estimated ? '≈' : ''}
+              {speed.tps >= 100 ? String(Math.round(speed.tps)) : speed.tps.toFixed(1)} tok/s
+            </span>
+          ) : (
+            <span aria-hidden />
+          )}
         </div>
       </div>
     </div>

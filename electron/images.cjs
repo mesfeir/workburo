@@ -13,7 +13,7 @@ const CATALOGUE = 'https://api.fal.ai/v1/models'
 const PUBLIC_CATALOGUE = 'https://fal.ai/api/models'
 const PRICING_API = 'https://api.fal.ai/v1/models/pricing'
 const SCHEMA_API = 'https://fal.ai/api/openapi/queue/openapi.json'
-const QUEUE = 'https://queue.fal.run'
+const QUEUE = process.env.ZEN_FAL_QUEUE || 'https://queue.fal.run'
 const UA = 'zen-chat/1.0'
 
 /**

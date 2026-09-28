@@ -60,6 +60,14 @@ export interface ChatMessage {
   tools?: ToolActivity[]
   /** everything the answer was grounded in */
   sources?: Source[]
+  /** how fast the answer came in, in tokens per second */
+  speed?: Speed
+}
+
+export interface Speed {
+  tps: number
+  /** true while it is still an estimate from streamed characters, not the endpoint's own count */
+  estimated?: boolean
 }
 
 export interface Conversation {

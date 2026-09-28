@@ -17,6 +17,7 @@ import {
   ThumbsDown,
   ThumbsUp,
   TriangleAlert,
+  Wand2,
   Wrench,
 } from 'lucide-react'
 import Markdown from '../lib/Markdown'
@@ -50,7 +51,17 @@ function Reasoning({ text, streaming, ms }: { text: string; streaming?: boolean;
   )
 }
 
-function ImageGrid({ images, large }: { images: Attachment[]; large?: boolean }) {
+function ImageGrid({
+  images,
+  large,
+  onUseImage,
+}: {
+  images: Attachment[]
+  large?: boolean
+  /** hand this picture to the composer, so the next thing typed changes it rather than drawing
+   *  something new — the way to "reply" to a picture that is already in the conversation */
+  onUseImage?: (im: Attachment) => void
+}) {
   const [zoom, setZoom] = useState<Attachment | null>(null)
   if (!images?.length) return null
   return (
@@ -92,6 +103,21 @@ function ImageGrid({ images, large }: { images: Attachment[]; large?: boolean })
                   className="absolute top-1.5 right-1.5 grid h-7 w-7 place-items-center rounded-lg border border-white/20 bg-black/60 text-white opacity-0 transition group-hover/img:opacity-100"
                 >
                   <Download size={13} />
+                </button>
+              )}
+              {onUseImage && (
+                <button
+                  onClick={() => onUseImage(im)}
+                  data-use-image
+                  title="Change this picture — it goes into the composer as the reference, then you say what to change"
+                  className={`absolute bottom-1.5 left-1.5 flex h-7 items-center gap-1.5 rounded-lg border border-white/20 bg-black/70 px-2 text-[11.5px] text-white transition hover:bg-black/90 ${
+                    // a picture the assistant drew has no other way back into the conversation, so
+                    // its button is always there; a picture you attached is already yours to edit
+                    large ? 'opacity-100' : 'opacity-0 group-hover/img:opacity-100'
+                  }`}
+                >
+                  <Wand2 size={12} />
+                  Change this image
                 </button>
               )}
             </div>
@@ -214,13 +240,22 @@ function Sources({ sources }: { sources: Source[] }) {
   )
 }
 
+/** "38.4 tok/s", with a ≈ while it is still an estimate rather than the endpoint's own count. */
+function fmtSpeed(speed?: ChatMessage['speed']): string {
+  if (!speed || !Number.isFinite(speed.tps) || speed.tps <= 0) return ''
+  const n = speed.tps >= 100 ? String(Math.round(speed.tps)) : speed.tps.toFixed(1)
+  return `${speed.estimated ? '≈' : ''}${n} tok/s`
+}
+
 export default function Message({
   msg,
   onRetry,
+  onUseImage,
   showUsage,
 }: {
   msg: ChatMessage
   onRetry?: () => void
+  onUseImage?: (im: Attachment) => void
   showUsage?: boolean
 }) {
   const [copied, setCopied] = useState(false)
@@ -238,7 +273,7 @@ export default function Message({
     return (
       <div className="flex animate-fade-up justify-end py-2" data-user={msg.id}>
         <div className="max-w-[85%] rounded-[22px] bg-bubble px-4 py-2.5 text-[15.5px] leading-[1.6]">
-          <ImageGrid images={msg.images || []} />
+          <ImageGrid images={msg.images || []} onUseImage={onUseImage} />
           {msg.content && <div className="whitespace-pre-wrap">{msg.content}</div>}
         </div>
       </div>
@@ -246,6 +281,27 @@ export default function Message({
   }
 
   const waiting = msg.streaming && !msg.content && !msg.reasoning && !(msg.tools || []).length
+
+  /**
+   * A picture being drawn by the Image switch: not a stream, no content yet, and fal reporting
+   * phases on the note. It gets a state of its own — the phase in words, with movement — because
+   * this row previously sat empty apart from whatever the last progress event happened to say,
+   * and a bare queue number told the user nothing was happening.
+   */
+  const drawing =
+    !msg.finished &&
+    !msg.streaming &&
+    !msg.content &&
+    !(msg.images || []).length &&
+    !msg.error &&
+    /^fal\b/i.test(String(msg.note || ''))
+  const drawingPhase =
+    String(msg.note || '')
+      .replace(/^fal\s*(·\s*)?/i, '')
+      .trim()
+      // never show a bare number, whatever the endpoint reports
+      .replace(/^-?[0-9]+$/, '') || 'starting'
+  const drawingEdit = /\/edit$|-edit$/.test(String(msg.model || ''))
 
   return (
     <div
@@ -260,13 +316,32 @@ export default function Message({
       <ToolRun tools={msg.tools || []} />
 
       {/* generated images come back as their own attachment, above the text */}
-      {!!(msg.images || []).length && <ImageGrid images={msg.images || []} large />}
+      {!!(msg.images || []).length && (
+        <ImageGrid images={msg.images || []} large onUseImage={onUseImage} />
+      )}
 
       {waiting && (
         <div className="thinking-dots flex items-center gap-1 py-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-[#8f8f8f]" />
           <span className="h-1.5 w-1.5 rounded-full bg-[#8f8f8f]" />
           <span className="h-1.5 w-1.5 rounded-full bg-[#8f8f8f]" />
+        </div>
+      )}
+
+      {drawing && (
+        <div
+          data-drawing={drawingEdit ? 'edit' : 'create'}
+          className="mt-0.5 flex w-fit items-center gap-3 rounded-2xl border border-white/10 bg-white/[.03] py-2.5 pr-5 pl-2.5"
+        >
+          <span className="drawing-tile" aria-hidden />
+          <span className="drawing-body">
+            <span className="drawing-title">
+              {drawingEdit ? 'Changing the image…' : 'Creating the image…'}
+            </span>
+            <span className="drawing-phase" data-drawing-phase>
+              {drawingPhase}
+            </span>
+          </span>
         </div>
       )}
 
@@ -347,6 +422,7 @@ export default function Message({
                   msg.usage.reasoning ? ` (${msg.usage.reasoning} thinking)` : ''
                 }`
               : ''}
+            {fmtSpeed(msg.speed) ? ` · ${fmtSpeed(msg.speed)}` : ''}
           </span>
         </div>
       )}
