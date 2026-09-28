@@ -1,0 +1,35 @@
+# ---- dependencies & build output (never commit) ----
+node_modules/
+dist/
+release/
+*.tsbuildinfo
+.vite/
+
+# ---- secrets: this repo is public, nothing here may hold a credential ----
+# the app stores config (including the API key) under %APPDATA%\zen-chat\, i.e.
+# OUTSIDE the repo. These patterns catch a copy that ever lands here by accident.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.json
+credentials.json
+zen-chat-store.json
+window-state.json
+!zen-chat-store.example.json
+
+# ---- local logs & scratch ----
+*.log
+npm-debug.log*
+.probe/
+.cache/
+
+# ---- editors / OS ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

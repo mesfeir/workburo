@@ -1,0 +1,84 @@
+{
+  "name": "zen-chat",
+  "private": true,
+  "version": "1.0.0",
+  "description": "A ChatGPT-style desktop client for any OpenAI-compatible API (OpenCode Zen / Go, OpenAI, local LLMs)",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "author": "Mel",
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron .\"",
+    "build": "tsc --noEmit && vite build",
+    "electron": "electron .",
+    "start": "npm run build && electron .",
+    "dist": "npm run build && electron-builder --win --dir && node scripts/apply-icon.cjs && electron-builder --win nsis portable --prepackaged release/win-unpacked",
+    "dist:dir": "npm run build && electron-builder --win --dir && node scripts/apply-icon.cjs",
+    "selftest": "electron . --selftest"
+  },
+  "dependencies": {
+    "highlight.js": "^11.10.0",
+    "lucide-react": "^0.460.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-markdown": "^9.0.1",
+    "rehype-highlight": "^7.0.1",
+    "remark-gfm": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "autoprefixer": "^10.4.21",
+    "concurrently": "^9.0.0",
+    "electron": "^35.7.5",
+    "electron-builder": "^25.1.8",
+    "postcss": "^8.5.0",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.6.0",
+    "vite": "^6.0.0",
+    "wait-on": "^8.0.0"
+  },
+  "build": {
+    "appId": "uk.clearestlab.zenchat",
+    "productName": "Zen Chat",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Zen Chat",
+      "artifactName": "Zen-Chat-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "Zen-Chat-${version}-portable.${ext}"
+    }
+  }
+}
