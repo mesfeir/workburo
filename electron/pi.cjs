@@ -96,6 +96,8 @@ function layout (piRoot) {
     exe: path.join(piRoot, PI_VERSION, exe),
     agentDir: path.join(piRoot, 'agent'),
     configFile: path.join(piRoot, 'agent', 'models.json'),
+    /** one directory per conversation, so a chat's agent memory is that chat's alone */
+    sessionsDir: path.join(piRoot, 'agent', 'sessions'),
     download: path.join(piRoot, `download-${PI_VERSION}${assetFor().endsWith('.zip') ? '.zip' : '.tar.gz'}`)
   }
 }
@@ -110,6 +112,27 @@ function status (piRoot) {
     exe: installed ? L.exe : null,
     agentDir: L.agentDir,
     configured: installed && fs.existsSync(L.configFile)
+  }
+}
+
+/**
+ * A conversation gets its own session directory. A conversation id becomes a folder name, so
+ * it is sanitised rather than trusted.
+ */
+function sessionDirFor (piRoot, conversationId) {
+  const safe =
+    String(conversationId || 'default')
+      .replace(/[^a-zA-Z0-9._-]/g, '')
+      .slice(0, 64) || 'default'
+  return path.join(layout(piRoot).sessionsDir, safe)
+}
+
+/** Has Pi written a session here yet? If it has, there is context to continue from. */
+function hasSession (sessionDir) {
+  try {
+    return fs.readdirSync(sessionDir).some(f => f.endsWith('.jsonl'))
+  } catch {
+    return false
   }
 }
 
@@ -338,8 +361,12 @@ function runTurn (opts) {
   const L = layout(opts.piRoot)
   const model = `${PROVIDER}/${opts.model}`
   const args = ['--mode', 'json']
-  if (opts.persistSession === true) {
-    if (opts.workspace) args.push('--session-dir', L.agentDir)
+  // A conversation keeps its own Pi session, so a follow-up turn remembers the previous one —
+  // including what its tools did. With no session directory the turn is a one-off.
+  if (opts.sessionDir) {
+    fs.mkdirSync(opts.sessionDir, { recursive: true })
+    args.push('--session-dir', opts.sessionDir)
+    if (hasSession(opts.sessionDir)) args.push('--continue')
   } else {
     args.push('--no-session')
   }
@@ -443,6 +470,8 @@ module.exports = {
   assetFor,
   layout,
   status,
+  sessionDirFor,
+  hasSession,
   install,
   writeConfig,
   createTranslator,

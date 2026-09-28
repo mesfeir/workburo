@@ -99,6 +99,8 @@ export interface ZenApi {
     openWorkspace: () => Promise<{ ok: boolean; error: string | null }>
     turn: (req: {
       requestId: string
+      /** Pi keeps one session per conversation, so follow-up turns remember the last one */
+      conversationId?: string
       prompt: string
       model?: string
       workspace?: string

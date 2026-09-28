@@ -382,6 +382,31 @@ function agentFail (requestId, message) {
 }
 
 /**
+ * The first agent turn in a conversation is seeded with what was said before it, because Pi
+ * has no way to know about messages the chat handled itself. Every later turn continues Pi's
+ * own session instead, so nothing is repeated.
+ */
+function agentSeed (store, convId, currentPrompt) {
+  const convo = (store.conversations || []).find(c => c.id === convId)
+  if (!convo) return ''
+  const now = String(currentPrompt || '').trim()
+  const lines = []
+  for (const m of convo.messages || []) {
+    if (m.role !== 'user' && m.role !== 'assistant') continue
+    const text = String(m.content || '').trim()
+    if (!text || text === now) continue
+    lines.push(`${m.role === 'user' ? 'user' : 'assistant'}: ${text.replace(/\s+/g, ' ').slice(0, 600)}`)
+  }
+  const recent = lines.slice(-12)
+  if (!recent.length) return ''
+  return [
+    'Earlier in this conversation, before agent mode was switched on, this was said. Treat it as context for what comes next; do not repeat it back.',
+    '',
+    ...recent
+  ].join('\n')
+}
+
+/**
  * One agent turn: Pi runs the loop in the chosen folder, using the model the chat has selected.
  * The provider config is regenerated first, so switching model in the composer switches the
  * model the agent uses too.
@@ -405,12 +430,21 @@ async function runAgentTurn (req) {
 
   pi.writeConfig({ agentDir: pi.layout(PI_ROOT()).agentDir, baseUrl: cfg.baseUrl, models: agentModels(cfg, store) })
 
+  // Pi keeps this conversation's own session, so a follow-up turn remembers the last one —
+  // including what its tools did. Only the very first turn needs the chat's own history,
+  // because Pi never saw those messages.
+  const sessionDir = pi.sessionDirFor(PI_ROOT(), req.conversationId)
+  const firstAgentTurn = !pi.hasSession(sessionDir)
+  const seed = firstAgentTurn ? agentSeed(store, req.conversationId, req.prompt) : ''
+  const prompt = seed ? `${seed}\n\n---\n\n${req.prompt}` : req.prompt
+
   const handle = pi.runTurn({
     piRoot: PI_ROOT(),
     workspace,
+    sessionDir,
     model: req.model || cfg.model,
     relayKey: cfg.apiKey,
-    prompt: req.prompt,
+    prompt,
     timeoutMs: 15 * 60 * 1000,
     onEvent: ev => {
       const mapped = agentEventFor(requestId, ev)

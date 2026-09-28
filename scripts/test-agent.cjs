@@ -200,6 +200,29 @@ check('11. agent mode with nothing installed fails cleanly instead of pretending
     })
 })
 
+check('11b. each conversation gets its own session directory, and the name is sanitised', () => {
+  const root = 'C:\\data\\pi'
+  const a = pi.sessionDirFor(root, 'conv-abc')
+  const b = pi.sessionDirFor(root, 'conv-xyz')
+  assert(a !== b, 'two conversations must never share one memory')
+  assert(a === pi.sessionDirFor(root, 'conv-abc'), 'the same conversation always maps to the same place')
+  assert(
+    pi.sessionDirFor(root, '../../escape').startsWith(pi.layout(root).sessionsDir),
+    'a hostile id cannot climb out of the sessions directory'
+  )
+  assert(pi.sessionDirFor(root, '').endsWith('default'), 'a missing id falls back rather than failing')
+  return true
+})
+
+check('11c. "has Pi written a session here" answers honestly', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zen-pi-sess-'))
+  assert(pi.hasSession(dir) === false, 'an empty directory means there is no context to continue')
+  assert(pi.hasSession(path.join(dir, 'not-there')) === false, 'a missing directory is not a crash')
+  fs.writeFileSync(path.join(dir, '2026-01-01T00-00-00-000Z_abc.jsonl'), '{}\n')
+  assert(pi.hasSession(dir) === true, 'a written session is found')
+  return true
+})
+
 // ---- live checks -------------------------------------------------------------------------
 // Skipped unless a Pi install is pointed at and a key can be found.
 
@@ -272,6 +295,58 @@ async function live () {
     assert(events.some(e => e.kind === 'tool_end'), 'and complete')
     assert(r.unparsed === 0 || r.unparsed < 5, `${r.unparsed} lines were unparseable`)
     console.log(`        ${secs}s · ${r.tools.length} tool calls · ${r.events.lines} events · ${r.usage ? r.usage.totalTokens + ' tokens' : 'no usage reported'}`)
+    return true
+  })
+
+  // The bug this exists for: every agent turn used to start from nothing, so a follow-up
+  // ("now change that file") had no idea what "that" was.
+  const memDir = pi.sessionDirFor(root, `mem-${Date.now()}`)
+  const quiet = () => {}
+  const r1 = await pi.runTurn({
+    piRoot: root,
+    workspace: ws,
+    sessionDir: memDir,
+    model,
+    relayKey: apiKey,
+    timeoutMs: 180000,
+    prompt: 'Remember the word TANGERINE for my next message. Reply with just OK.',
+    onEvent: quiet
+  }).promise
+  const r2 = await pi.runTurn({
+    piRoot: root,
+    workspace: ws,
+    sessionDir: memDir,
+    model,
+    relayKey: apiKey,
+    timeoutMs: 180000,
+    prompt: 'What word did I ask you to remember? Reply with just that word.',
+    onEvent: quiet
+  }).promise
+
+  check('15. a follow-up turn remembers the one before it', () => {
+    assert(r1.ok && r2.ok, `a turn failed: ${(r1.stderr || r2.stderr || '').slice(-200)}`)
+    assert(
+      /TANGERINE/i.test(r2.text),
+      `the agent did not remember — it answered ${JSON.stringify(String(r2.text).slice(0, 140))}`
+    )
+    return true
+  })
+
+  const otherDir = pi.sessionDirFor(root, `isolation-${Date.now()}`)
+  const r3 = await pi.runTurn({
+    piRoot: root,
+    workspace: ws,
+    sessionDir: otherDir,
+    model,
+    relayKey: apiKey,
+    timeoutMs: 180000,
+    prompt: 'What word did I ask you to remember? Reply with just that word, or NONE if you do not know.',
+    onEvent: quiet
+  }).promise
+
+  check('16. another conversation does not inherit that memory', () => {
+    assert(r3.ok, `the isolation turn failed: ${(r3.stderr || '').slice(-200)}`)
+    assert(!/TANGERINE/i.test(r3.text), 'memory leaked from one conversation into another')
     return true
   })
 }

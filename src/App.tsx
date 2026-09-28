@@ -379,6 +379,7 @@ export default function App() {
         cfg.agent?.enabled && agentReadyRef.current
           ? window.zen.pi.turn({
               requestId,
+              conversationId: convId,
               prompt: history[history.length - 1]?.content || '',
               model: cfg.model,
               workspace: cfg.agent?.workspace,
