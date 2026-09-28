@@ -1715,6 +1715,43 @@ ipcMain.handle('app:openStore', () => shell.showItemInFolder(storePath()))
 
 ipcMain.handle('images:options', () => ({ sizes: falImages.SIZE_PRESETS }))
 
+/**
+ * What the selected model charges for the selected size.
+ *
+ * fal's own rate for the endpoint is the answer when it has one, which covers models the public
+ * catalogue says nothing about; the catalogue's sentence is the fallback, and failing both the UI
+ * is told plainly that no per-image price is published rather than being handed a guess.
+ */
+ipcMain.handle('images:cost', async (_e, { pricing, model, width, height, count }) => {
+  const n = Math.max(1, Number(count) || 1)
+  const rate = await falImages.priceFor(String(model || ''), (readStore().config.imageGen || {}).falKey || '')
+  const fromRate = rate ? falImages.costFromRate(rate, { width, height }) : null
+
+  if (fromRate) {
+    return {
+      ok: true,
+      source: 'fal pricing api',
+      rate: fromRate.basis,
+      perImage: fromRate.perImage,
+      megapixels: fromRate.megapixels,
+      text: fromRate.perImage == null ? fromRate.basis : `${falImages.formatCost(fromRate.perImage)} per image`,
+      forCount: fromRate.perImage == null ? '' : falImages.formatCost(fromRate.perImage * n),
+    }
+  }
+
+  const est = falImages.estimateCost(pricing, (Number(width) || 0) * (Number(height) || 0) / 1e6)
+  if (!est) return { ok: false }
+  return {
+    ok: true,
+    source: 'catalogue',
+    rate: est.basis,
+    perImage: est.perImage,
+    megapixels: est.megapixels,
+    text: `${falImages.formatCost(est.perImage)} per image`,
+    forCount: falImages.formatCost(est.perImage * n),
+  }
+})
+
 ipcMain.handle('images:models', async (_e, { key }) => falImages.listModels(String(key || '')))
 
 /**

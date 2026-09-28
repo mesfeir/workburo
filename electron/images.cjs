@@ -11,6 +11,7 @@ const fs = require('node:fs')
 
 const CATALOGUE = 'https://api.fal.ai/v1/models'
 const PUBLIC_CATALOGUE = 'https://fal.ai/api/models'
+const PRICING_API = 'https://api.fal.ai/v1/models/pricing'
 const SCHEMA_API = 'https://fal.ai/api/openapi/queue/openapi.json'
 const QUEUE = 'https://queue.fal.run'
 const UA = 'zen-chat/1.0'
@@ -24,12 +25,12 @@ const DEFAULT_ENDPOINTS = { queue: QUEUE, schema: SCHEMA_API }
 
 /** size presets; the schema decides whether a model accepts one at all */
 const SIZE_PRESETS = [
-  { id: 'square_hd', label: 'Square · 1024×1024' },
-  { id: 'square', label: 'Square (small) · 512×512' },
-  { id: 'landscape_4_3', label: 'Landscape · 4:3' },
-  { id: 'landscape_16_9', label: 'Wide · 16:9' },
-  { id: 'portrait_4_3', label: 'Portrait · 3:4' },
-  { id: 'portrait_16_9', label: 'Tall · 9:16' },
+  { id: 'square_hd', label: 'Square · 1024×1024', width: 1024, height: 1024 },
+  { id: 'square', label: 'Square (small) · 512×512', width: 512, height: 512 },
+  { id: 'landscape_4_3', label: 'Landscape · 4:3', width: 1024, height: 768 },
+  { id: 'landscape_16_9', label: 'Wide · 16:9', width: 1024, height: 576 },
+  { id: 'portrait_4_3', label: 'Portrait · 3:4', width: 768, height: 1024 },
+  { id: 'portrait_16_9', label: 'Tall · 9:16', width: 576, height: 1024 },
 ]
 
 /** the image categories worth showing in a generator */
@@ -130,26 +131,213 @@ async function listModels(key, { pages = 3 } = {}) {
   return { ok: true, models: mapped, total: out.length }
 }
 
-/** id -> human pricing sentence, from the catalogue the fal website itself uses */
-async function pricingMap() {
-  try {
-    const res = await falFetch(`${PUBLIC_CATALOGUE}?size=50`, { timeout: 20000 })
-    if (!res.ok || !res.json?.items) return {}
-    const map = {}
-    for (const it of res.json.items) {
+/**
+ * id -> the price sentence fal publishes for that endpoint.
+ *
+ * fal's models API carries no price at all, and the public catalogue that does is paged: 40 a
+ * page, 38 pages for the whole listing. Asking for one page priced 17 models out of 226 — useless
+ * for "what will this cost me" — so the listing is walked in full, a few pages at a time, and kept
+ * on disk for a week: a price does not need re-fetching on every visit to Settings.
+ */
+const PRICING_TTL_MS = 7 * 24 * 60 * 60 * 1000
+let pricingMemory = null
+
+function pricingCachePath() {
+  return path.join(process.env.APPDATA || process.cwd(), 'zen-chat', 'fal-pricing.json')
+}
+
+async function pricingMap({ refresh = false } = {}) {
+  if (!refresh && pricingMemory && Date.now() - pricingMemory.at < PRICING_TTL_MS) return pricingMemory.map
+  if (!refresh) {
+    try {
+      const onDisk = JSON.parse(fs.readFileSync(pricingCachePath(), 'utf8'))
+      if (onDisk && onDisk.map && Date.now() - onDisk.at < PRICING_TTL_MS) {
+        pricingMemory = onDisk
+        return onDisk.map
+      }
+    } catch {
+      // no usable cache yet; fetch it below
+    }
+  }
+  const map = await fetchAllPricing()
+  if (Object.keys(map).length) {
+    pricingMemory = { at: Date.now(), map }
+    try {
+      fs.mkdirSync(path.dirname(pricingCachePath()), { recursive: true })
+      fs.writeFileSync(pricingCachePath(), JSON.stringify(pricingMemory))
+    } catch {
+      // the cache is a convenience, not a requirement
+    }
+  }
+  return map
+}
+
+async function fetchAllPricing() {
+  const map = {}
+  const collect = (items) => {
+    for (const it of items || []) {
       const p = it.pricingInfoOverride || it.pricing || ''
-      if (it.id && p) {
-        map[it.id] = String(p)
-          .replace(/\*\*/g, '')
-          .replace(/\s+/g, ' ')
-          .trim()
-          .slice(0, 160)
+      if (!it.id || !p) continue
+      map[it.id] = String(p)
+        .replace(/\*\*/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 200)
+    }
+  }
+
+  let pages = 1
+  try {
+    const first = await falFetch(`${PUBLIC_CATALOGUE}?page=1`, { timeout: 20000 })
+    if (!first.ok || !first.json?.items) return map
+    collect(first.json.items)
+    pages = Math.min(Number(first.json.pages) || 1, 60)
+  } catch {
+    return map
+  }
+
+  const queue = []
+  for (let page = 2; page <= pages; page += 1) queue.push(page)
+  const workers = Array.from({ length: 5 }, async () => {
+    while (queue.length) {
+      const page = queue.shift()
+      try {
+        const r = await falFetch(`${PUBLIC_CATALOGUE}?page=${page}`, { timeout: 20000 })
+        if (r.ok) collect(r.json?.items)
+      } catch {
+        // one missing page does not spoil the rest of the prices
       }
     }
-    return map
-  } catch {
-    return {}
+  })
+  await Promise.all(workers)
+  return map
+}
+
+/**
+ * What one image costs, in dollars, from the sentence fal publishes.
+ *
+ * fal bills either per image or per megapixel, and bills a part megapixel as a whole one — a
+ * 1024×1024 square is 1.05 MP and is charged as 2 MP on a per-megapixel model. Only the wordings
+ * fal actually uses are parsed; anything else returns null rather than a made-up number.
+ */
+function estimateCost(pricing, megapixels) {
+  const text = String(pricing || '')
+  if (!text) return null
+  const mp = Math.max(1, Math.ceil(Number(megapixels) || 0))
+  const money = (s) => Number(String(s).replace(/[^0-9.]/g, ''))
+
+  const perImage = text.match(/\$([0-9]+(?:\.[0-9]+)?)\s*per\s*image/i)
+  if (perImage) return { perImage: money(perImage[1]), basis: 'per image', megapixels: mp }
+
+  const firstPlus = text.match(
+    /\$([0-9]+(?:\.[0-9]+)?)\s*for the first megapixel[^$]*\$([0-9]+(?:\.[0-9]+)?)\s*per extra megapixel/i,
+  )
+  if (firstPlus) {
+    return {
+      perImage: money(firstPlus[1]) + money(firstPlus[2]) * (mp - 1),
+      basis: 'first megapixel plus extra',
+      megapixels: mp,
+    }
   }
+
+  const perMp = text.match(/\$([0-9]+(?:\.[0-9]+)?)\s*per\s*megapixel/i)
+  if (perMp) return { perImage: money(perMp[1]) * mp, basis: 'per megapixel', megapixels: mp }
+
+  return null
+}
+
+/** a dollar figure a person can read, keeping the precision a small amount needs */
+function formatCost(perImage) {
+  const n = Number(perImage) || 0
+  if (n >= 0.1) return `$${n.toFixed(2)}`
+  const three = n.toFixed(3)
+  return `$${three.endsWith('0') ? n.toFixed(2) : three}`
+}
+
+/**
+ * The rate fal actually charges for one endpoint, straight from its pricing API.
+ *
+ * The public catalogue states a price in prose for some models and says nothing about the rate for
+ * others — fal-ai/flux/dev, the model this app starts on, is one of the silent ones — but the
+ * pricing API answers for every endpoint with a number and a unit. It only takes one endpoint at a
+ * time, so results are kept on disk: only the models actually chosen are ever asked about.
+ */
+const PRICE_TTL_MS = 7 * 24 * 60 * 60 * 1000
+const priceMemory = new Map()
+
+function priceCachePath() {
+  return path.join(process.env.APPDATA || process.cwd(), 'zen-chat', 'fal-prices.json')
+}
+
+function priceCacheRead() {
+  if (priceCacheRead.done) return
+  priceCacheRead.done = true
+  try {
+    const onDisk = JSON.parse(fs.readFileSync(priceCachePath(), 'utf8'))
+    for (const [id, entry] of Object.entries(onDisk || {})) {
+      // a lookup that found nothing is not an answer: only real rates are worth keeping
+      if (entry && entry.rate && Date.now() - (entry.at || 0) < PRICE_TTL_MS) priceMemory.set(id, entry)
+    }
+  } catch {
+    // no cache yet
+  }
+}
+
+function priceCacheWrite() {
+  try {
+    fs.mkdirSync(path.dirname(priceCachePath()), { recursive: true })
+    const out = {}
+    for (const [id, entry] of priceMemory) out[id] = entry
+    fs.writeFileSync(priceCachePath(), JSON.stringify(out))
+  } catch {
+    // the cache is a convenience, not a requirement
+  }
+}
+
+async function priceFor(model, key) {
+  const id = String(model || '')
+  if (!id) return null
+  priceCacheRead()
+  const hit = priceMemory.get(id)
+  if (hit) return hit.rate
+
+  let rate = null
+  try {
+    const res = await falFetch(`${PRICING_API}?endpoint_id=${encodeURIComponent(id)}`, { key, timeout: 20000 })
+    const p = res.json && Array.isArray(res.json.prices) ? res.json.prices[0] : null
+    if (p && Number.isFinite(Number(p.unit_price))) {
+      rate = { unitPrice: Number(p.unit_price), unit: String(p.unit || ''), currency: String(p.currency || 'USD') }
+    }
+  } catch {
+    return null
+  }
+  // only a real rate is remembered: a keyless or failed lookup must not become the answer for a week
+  if (rate) {
+    priceMemory.set(id, { at: Date.now(), rate })
+    priceCacheWrite()
+  }
+  return rate
+}
+
+/**
+ * Dollars for one image at a given output size, from a rate and its unit.
+ *
+ * megapixels and processed megapixels are billed rounded up to the whole megapixel, which is what
+ * makes a 1024×1024 square cost two megapixels rather than one. Units that are not about images or
+ * megapixels (seconds of compute, and so on) have no per-image answer to give, so none is invented.
+ */
+function costFromRate(rate, { width, height } = {}) {
+  const price = Number(rate && rate.unitPrice)
+  if (!Number.isFinite(price)) return null
+  const unit = String((rate && rate.unit) || '').toLowerCase()
+  const mp = Math.max(1, Math.ceil(((Number(width) || 0) * (Number(height) || 0)) / 1e6))
+  if (unit.includes('megapixel')) {
+    return { perImage: price * mp, megapixels: mp, basis: `${formatCost(price)} per megapixel`, unit: rate.unit }
+  }
+  if (unit.includes('image')) {
+    return { perImage: price, megapixels: mp, basis: `${formatCost(price)} per image`, unit: rate.unit }
+  }
+  return { perImage: null, megapixels: mp, basis: `${formatCost(price)} per ${rate.unit || 'unit'}`, unit: rate.unit }
 }
 
 /** The endpoint's real input schema: property names, enums, required fields. */
@@ -340,7 +528,7 @@ async function generate({
     schemaUrl: ep.schema,
   })
   if (bodyError) return { ok: false, error: bodyError }
-  onProgress({ phase: 'submitting', detail: `sending to ${model}` })
+  onProgress({ phase: 'submitting', detail: `sending to ${model}`, label: `Sending to ${model}…` })
 
   const submit = await falFetch(`${ep.queue}/${model}`, { key, method: 'POST', body, timeout: 60000 })
   if (!submit.ok) {
@@ -357,7 +545,7 @@ async function generate({
   if (!status_url || !response_url) {
     return { ok: false, error: 'fal.ai accepted the request but returned no status URL.' }
   }
-  onProgress({ phase: 'queued', detail: `request ${request_id || ''}`.trim() })
+  onProgress({ phase: 'queued', detail: `request ${request_id || ''}`.trim(), label: 'Waiting in the queue…' })
 
   const started = Date.now()
   const deadline = started + 6 * 60 * 1000
@@ -368,15 +556,26 @@ async function generate({
     if (!st.ok) return { ok: false, error: describeError(st.status, st.json || st.text) }
     const state = String(st.json?.status || '').toUpperCase()
     if (state === 'COMPLETED' || state === 'OK') break
+    // what the user reads while they wait: words, never a raw queue position. fal's position 0
+    // means "next in line", and a bare number on its own told nobody anything.
+    const ahead = Number(st.json?.queue_position)
+    const label =
+      state === 'IN_QUEUE'
+        ? !Number.isFinite(ahead) || ahead <= 0
+          ? 'Waiting in the queue…'
+          : `Waiting in the queue — ${ahead} request${ahead === 1 ? '' : 's'} ahead…`
+        : state === 'IN_PROGRESS'
+          ? 'Generating image…'
+          : `${state || 'Working'}…`
     const detail =
       state === 'IN_QUEUE'
         ? `queued${st.json?.queue_position != null ? ` · position ${st.json.queue_position}` : ''}`
         : state === 'IN_PROGRESS'
           ? 'generating…'
           : state || 'working…'
-    if (detail !== last) {
-      last = detail
-      onProgress({ phase: state === 'IN_QUEUE' ? 'queued' : 'running', detail })
+    if (label !== last) {
+      last = label
+      onProgress({ phase: state === 'IN_QUEUE' ? 'queued' : 'running', detail, label })
     }
     if (state === 'FAILED' || state === 'ERROR') {
       return { ok: false, error: st.json?.error || 'fal.ai reported the request failed.' }
@@ -399,7 +598,7 @@ async function generate({
   fs.mkdirSync(imagesDir, { recursive: true })
   const saved = []
   for (let i = 0; i < list.length; i += 1) {
-    onProgress({ phase: 'downloading', detail: `image ${i + 1} of ${list.length}` })
+    onProgress({ phase: 'downloading', detail: `image ${i + 1} of ${list.length}`, label: `Saving image ${i + 1} of ${list.length}…` })
     try {
       saved.push(await persistImage(list[i], imagesDir, i))
     } catch (err) {
@@ -428,4 +627,8 @@ module.exports = {
   SIZE_PRESETS,
   describeError,
   pricingMap,
+  estimateCost,
+  formatCost,
+  priceFor,
+  costFromRate,
 }

@@ -143,6 +143,36 @@ because it is fast and cheap, and the picker exists precisely so you can move up
 quality you are willing to pay for. The comparison is only about the cheapest model on fal, not
 about hosted generation as such.
 
+## What it costs
+
+Every model in the picker is priced where fal publishes a price, and the chosen model gets an exact
+figure for the size and count selected — `$0.025 per megapixel · $0.05 per image at this size (fal
+bills 2 MP — a part megapixel rounds up)`.
+
+Two sources, in this order:
+
+1. **fal's pricing API** (`api.fal.ai/v1/models/pricing`) answers for one endpoint at a time with a
+   number and a unit — `0.025 megapixels`, `0.15 images`. This is the one that answers for models
+   the catalogue says nothing about, which includes `fal-ai/flux/dev`, the model this app starts on.
+   It needs the account key, and one request per model, so rates are kept on disk for a week and
+   only models actually chosen are ever asked about. A lookup that found nothing is never cached:
+   a failure must not become the answer for a week.
+2. **fal's public catalogue** states a price in prose for 735 of 1,504 models, which is what the
+   picker rows show while browsing, and is used as the arithmetic fallback.
+
+Where fal publishes no rate, the panel says so rather than guessing. Units that are not about
+images or megapixels (seconds of compute) get no per-image number either — the rate is shown and
+the panel says the total depends on the run.
+
+## What the row says while it works
+
+fal's queue reports a *position*, and position 0 means "next in line" — which rendered as a bare
+**0** on screen and looked like a failure. Every phase now carries words: `Sending to <model>…`,
+`Waiting in the queue…` (or `— 3 requests ahead…`), `Generating image…`, `Saving image 1 of 1…`.
+The renderer phrases anything that arrives without a label, so a raw number can never be shown on
+its own again. Covered by `npm run test:pricing`, which drives a whole run against a stand-in that
+reports position 0.
+
 ## Follow-ups: talking about the picture you just made
 
 "make it bigger", "change the colours" — after a picture has been created or edited, the next

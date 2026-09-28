@@ -19,6 +19,25 @@ import type {
 } from './types'
 import type { HotkeyStatus } from './global'
 
+/**
+ * How fal's progress reads in the row.
+ *
+ * The main process sends a label with every phase. Anything arriving without one is phrased here
+ * rather than shown raw, because fal's queue reports a position — and "0" on its own, which is
+ * what "next in line" looks like, told the user nothing about what was happening.
+ */
+function falProgressText(p: { label?: string; phase?: string; detail?: unknown }): string {
+  if (p?.label) return String(p.label)
+  const phase = String(p?.phase || '')
+  if (phase === 'submitting') return 'Sending to fal…'
+  if (phase === 'queued') return 'Waiting in the queue…'
+  if (phase === 'running') return 'Generating image…'
+  if (phase === 'downloading') return 'Saving the image…'
+  const detail = typeof p?.detail === 'string' ? p.detail.trim() : ''
+  if (detail && !/^-?[0-9]+$/.test(detail)) return detail
+  return phase ? `${phase[0].toUpperCase()}${phase.slice(1)}…` : 'Generating image…'
+}
+
 const DEFAULTS: Config = {
   baseUrl: 'https://opencode.ai/zen/go/v1',
   apiKey: '',
@@ -280,7 +299,7 @@ export default function App() {
           const v = ev.value || {}
           const at = s.tools.findIndex((t) => t.id === v.id)
           if (at >= 0) {
-            s.tools[at] = { ...s.tools[at], preview: `fal · ${v.detail || v.phase}` }
+            s.tools[at] = { ...s.tools[at], preview: `fal · ${falProgressText(v)}` }
             flush(s)
           }
           break
@@ -622,7 +641,7 @@ export default function App() {
             : {
                 ...c,
                 messages: c.messages.map((m) =>
-                  m.id === target.msgId ? { ...m, note: `fal · ${p.detail || p.phase}` } : m,
+                  m.id === target.msgId ? { ...m, note: `fal · ${falProgressText(p)}` } : m,
                 ),
               },
         ),

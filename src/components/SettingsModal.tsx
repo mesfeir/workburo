@@ -268,7 +268,37 @@ export default function SettingsModal({
     kind: 'idle',
     msg: '',
   })
-  const [sizes, setSizes] = useState<{ id: string; label: string }[]>([])
+  const [sizes, setSizes] = useState<{ id: string; label: string; width?: number; height?: number }[]>([])
+  const [falCost, setFalCost] = useState<{
+    text?: string
+    forCount?: string
+    megapixels?: number
+    rate?: string
+    source?: string
+    perImage?: number | null
+  } | null>(null)
+
+  // what the chosen model charges for the chosen size, so the price is visible before drawing
+  useEffect(() => {
+    const model = falModels.find((m) => m.id === imageGen.model) || (imageGen.model ? { id: imageGen.model } : null)
+    const size = sizes.find((s) => s.id === imageGen.size)
+    if (!model?.id || !size?.width || !size?.height) {
+      setFalCost(null)
+      return
+    }
+    let cancelled = false
+    window.zen.images
+      .cost({ model: model.id, width: size.width, height: size.height, count: imageGen.count })
+      .then((r) => {
+        if (!cancelled) setFalCost(r?.ok ? r : null)
+      })
+      .catch(() => {
+        if (!cancelled) setFalCost(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [falModels, sizes, imageGen.model, imageGen.size, imageGen.count])
   const [genTest, setGenTest] = useState<{ ok: boolean; url?: string; msg: string } | null>(null)
   const falLoadedFor = useRef('')
 
@@ -494,7 +524,7 @@ export default function SettingsModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" onMouseDown={onClose}>
       <div
-        className="flex max-h-[86vh] w-[740px] flex-col overflow-hidden rounded-2xl border border-[#2c2c2c] bg-[#161616] shadow-2xl"
+        className="flex h-[660px] max-h-[86vh] w-[740px] flex-col overflow-hidden rounded-2xl border border-[#2c2c2c] bg-[#161616] shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[#2a2a2a] px-5 py-3.5">
@@ -1301,6 +1331,9 @@ export default function SettingsModal({
                             <span className="min-w-0 flex-1">
                               <span className="block truncate text-[13px] text-[#dcdcdc]">{m.name}</span>
                               <span className="block truncate font-mono text-[10.5px] text-faint">{m.id}</span>
+                              {m.pricing && (
+                                <span className="mt-0.5 block truncate text-[10.5px] text-[#9a9a9a]">{m.pricing}</span>
+                              )}
                             </span>
                             <span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[9.5px] tracking-wide text-[#bdbdbd] uppercase">
                               {m.category === 'text-to-image' ? 't2i' : 'i2i'}
@@ -1312,6 +1345,36 @@ export default function SettingsModal({
                     </div>
                   )}
                 </Field>
+
+                <div
+                  data-fal-cost={falCost?.text ? 'yes' : 'no'}
+                  className="rounded-xl border border-[#2a2a2a] bg-[#121212] px-3 py-2 text-[11.5px] leading-snug text-faint"
+                >
+                  {falCost?.text ? (
+                    <>
+                      <strong className="font-medium text-muted">Cost</strong> —{' '}
+                      {falCost.rate && falCost.rate !== falCost.text ? <span className="text-muted">{falCost.rate} · </span> : null}
+                      {falCost.perImage == null ? (
+                        <>this model is billed by {falCost.text.replace(/^\$[0-9.]+ per /, '')}, so what one image costs depends on the run.</>
+                      ) : (
+                        <>
+                          <span className="text-[#dcdcdc]">{falCost.text}</span> at this size
+                          {falCost.megapixels ? ` (fal bills ${falCost.megapixels} MP — a part megapixel rounds up)` : ''}
+                          {imageGen.count > 1 ? ` · about ${falCost.forCount} for ${imageGen.count} images` : ''}.
+                        </>
+                      )}
+                    </>
+                  ) : selectedFal?.pricing ? (
+                    <>
+                      <strong className="font-medium text-muted">Cost</strong> — {selectedFal.pricing}
+                    </>
+                  ) : (
+                    <>
+                      <strong className="font-medium text-muted">Cost</strong> — fal publishes no rate for this model, so its own
+                      page is the only place to check before drawing a batch.
+                    </>
+                  )}
+                </div>
 
                 <Field
                   label="Reference edit model"
