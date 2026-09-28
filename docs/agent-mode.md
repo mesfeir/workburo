@@ -18,6 +18,8 @@ needs a rebuild (`npm run dist`) before it carries this — the copy in the Star
   always did.
 - **Model**: whatever is selected in the composer. Pi's provider config is regenerated from the
   app's own settings on every turn, so the two can never drift apart.
+- **Memory**: a follow-up turn remembers the last one — the conversation's own Pi session is
+  continued each time. Switching to a new chat starts clean.
 
 
 Agent mode is an opt-in toggle in the chat: when it is on, a turn is handed to
@@ -75,10 +77,13 @@ new is a process to run, a stream to parse and a workspace to scope.
   directory, hand it the prompt, parse the JSONL with a hand-rolled LF splitter (Pi's docs warn
   Node's `readline` is not protocol-compliant — it splits on U+2028/9, which are legal inside JSON
   strings), and translate events into the app's chat events.
-- **Session mapping**: v1 uses one Pi process per turn, with `--no-session` and the conversation
-  history kept in the app's own store, so a conversation is never split across two sources of
-  truth. Long-lived RPC mode (`steer`, `follow_up`, persistent session trees) is the upgrade path
-  once the simple version is trusted.
+- **Memory**: each conversation gets its own Pi session, kept in its own directory, and every
+  turn after the first continues it — so Pi remembers the chat, including what its tools did.
+  The first agent turn of a conversation is seeded with what the chat already said, because Pi
+  never saw those messages. A new chat is a new session, and one conversation can never read
+  another's memory.
+- **Long-lived RPC mode** (`steer`, `follow_up`, live session trees) remains the upgrade path:
+  today a turn is still one process, ended by Stop.
 - **Workspace**: a folder chosen in Settings → Agent, shown in the header while agent mode is on,
   because that is the folder the agent may change.
 
