@@ -416,7 +416,11 @@ export default function Message({
           </button>
           <span className="ml-1.5 text-[11.5px] text-[#8a8a8a]">
             {msg.model}
-            {msg.note ? ` · ${msg.note}` : ''}
+            {/* Not `msg.note` while a picture is being drawn: that note is fal's own line, e.g.
+                "Waiting in the queue… 0", and printing it here put a bare queue number on screen —
+                which is exactly the "0" the user kept seeing. The drawing row above already says
+                the phase in words, so the number is never shown on its own. */}
+            {!drawing && msg.note ? ` · ${msg.note}` : ''}
             {showUsage && msg.usage
               ? ` · ${msg.usage.prompt} in / ${msg.usage.completion} out${
                   msg.usage.reasoning ? ` (${msg.usage.reasoning} thinking)` : ''

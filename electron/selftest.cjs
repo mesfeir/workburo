@@ -1210,12 +1210,14 @@ async function run({
   const drawingNow = await inPage(win, function () {
     const d = document.querySelector('[data-drawing]')
     const phase = document.querySelector('[data-drawing-phase]')
+    const row = d ? d.closest('[data-msg]') : null
     return {
       present: !!d,
       kind: d ? d.getAttribute('data-drawing') : '',
       words: d ? String(d.innerText || '').replace(/\s+/g, ' ').trim() : '',
       phaseText: phase ? String(phase.innerText || '').trim() : '',
       tiles: d ? d.querySelectorAll('.drawing-tile').length : 0,
+      rowText: row ? String(row.innerText || '').replace(/\s+/g, ' ').trim() : '',
     }
   })
   record(
@@ -1224,7 +1226,9 @@ async function run({
       drawingNow.tiles === 1 &&
       drawingNow.phaseText.length > 3 &&
       !/^-?[0-9]+$/.test(drawingNow.phaseText) &&
-      /Creating the image/.test(drawingNow.words),
+      /Creating the image|Changing the image/.test(drawingNow.words) &&
+      // the whole message row, footer included: fal's queue position must not reach the screen
+      !/[\s·]0$/.test(drawingNow.rowText),
     JSON.stringify(drawingNow),
   )
   await shot(win, '16-drawing-state')
