@@ -1212,7 +1212,7 @@ async function run({
   )
   record(
     'the picker says whether the chosen endpoint keeps your picture or re-draws it',
-    Boolean(editPicker) && /keeps the picture you sent|re-draws a new picture/.test(editPicker.kind || ''),
+    Boolean(editPicker) && /keeps the picture you sent|re-drawing endpoint/.test(editPicker.kind || ''),
     `"${editPicker?.kind || ''}"`,
   )
   record(

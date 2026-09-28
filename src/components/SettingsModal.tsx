@@ -1453,13 +1453,14 @@ export default function SettingsModal({
                       ? 'Load models above to choose from fal’s image-to-image endpoints.'
                       : `${editChoices.length} endpoint${editChoices.length === 1 ? '' : 's'} here accept a reference image.`}
                   </div>
-                  {/* the family matters more than the name: it decides whether you get your picture
-                      back, changed, or a new picture inspired by it */}
+                  {/* the family decides whether you get your picture back, changed, or a new
+                      picture inspired by it. The reliable marker is the reference parameter's
+                      style: image-to-image endpoints carry a strength and re-draw; editors
+                      (image_urls, no strength) follow the instruction and keep the picture. */}
                   <div data-editmodel-kind className="mt-1.5 text-[11.5px] text-faint">
-                    {/flux\/dev\/image-to-image|flux-2-pro\/edit/i.test(imageGen.editModel || '') &&
-                    !/kontext/i.test(imageGen.editModel || '')
-                      ? 'This one re-draws a new picture guided by yours, so details drift. For “the same picture, with my change”, pick a Nano Banana, Kontext or GPT Image edit endpoint.'
-                      : 'This one follows your instruction and keeps the picture you sent — the same image, changed as asked.'}
+                    {/image-to-image/i.test(imageGen.editModel || '')
+                      ? 'A re-drawing endpoint: it makes a new picture guided by yours, so details drift. The app keeps its strength low (0.85) so your picture survives — for “the same picture, with my change”, a Nano Banana, Kontext or GPT Image edit endpoint follows the instruction exactly.'
+                      : 'An instruction editor: it follows what you asked for and keeps the picture you sent. If a result ever comes back looking re-drawn rather than changed, try a Nano Banana or Kontext edit endpoint.'}
                   </div>
                   {imageGen.editModelMovedFrom ? (
                     <div
