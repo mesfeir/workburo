@@ -18,7 +18,8 @@
     "test:agent": "node scripts/test-agent.cjs",
     "test:messages": "node scripts/test-messages.cjs",
     "test:pricing": "node scripts/test-pricing.cjs",
-    "test:edit": "node scripts/test-edit.cjs"
+    "test:edit": "node scripts/test-edit.cjs",
+    "test:tools": "node scripts/test-tools.cjs"
   },
   "dependencies": {
     "highlight.js": "^11.10.0",

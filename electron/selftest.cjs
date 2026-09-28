@@ -1202,7 +1202,7 @@ async function run({
       offersChosen: opts.includes(sel.value),
       isEditor: /image-to-image|\/edit$|-edit/.test(sel.value),
       allImageToImage: opts.every((v) => /image-to-image|\/edit$|-edit/.test(v)),
-      kind: kind ? String(kind.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 80) : '',
+      kind: kind ? String(kind.innerText || '').replace(/\s+/g, ' ').trim() : '',
     }
   })
   record(

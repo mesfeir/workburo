@@ -502,6 +502,9 @@ const ALL_TOOLS = Object.keys(REGISTRY)
 
 /** Tool definitions in chat/completions shape, for the tools the config enables. */
 function chatToolDefs(cfg) {
+  // The master switch means no tools at all. Settings greys the per-tool toggles out when it
+  // is off, so advertising tools anyway would contradict what the app says it is doing.
+  if (cfg && cfg.toolsEnabled === false) return []
   const on = (cfg.toolToggles || {})
   return ALL_TOOLS.filter((n) => on[n] !== false).map((n) => REGISTRY[n].schema)
 }
