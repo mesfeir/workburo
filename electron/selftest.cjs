@@ -1218,6 +1218,18 @@ async function run({
       phaseText: phase ? String(phase.innerText || '').trim() : '',
       tiles: d ? d.querySelectorAll('.drawing-tile').length : 0,
       rowText: row ? String(row.innerText || '').replace(/\s+/g, ' ').trim() : '',
+      // Which child of the row is carrying the stray number. Reading the source did not find it,
+      // so the check reports where it actually is: each direct child, labelled, compacted.
+      parts: row
+        ? Array.from(row.children)
+            .map((c) => {
+              const t = String(c.innerText || '').replace(/\s+/g, ' ').trim()
+              if (!t) return ''
+              const mark = c.getAttribute('data-drawing') ? '[drawing]' : ''
+              return `${mark}${t.slice(0, 60)}`
+            })
+            .filter(Boolean)
+        : [],
     }
   })
   record(

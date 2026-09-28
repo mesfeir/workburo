@@ -377,8 +377,11 @@ export default function Message({
         </div>
       )}
 
-      {/* hover actions */}
-      {!msg.streaming && (msg.content || msg.error || (msg.images || []).length) && (
+      {/* hover actions — the `!!` is load-bearing: without it this chain evaluates to the *number*
+          0 while a picture is being drawn (no content, no error, no images yet), and React renders
+          a falsy value that is a number. That bare "0" sat in the message row and is what the user
+          kept seeing when they pressed the Image button. */}
+      {!msg.streaming && !!(msg.content || msg.error || (msg.images || []).length) && (
         <div className="mt-1.5 flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
           <button
             onClick={copy}
