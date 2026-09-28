@@ -72,9 +72,15 @@ look complete.
 
 **Images out, not just in**
 
-- **Hosted image generation.** Put a [fal.ai](https://fal.ai/dashboard/keys) key in Settings →
-  Images and an **Image** button appears in the composer: describe the picture, get the picture,
-  in the conversation. Off by default.
+- **It draws when you ask to see something.** Image generation is a tool the model can call, not a
+  mode you switch on: say *"create an image of an elephant"* or *"show me how it would look"* and the
+  picture arrives in the conversation, mid-answer. Save a
+  [fal.ai](https://fal.ai/dashboard/keys) key once (Settings → Images) and that is the whole setup.
+- **It writes its own prompt.** The model expands your words into a proper visual description —
+  subject, style, lighting, framing — because that text is the only instruction the image model gets.
+- **Still a tool, so it is yours to control.** It sits in Settings → Tools beside web search and
+  weather and can be switched off there, and there is an optional manual **Image** button in the
+  composer if you would rather send a prompt straight to the generator.
 - **The live fal catalogue, not a hardcoded list.** The picker is loaded from fal.ai's own API,
   so it offers every text-to-image and image-to-image endpoint your key can reach — 226 of them
   at the time of writing — each with its own description, and its price wherever fal publishes
@@ -153,9 +159,9 @@ so SmartScreen will show "unknown publisher" until you sign it with your own cer
 2. Pick a preset or paste a base URL — for example `https://opencode.ai/zen/go/v1`.
 3. Paste your key and hit **Test connection**. The model list loads on success.
 4. In **Models**, hit ⚡ on the models you care about so their real capabilities are recorded.
-5. Optional, for pictures: in **Images**, paste your fal.ai key, hit **Test key & load models**,
-   pick a model and tick **Enable image generation**. An **Image** button then appears in the
-   composer.
+5. Optional, for pictures: in **Images**, paste your fal.ai key, hit **Test key & load models** and
+   pick a model. That is all — the model can now draw whenever you ask to see something. Nothing to
+   enable, though you can switch the tool off in **Tools** or turn on a manual **Image** button.
 
 ![Zen Chat settings, showing endpoint presets, the base URL and a masked API key field](docs/screenshots/readme-settings.png)
 
@@ -319,10 +325,12 @@ paste or drag an image into the composer. If the model can't take images, the ap
 clearly instead of silently dropping the attachment.
 
 **Can it make images?**
-Yes — with a [fal.ai](https://fal.ai/dashboard/keys) key, enabled in Settings → Images. The
-composer then grows an **Image** button, and the model list is pulled live from fal.ai so you can
-pick anything from the cheapest draft model to a flagship. Generation is hosted: your prompt goes
-to fal.ai and you pay their per-image rate. Local generation is benchmarked but not wired in yet.
+Yes. Image generation is a tool the model calls on its own — ask for a picture, or ask how something
+would look, and it draws instead of describing. You just need a
+[fal.ai](https://fal.ai/dashboard/keys) key saved once in Settings → Images; there is no mode to
+enable. The model list is pulled live from fal.ai, so you can point it at anything from the cheapest
+draft model to a flagship. Generation is hosted: your prompt goes to fal.ai and you pay their
+per-image rate. Local generation is benchmarked but not wired in yet.
 
 **Can it search the web?**
 Yes — through your own SearXNG instance, or with a model that has server-side search on the

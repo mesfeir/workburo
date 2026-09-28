@@ -221,7 +221,7 @@ async function pickModel(win, name) {
 
 /* --------------------------------------------------------------- runner */
 
-async function run({ win, apiKey, toggle, hide, isVisible, isRegistered, readBounds, setLogin, getLogin, isPackaged, reapplyStored }) {
+async function run({ win, apiKey, toggle, hide, isVisible, isRegistered, readBounds, setLogin, getLogin, isPackaged, reapplyStored, hasFalKey = false }) {
   const results = []
 
   // surface renderer-side errors so a silent failure can't hide
@@ -739,6 +739,70 @@ async function run({ win, apiKey, toggle, hide, isVisible, isRegistered, readBou
     `toolRows=${m14.tools} [${m14.labels.join(' | ')}] sources=${m14.sources} ${m14.error ? `ERR:"${m14.error}" ` : ''}answer="${m14.text.slice(0, 150)}"`,
   )
   await shot(win, '13-server-search')
+
+  // ---------- 14b. pictures are a tool, not a mode: the model draws on its own
+  // Nothing to arm. Asking to see something must make the model call generate_image
+  // itself — and when it cannot draw (no key, no credit) the user must be told why
+  // rather than handed a description that pretends to be the request.
+  const imgTools = await inPage(win, function () {
+    return window.zen.tools.list().then((t) => t.map((x) => x.name))
+  })
+  record(
+    'image generation is offered to the model as a tool',
+    Array.isArray(imgTools) && imgTools.includes('generate_image'),
+    `tools=[${(imgTools || []).join(', ')}]`,
+  )
+
+  const drewPicked = await pickModel(win, 'deepseek-v4.1-flash')
+  await inPage(win, function () {
+    const b = Array.from(document.querySelectorAll('button')).find(
+      (x) => (x.textContent || '').trim() === 'New chat',
+    )
+    if (b) b.click()
+  })
+  await sleep(700)
+  const beforeDraw = await inPage(win, pageAssistantTurns)
+  await inPage(win, pageType, ['Create an image of an elephant.'])
+  await inPage(win, pageSend)
+  await waitFor(
+    win,
+    new Function(`return function(){ return document.querySelectorAll('.prose-zen').length > ${beforeDraw} }`)(),
+    180000,
+    400,
+    'image turn to start',
+  )
+  await waitFor(win, pageIdle, 300000, 400, 'image turn to finish')
+  await sleep(900)
+  const imgState = await inPage(win, function () {
+    const all = document.querySelectorAll('[data-msg]')
+    const wrap = all[all.length - 1]
+    return {
+      imgs: wrap ? wrap.querySelectorAll('img').length : 0,
+      toolRows: wrap ? wrap.querySelectorAll('[data-tools] button').length : 0,
+      text: (wrap ? wrap.innerText || '' : '').replace(/\s+/g, ' ').slice(0, 400),
+    }
+  })
+  const drewIt = imgState.imgs > 0
+  record(
+    'asking for a picture makes the model call the image tool by itself',
+    drewPicked && imgState.toolRows > 0 && /image generation/i.test(imgState.text),
+    `toolRows=${imgState.toolRows} imgs=${imgState.imgs} text="${imgState.text.slice(0, 160)}"`,
+  )
+  record(
+    'the request ends with the picture, or with the reason it could not be drawn',
+    drewIt || /Settings → Images|balance|locked|credit/i.test(imgState.text),
+    `imgs=${imgState.imgs} falKey=${hasFalKey ? 'saved' : 'none'} text="${imgState.text.slice(0, 200)}"`,
+  )
+  if (hasFalKey) {
+    record(
+      'with a fal key saved the picture really lands on the reply',
+      drewIt || /balance|locked|credit/i.test(imgState.text),
+      `imgs=${imgState.imgs} text="${imgState.text.slice(0, 200)}"`,
+    )
+  } else {
+    console.log('SKIP  drawing for real (no ZEN_FAL_KEY in the environment)')
+  }
+  await shot(win, '15-image-tool')
 
   // ---------- 15. the off switch really turns tools off
   await inPage(win, function () {

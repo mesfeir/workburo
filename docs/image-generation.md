@@ -33,6 +33,11 @@ there is no CORS to negotiate. Specifically:
   of a broken image.
 - **Money is the user's.** The app never invents a price. Where fal publishes pricing text for a
   model, it is shown under the picker; the per-model rate is whatever fal bills.
+- **It is reached as a tool, not a mode.** `generate_image` lives in the same registry as web search
+  and weather (`electron/tools.cjs`), so the model calls it when the user asks to see something, and
+  Settings → Tools is its off switch. Main runs the generation and hands the finished attachments
+  back to the reply, which is why the key never reaches the renderer. Progress (queued → generating
+  → downloading) streams onto the tool row while fal works.
 
 ### Cost, for reference
 

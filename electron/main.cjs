@@ -484,6 +484,10 @@ app.whenReady().then(() => {
     seeded.config.maxTokens = 4096
     seeded.config.sendAffinity = true
     seeded.config.showUsage = true
+    // a fal key in the environment is used only to prove drawing works; it is never printed
+    if (process.env.ZEN_FAL_KEY) {
+      seeded.config.imageGen = { ...seeded.config.imageGen, falKey: process.env.ZEN_FAL_KEY, enabled: true }
+    }
     writeStore(seeded)
 
     createWindow()
@@ -504,6 +508,7 @@ app.whenReady().then(() => {
           getLogin: getLoginState,
           isPackaged: app.isPackaged,
           reapplyStored: () => applyStoredHotkey(),
+          hasFalKey: Boolean(process.env.ZEN_FAL_KEY),
         })
         const passed = results.filter((r) => r.pass).length
         console.log(`\n${passed}/${results.length} checks passed`)
@@ -643,6 +648,15 @@ const REASONING_HINTS = /reasoning_effort|disabling thinking|thinking-only|reaso
 const TOOL_HINTS = /tool_calls|tool_choice|"tools"|tools are not supported|tool.*not supported|'function' is|invalid_parameter_error.*(tool|function)/i
 
 const { chatToolDefs, responsesToolDefs, executeTool, ALL_TOOLS, REGISTRY } = require('./tools.cjs')
+
+// Pictures are a tool, not a mode: the model reaches for it as soon as the user
+// asks to see something. Saying so up front is what turns "show me what that
+// would look like" into a call instead of a paragraph of description.
+const IMAGE_TOOL_NOTE =
+  'You can create pictures with the generate_image tool. Whenever the user asks to see something — ' +
+  '"create an image of …", "draw …", "make a picture / logo / poster of …", "show me how it would look", ' +
+  '"what would X look like" — call generate_image with a detailed visual prompt instead of describing ' +
+  'the scene in words. The picture appears in the conversation itself.'
 
 /* ---------------------------------------------------------------- request */
 
@@ -1075,7 +1089,17 @@ async function runRound({ protocol, base, cfg, messages, systemPrompt, send, ac,
 /* --------------------------------------------------------------- IPC: chat */
 
 ipcMain.handle('chat:start', async (event, req) => {
-  const { requestId, cfg, messages, systemPrompt } = req
+  const { requestId, cfg, messages } = req
+  // only claim the model can draw when there is actually a key to draw with. The
+  // tool stays advertised either way, so asking for a picture with no key comes
+  // back as "add one in Settings → Images" rather than a description.
+  const drawReady =
+    cfg.toolsEnabled !== false &&
+    (cfg.toolToggles || {}).generate_image !== false &&
+    !!cfg.imageGen?.falKey
+  const systemPrompt = drawReady
+    ? [String(req.systemPrompt || '').trim(), IMAGE_TOOL_NOTE].filter(Boolean).join('\n\n')
+    : req.systemPrompt
   const send = (payload) => {
     if (!event.sender.isDestroyed()) event.sender.send('chat:event', { requestId, ...payload })
   }
@@ -1216,7 +1240,18 @@ ipcMain.handle('chat:start', async (event, req) => {
           value: { phase: 'start', id: tc.id, name: tc.name, label: meta.label || tc.name, args },
         })
 
-        const r = await executeTool(tc.name, tc.arguments, { searchUrl: cfg.searchUrl, signal: ac.signal })
+        const r = await executeTool(tc.name, tc.arguments, {
+          searchUrl: cfg.searchUrl,
+          signal: ac.signal,
+          // a picture is drawn here, in main: the key stays out of the renderer,
+          // and progress streams to the tool row while fal works
+          images: {
+            key: cfg.imageGen?.falKey || '',
+            model: cfg.imageGen?.model || '',
+            imagesDir: imagesDir(),
+            onProgress: (p) => send({ type: 'image', value: { id: tc.id, ...p } }),
+          },
+        })
         for (const s of r.sources || []) {
           if (!allSources.some((x) => x.url === s.url)) allSources.push(s)
         }
@@ -1230,6 +1265,8 @@ ipcMain.handle('chat:start', async (event, req) => {
             ok: r.ok,
             error: r.error || null,
             sources: r.sources || [],
+            // attachments the renderer hangs on the reply
+            images: r.images || [],
             preview: String(r.ok ? r.text : r.error || '')
               .replace(/\s+/g, ' ')
               .slice(0, 300),

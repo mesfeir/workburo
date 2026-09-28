@@ -241,6 +241,104 @@ async function offline() {
   fs.rmSync(outDir, { recursive: true, force: true })
 }
 
+/* ---------------------------------------------- the tool the model calls */
+
+/**
+ * The same pipeline, reached the way the model reaches it: through the tool
+ * registry. A stand-in generator replaces fal, so this proves the wiring —
+ * advertisement, argument validation, attachments, error mapping — with no key.
+ */
+async function toolLayer() {
+  console.log('\n=== OFFLINE: generate_image as a tool ===\n')
+  const tools = require('../electron/tools.cjs')
+  const names = tools.chatToolDefs({}).map((t) => t.function.name)
+  check('generate_image is advertised to the model by default', names.includes('generate_image'), names.join(', '))
+  check(
+    'and can be switched off in Settings → Tools',
+    !tools
+      .chatToolDefs({ toolToggles: { generate_image: false } })
+      .map((t) => t.function.name)
+      .includes('generate_image'),
+  )
+  const rs = tools.responsesToolDefs({}).find((t) => t.name === 'generate_image')
+  check('the Responses protocol gets it too, flattened', Boolean(rs?.parameters?.required?.includes('prompt')))
+
+  const schema = tools.REGISTRY.generate_image.schema.function
+  check(
+    'the schema offers exactly the sizes the picker offers',
+    JSON.stringify(schema.parameters.properties.size.enum) === JSON.stringify(images.SIZE_PRESETS.map((p) => p.id)),
+    schema.parameters.properties.size.enum.join(', '),
+  )
+  check(
+    'the description tells the model to draw rather than describe',
+    /never answer a request like this by\s+describing/i.test(schema.description.replace(/\s+/g, ' ')),
+  )
+
+  // a stand-in for fal that records exactly what the tool asked it for
+  const calls = []
+  let next = {
+    ok: true,
+    tookMs: 1200,
+    model: 'fal-ai/flux/schnell',
+    images: [
+      { path: 'C:/tmp/zen-1.png', name: 'zen-1.png', url: 'data:image/png;base64,AAAA', bytes: 4, width: 512, height: 512 },
+    ],
+  }
+  const opts = {
+    images: {
+      key: 'stub-key',
+      model: 'fal-ai/flux/schnell',
+      imagesDir: 'C:/tmp',
+      generate: async (a) => {
+        calls.push(a)
+        return next
+      },
+    },
+  }
+
+  const ok = await tools.executeTool('generate_image', JSON.stringify({ prompt: 'a red dot on white' }), opts)
+  check('a tool call comes back successful', ok.ok === true, ok.error || '')
+  check(
+    'the picture is handed back as an attachment',
+    (ok.images || []).length === 1 && String(ok.images[0].path).endsWith('.png'),
+    (ok.images || []).map((i) => i.path).join(', '),
+  )
+  check(
+    'the model gets a short report, never image bytes',
+    typeof ok.text === 'string' && ok.text.length < 500 && !/base64/.test(ok.text),
+    ok.text,
+  )
+  check('the report names the model and the time', /schnell/.test(ok.text) && /1\.2s/.test(ok.text), ok.text)
+  check('the key and the images folder reach the generator', calls[0]?.key === 'stub-key' && calls[0]?.imagesDir === 'C:/tmp')
+  check('the default count is one image', calls[0]?.count === 1, String(calls[0]?.count))
+
+  await tools.executeTool('generate_image', JSON.stringify({ prompt: 'x', count: 99, size: 'portrait_16_9' }), opts)
+  check('an absurd count is clamped to 4', calls[1]?.count === 4, String(calls[1]?.count))
+  check('a valid size is passed straight through', calls[1]?.size === 'portrait_16_9', String(calls[1]?.size))
+
+  const badSize = await tools.executeTool('generate_image', JSON.stringify({ prompt: 'x', size: 'huge' }), opts)
+  check('an unknown size is refused with the list of real ones', badSize.ok === false && /square_hd/.test(badSize.error), badSize.error)
+  check('and nothing was generated for it', calls.length === 2, `${calls.length} generator calls`)
+
+  const noPrompt = await tools.executeTool('generate_image', '{}', opts)
+  check('a missing prompt is refused', noPrompt.ok === false && /needs a prompt/.test(noPrompt.error), noPrompt.error)
+
+  const noKey = await tools.executeTool(
+    'generate_image',
+    JSON.stringify({ prompt: 'x' }),
+    { images: { ...opts.images, key: '' } },
+  )
+  check(
+    'with no key the model is told exactly what to ask the user for',
+    noKey.ok === false && /Settings → Images/.test(noKey.error),
+    noKey.error,
+  )
+
+  next = { ok: false, error: 'Your fal.ai account is locked: the balance is exhausted.' }
+  const failed = await tools.executeTool('generate_image', JSON.stringify({ prompt: 'x' }), opts)
+  check('a fal failure becomes the tool error, verbatim', failed.ok === false && /balance/.test(failed.error), failed.error)
+}
+
 async function live() {
   const key = process.env.FAL_KEY
   console.log('\n=== LIVE: the real fal.ai API ===\n')
@@ -276,6 +374,18 @@ async function live() {
   })
   if (gen.ok) {
     check('a real generation succeeded', true, `${gen.images.length} image(s) in ${gen.tookMs}ms`)
+
+    // the same pipeline again, but reached the way the model reaches it
+    const viaTool = await require('../electron/tools.cjs').executeTool(
+      'generate_image',
+      JSON.stringify({ prompt: 'a single blue dot centred on a white background', size: 'square' }),
+      { images: { key, model: 'fal-ai/flux/schnell', imagesDir: path.join(os.tmpdir(), 'zen-img-live-test') } },
+    )
+    check(
+      'the same thing works through the tool the model calls',
+      viaTool.ok === true && (viaTool.images || []).length === 1,
+      viaTool.error || viaTool.text,
+    )
   } else {
     console.log(`BLOCKED  real generation: ${gen.error}`)
     check('a refused generation fails with an actionable message', /balance|billing/i.test(gen.error || ''), gen.error)
@@ -284,6 +394,7 @@ async function live() {
 
 ;(async () => {
   await offline()
+  await toolLayer()
   await live()
   console.log(`\n=== ${pass}/${pass + fail} passed ===`)
   process.exit(fail ? 1 : 0)

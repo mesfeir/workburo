@@ -3,11 +3,14 @@
  * the only place that can reach the internet freely (no CORS, no page sandbox).
  *
  * Each tool returns { ok, text, sources, error }. `text` is what the model sees;
- * `sources` is what the user sees (clickable links under the reply).
+ * `sources` is what the user sees (clickable links under the reply); `images`
+ * (generate_image only) is attachments the caller hangs on the reply.
  */
 
 const UA = 'Zen-Chat/1.0'
 const DEFAULT_SEARCH_URL = 'http://localhost:8888'
+
+const falImages = require('./images.cjs')
 
 function timeoutSignal(ms, outer) {
   const t = AbortSignal.timeout(ms)
@@ -248,6 +251,71 @@ async function getTime(args) {
   }
 }
 
+/* --------------------------------------------------------------- pictures */
+
+/**
+ * Draw a picture, as a tool, so the model can reach for it on its own the moment
+ * the user asks to see something — no mode to arm first.
+ *
+ * Same return shape as every other tool, plus `images`: attachments the caller
+ * puts on the reply. `text` is what the model reads — a short report, never the
+ * image bytes.
+ */
+async function generateImage(args, opts = {}) {
+  const prompt = String(args.prompt || args.description || '').trim()
+  if (!prompt) return { ok: false, error: 'generate_image needs a prompt describing the picture.' }
+
+  const cfg = opts.images || {}
+  // a test can inject a stand-in here, so the whole tool path runs with no key and no network
+  const generate = cfg.generate || falImages.generate
+
+  if (!cfg.key) {
+    return {
+      ok: false,
+      error:
+        'No fal.ai API key is saved, so there is nothing to draw with. Add one in Settings → Images, ' +
+        'then ask me again.',
+    }
+  }
+
+  const model = String(args.model || cfg.model || '').trim()
+  if (!model) return { ok: false, error: 'No fal.ai model is selected. Pick one in Settings → Images.' }
+
+  const count = Math.min(Math.max(Number(args.count) || 1, 1), 4)
+  const asked = String(args.size || '').trim()
+  const size = falImages.SIZE_PRESETS.some((p) => p.id === asked) ? asked : ''
+  if (asked && !size) {
+    return {
+      ok: false,
+      error: `Unknown size "${asked}". Use one of: ${falImages.SIZE_PRESETS.map((p) => p.id).join(', ')}.`,
+    }
+  }
+
+  const result = await generate({
+    key: cfg.key,
+    model,
+    prompt,
+    count,
+    size,
+    imagesDir: cfg.imagesDir,
+    onProgress: cfg.onProgress,
+  })
+  if (!result.ok) return { ok: false, error: result.error || 'Image generation failed.' }
+
+  const images = result.images || []
+  const secs = ((result.tookMs || 0) / 1000).toFixed(1)
+  return {
+    ok: true,
+    images,
+    sources: [],
+    text:
+      `Drew ${images.length} image${images.length === 1 ? '' : 's'} with ${model} in ${secs}s` +
+      `${size ? ` at ${size}` : ''}. The user can see ${images.length === 1 ? 'it' : 'them'} in the ` +
+      'conversation now. Do not describe the picture as if you painted it and do not repeat the prompt ' +
+      'back — just introduce it in a sentence or two.',
+  }
+}
+
 /* ------------------------------------------------------------- the registry */
 
 const REGISTRY = {
@@ -330,6 +398,49 @@ const REGISTRY = {
       },
     },
   },
+  generate_image: {
+    label: 'Image generation',
+    describe: 'Draw a picture and show it in the chat, with fal.ai.',
+    run: generateImage,
+    schema: {
+      type: 'function',
+      function: {
+        name: 'generate_image',
+        description:
+          'Create a picture and show it to the user in the chat. Call this whenever the user wants to ' +
+          'SEE something rather than read about it: "create an image of …", "draw …", "make a picture / ' +
+          'logo / poster / character of …", "show me how it would look", "what would X look like", or any ' +
+          'other request for a visual. Write the prompt as a rich visual description — subject, style, ' +
+          'lighting, framing — because the words you send are the only instruction the image model gets. ' +
+          'The picture appears in the conversation itself, so never answer a request like this by ' +
+          'describing the scene in words instead of calling this tool.',
+        parameters: {
+          type: 'object',
+          properties: {
+            prompt: {
+              type: 'string',
+              description:
+                'What to draw, as a detailed visual description. Expand the user\'s words into a prompt ' +
+                'an image model can use: subject, setting, style, lighting, colours, framing.',
+            },
+            count: { type: 'integer', description: 'How many images to make, 1-4 (default 1)' },
+            size: {
+              type: 'string',
+              enum: falImages.SIZE_PRESETS.map((p) => p.id),
+              description: 'Canvas shape. Defaults to what the user picked in Settings.',
+            },
+            model: {
+              type: 'string',
+              description:
+                'Optional fal.ai model id to draw with, e.g. "fal-ai/flux/schnell". Defaults to the ' +
+                'model the user selected.',
+            },
+          },
+          required: ['prompt'],
+        },
+      },
+    },
+  },
 }
 
 const ALL_TOOLS = Object.keys(REGISTRY)
@@ -358,7 +469,15 @@ async function executeTool(name, argsRaw, opts = {}) {
   }
   try {
     const r = await tool.run(args || {}, opts)
-    return { name, text: r.text || '', sources: r.sources || [], ok: r.ok !== false, error: r.error || null }
+    return {
+      name,
+      text: r.text || '',
+      sources: r.sources || [],
+      // only generate_image fills this in; every other tool leaves it empty
+      images: r.images || [],
+      ok: r.ok !== false,
+      error: r.error || null,
+    }
   } catch (err) {
     return { name, ok: false, error: `${name} threw: ${err.message}`, text: '', sources: [] }
   }

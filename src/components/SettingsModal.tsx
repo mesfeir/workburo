@@ -988,10 +988,16 @@ export default function SettingsModal({
                       className="h-4 w-4 accent-[#3f6db5]"
                     />
                     <span className="text-[13px] text-[#dcdcdc]">
-                      Enable image generation — adds an <strong className="font-medium">Image</strong> button to the
-                      composer
+                      Show the manual <strong className="font-medium">Image</strong> button in the composer
                     </span>
                   </label>
+                  <p className="mt-2 text-[11.5px] leading-snug text-faint">
+                    You don't need this on to get pictures. As soon as a key is saved below, the model calls image
+                    generation by itself whenever you ask to see something — "create an image of…", "show me how it
+                    would look" — and the picture lands in the conversation. That tool is switched off in{' '}
+                    <strong className="font-medium text-muted">Tools</strong>, not here; this box only adds the manual
+                    button that sends your next message straight to fal.
+                  </p>
                 </Field>
 
                 <div className="rounded-xl border border-[#2a2a2a] bg-[#121212] p-3 text-[11.5px] leading-snug text-faint">

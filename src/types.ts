@@ -157,6 +157,7 @@ export interface ChatEvent {
     | 'tool'
     | 'sources'
     | 'notice'
+    | 'image'
   value?: any
   status?: number
 }

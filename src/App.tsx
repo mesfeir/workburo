@@ -74,6 +74,8 @@ interface StreamState {
   startedAt: number
   tools: ToolActivity[]
   sources: Source[]
+  /** pictures the model drew with the generate_image tool, mid-answer */
+  genImages: Attachment[]
 }
 
 function titleFrom(text: string, images: number) {
@@ -173,6 +175,7 @@ export default function App() {
                         error: s.error ?? m.error,
                         tools: [...s.tools],
                         sources: [...s.sources],
+                        images: s.genImages.length ? [...s.genImages] : m.images,
                       },
                 ),
               },
@@ -227,7 +230,21 @@ export default function App() {
           }
           if (at >= 0) s.tools[at] = entry
           else s.tools.push(entry)
+          // a tool that drew something hands back finished attachments
+          for (const img of v.images || []) {
+            if (img?.path && !s.genImages.some((x) => x.path === img.path)) s.genImages.push(img)
+          }
           flush(s)
+          break
+        }
+        case 'image': {
+          // fal reports progress while the picture is being drawn
+          const v = ev.value || {}
+          const at = s.tools.findIndex((t) => t.id === v.id)
+          if (at >= 0) {
+            s.tools[at] = { ...s.tools[at], preview: `fal · ${v.detail || v.phase}` }
+            flush(s)
+          }
           break
         }
         case 'sources': {
@@ -259,6 +276,7 @@ export default function App() {
             elapsedMs: Date.now() - s.startedAt,
             tools: [...s.tools],
             sources: [...s.sources],
+            ...(s.genImages.length ? { images: [...s.genImages] } : {}),
           }
           setConversations((prev) =>
             prev.map((c) =>
@@ -310,6 +328,7 @@ export default function App() {
         startedAt: Date.now(),
         tools: [],
         sources: [],
+        genImages: [],
       }
       streams.current.set(requestId, state)
       activeRequest.current = requestId
