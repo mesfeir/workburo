@@ -143,6 +143,32 @@ because it is fast and cheap, and the picker exists precisely so you can move up
 quality you are willing to pay for. The comparison is only about the cheapest model on fal, not
 about hosted generation as such.
 
+## Follow-ups: talking about the picture you just made
+
+"make it bigger", "change the colours" — after a picture has been created or edited, the next
+message is about *that* picture:
+
+- The picture becomes the composer's reference the moment it is made, so an instruction like
+  "make it bigger" goes straight to fal with your words as the prompt. No chat model sits in the
+  middle describing it, so the change you typed is the change that is made.
+- Asking *about* the picture goes to the chat model instead, which needs a model that reads
+  pictures.
+
+Two rules keep the conversation valid, both learned from real 400s from the relay:
+
+1. **A picture is never put on an assistant turn.** The relay refuses it outright — *"Image in
+   assistant message is not supported"* — and one such turn breaks the whole conversation. A
+   picture the app made is recorded in that turn's text instead, so the model still knows a
+   picture exists.
+2. **A picture is only sent to a model confirmed to read pictures.** A model that cannot read one
+   rejects the request, and because the picture stays in the conversation history, every later
+   message fails the same way. `unknown` is not treated as a yes: if a model rejects a request
+   that carried a picture, the request is retried with the picture described in words, a notice
+   says why, and that model is remembered as text-only so it is never asked again.
+
+Both rules live in `electron/messages.cjs` and are covered by `npm run test:messages`, which
+replays a real conversation containing a picture against the configured model.
+
 ## Why local is still the interesting direction
 
 1. **Local generation can keep the GPU free.** The thing that holds this GPU is a resident ComfyUI
