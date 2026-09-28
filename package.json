@@ -19,16 +19,20 @@
     "test:messages": "node scripts/test-messages.cjs",
     "test:pricing": "node scripts/test-pricing.cjs",
     "test:edit": "node scripts/test-edit.cjs",
-    "test:tools": "node scripts/test-tools.cjs"
+    "test:tools": "node scripts/test-tools.cjs",
+    "test:files": "node scripts/test-files.cjs"
   },
   "dependencies": {
     "highlight.js": "^11.10.0",
     "lucide-react": "^0.460.0",
+    "mammoth": "^1.13.0",
+    "pdfjs-dist": "^6.3.289",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^9.0.1",
     "rehype-highlight": "^7.0.1",
-    "remark-gfm": "^4.0.0"
+    "remark-gfm": "^4.0.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
@@ -54,7 +58,11 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
-      "package.json"
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "asarUnpack": [
+      "**/node_modules/pdfjs-dist/**"
     ],
     "win": {
       "icon": "build/icon.ico",
