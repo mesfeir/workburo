@@ -121,6 +121,11 @@ function defaultStore() {
       affinityId: 'zen-chat-' + Math.random().toString(36).slice(2, 10),
       hotkey: 'Alt+Space',
       startWithWindows: false,
+      // agent mode: off until Pi is installed and switched on in the chat
+      agent: {
+        workspace: '',
+        enabled: false
+      },
       titleModel: '',
       imageGen: {
         enabled: false,
@@ -307,6 +312,125 @@ function toggleWindow() {
 
 function sendToRenderer(channel, payload) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
+}
+
+/* ------------------------------------------------------------ agent mode */
+
+// Pi in the backend, with hands. Off by default: nothing is downloaded, installed or started
+// until the user asks for it, and when the toggle is off no process is ever spawned.
+
+const pi = require('./pi.cjs')
+const { dialog: piDialog } = require('electron')
+
+/** Pi lives beside the store, so uninstalling is deleting one folder. */
+const PI_ROOT = () => path.join(app.getPath('userData'), 'pi')
+
+/** The model list Pi is offered: the one the chat offers, so the two cannot disagree. */
+function agentModels (cfg, store) {
+  const fromStore = Array.isArray(store && store.models) ? store.models : []
+  const list = fromStore.length ? fromStore : []
+  return pi.modelsFor(list.concat([{ id: cfg.model, name: cfg.model }]))
+}
+
+const activeAgentTurns = new Map()
+let agentInstalling = false
+
+/** Pi's events, in the words the chat already knows how to render. */
+function agentEventFor (requestId, ev) {
+  switch (ev.kind) {
+    case 'text':
+      return { type: 'text', value: ev.delta }
+    case 'thinking':
+      return { type: 'reasoning', value: ev.delta }
+    case 'usage':
+      return { type: 'usage', value: ev.usage }
+    case 'tool_start':
+      return {
+        type: 'tool',
+        value: {
+          id: ev.tool.id,
+          name: ev.tool.name,
+          label: ev.tool.label,
+          phase: 'start',
+          args: ev.tool.args,
+          query: ev.tool.summary
+        }
+      }
+    case 'tool_end':
+      return {
+        type: 'tool',
+        value: {
+          id: ev.id,
+          name: ev.name,
+          phase: 'end',
+          ok: ev.ok,
+          preview: ev.text,
+          error: ev.ok ? null : (ev.text || 'the command failed')
+        }
+      }
+    case 'error':
+      return { type: 'error', value: ev.message }
+    default:
+      return null
+  }
+}
+
+function agentFail (requestId, message) {
+  sendToRenderer('chat:event', { requestId, type: 'error', value: message })
+  sendToRenderer('chat:event', { requestId, type: 'done' })
+  return { ok: false, error: message }
+}
+
+/**
+ * One agent turn: Pi runs the loop in the chosen folder, using the model the chat has selected.
+ * The provider config is regenerated first, so switching model in the composer switches the
+ * model the agent uses too.
+ */
+async function runAgentTurn (req) {
+  const requestId = req && req.requestId
+  const store = readStore()
+  const cfg = store.config || {}
+  const agent = cfg.agent || {}
+
+  if (!pi.status(PI_ROOT()).installed) {
+    return agentFail(requestId, 'Agent mode needs Pi installed. Add it in Settings → Agent.')
+  }
+  const workspace = req.workspace || agent.workspace
+  if (!workspace) {
+    return agentFail(requestId, 'Agent mode needs a workspace folder. Choose one in Settings → Agent.')
+  }
+  if (!fs.existsSync(workspace)) {
+    return agentFail(requestId, `The agent workspace no longer exists: ${workspace}`)
+  }
+
+  pi.writeConfig({ agentDir: pi.layout(PI_ROOT()).agentDir, baseUrl: cfg.baseUrl, models: agentModels(cfg, store) })
+
+  const handle = pi.runTurn({
+    piRoot: PI_ROOT(),
+    workspace,
+    model: req.model || cfg.model,
+    relayKey: cfg.apiKey,
+    prompt: req.prompt,
+    timeoutMs: 15 * 60 * 1000,
+    onEvent: ev => {
+      const mapped = agentEventFor(requestId, ev)
+      if (mapped) sendToRenderer('chat:event', { requestId, ...mapped })
+    }
+  })
+  activeAgentTurns.set(requestId, handle)
+  let result
+  try {
+    result = await handle.promise
+  } finally {
+    activeAgentTurns.delete(requestId)
+  }
+  sendToRenderer('chat:event', { requestId, type: 'done' })
+  return {
+    ok: result.ok,
+    stopped: !!result.stopped,
+    text: result.text,
+    tools: result.tools.length
+  }
 }
 
 /* ---------------------------------------------------------------- hotkey */
@@ -1309,6 +1433,59 @@ ipcMain.handle('chat:abort', (_e, { requestId }) => {
 })
 
 /* -------------------------------------------------------------- IPC: models */
+
+/* ---- agent mode: Pi in the backend, installed on demand ---- */
+
+ipcMain.handle('pi:status', () => {
+  const st = pi.status(PI_ROOT())
+  const cfg = readStore().config || {}
+  return { ...st, pinned: pi.PI_VERSION, workspace: (cfg.agent || {}).workspace || '' }
+})
+
+ipcMain.handle('pi:install', async () => {
+  if (agentInstalling) return { busy: true }
+  agentInstalling = true
+  try {
+    const st = await pi.install(PI_ROOT(), { onProgress: p => sendToRenderer('pi:progress', p) })
+    return st
+  } catch (err) {
+    sendToRenderer('pi:progress', { phase: 'error', message: err.message })
+    return { installed: false, error: err.message }
+  } finally {
+    agentInstalling = false
+  }
+})
+
+ipcMain.handle('pi:uninstall', () => {
+  for (const h of activeAgentTurns.values()) h.kill()
+  fs.rmSync(PI_ROOT(), { recursive: true, force: true })
+  return pi.status(PI_ROOT())
+})
+
+ipcMain.handle('pi:pickWorkspace', async () => {
+  const r = await piDialog.showOpenDialog(win, {
+    title: 'Choose the folder the agent may work in',
+    buttonLabel: 'Use this folder',
+    properties: ['openDirectory', 'createDirectory']
+  })
+  return r.canceled || !r.filePaths.length ? null : r.filePaths[0]
+})
+
+ipcMain.handle('pi:openWorkspace', async () => {
+  const ws = (readStore().config.agent || {}).workspace
+  if (!ws) return { ok: false, error: 'no workspace folder chosen yet' }
+  const err = await shell.openPath(ws)
+  return { ok: !err, error: err || null }
+})
+
+ipcMain.handle('pi:turn', (_e, req) => runAgentTurn(req))
+
+ipcMain.handle('pi:stop', (_e, { requestId }) => {
+  const h = activeAgentTurns.get(requestId)
+  if (!h) return { stopped: false }
+  h.kill()
+  return { stopped: true }
+})
 
 ipcMain.handle('models:list', async (_e, { cfg, label }) => {
   console.log(

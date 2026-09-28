@@ -41,6 +41,10 @@ const DEFAULTS: Config = {
   searchUrl: 'http://localhost:8888',
   profiles: [],
   modelPrefs: {},
+  agent: {
+    workspace: '',
+    enabled: false,
+  },
   imageGen: {
     enabled: false,
     provider: 'fal',

@@ -36,6 +36,20 @@ contextBridge.exposeInMainWorld('zen', {
       return () => ipcRenderer.removeListener('images:progress', listener)
     },
   },
+  pi: {
+    status: () => ipcRenderer.invoke('pi:status'),
+    install: () => ipcRenderer.invoke('pi:install'),
+    uninstall: () => ipcRenderer.invoke('pi:uninstall'),
+    pickWorkspace: () => ipcRenderer.invoke('pi:pickWorkspace'),
+    openWorkspace: () => ipcRenderer.invoke('pi:openWorkspace'),
+    turn: (req) => ipcRenderer.invoke('pi:turn', req),
+    stop: (requestId) => ipcRenderer.invoke('pi:stop', { requestId }),
+    onProgress: (handler) => {
+      const listener = (_e, payload) => handler(payload)
+      ipcRenderer.on('pi:progress', listener)
+      return () => ipcRenderer.removeListener('pi:progress', listener)
+    },
+  },
   app: {
     info: () => ipcRenderer.invoke('app:info'),
     openStore: () => ipcRenderer.invoke('app:openStore'),

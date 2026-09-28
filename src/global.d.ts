@@ -82,6 +82,38 @@ export interface ZenApi {
     openFolder: () => Promise<{ ok: boolean; error: string | null }>
     onProgress: (handler: (p: { requestId: string; phase: string; detail?: string }) => void) => () => void
   }
+  pi: {
+    status: () => Promise<{
+      installed: boolean
+      version: string | null
+      /** the release this build installs */
+      pinned: string
+      exe: string | null
+      agentDir: string
+      workspace: string
+      configured?: boolean
+    }>
+    install: () => Promise<{ installed?: boolean; version?: string | null; busy?: boolean; error?: string }>
+    uninstall: () => Promise<{ installed: boolean }>
+    pickWorkspace: () => Promise<string | null>
+    openWorkspace: () => Promise<{ ok: boolean; error: string | null }>
+    turn: (req: {
+      requestId: string
+      prompt: string
+      model?: string
+      workspace?: string
+    }) => Promise<{ ok: boolean; stopped?: boolean; text?: string; tools?: number; error?: string }>
+    stop: (requestId: string) => Promise<{ stopped: boolean }>
+    onProgress: (
+      handler: (p: {
+        phase: string
+        pct?: number | null
+        received?: number
+        total?: number
+        message?: string
+      }) => void,
+    ) => () => void
+  }
   app: {
     info: () => Promise<{
       version: string

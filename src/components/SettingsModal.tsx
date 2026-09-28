@@ -26,7 +26,7 @@ const INSTRUCTION_PRESETS = [
   'Ask before assuming.',
 ]
 
-type Tab = 'general' | 'api' | 'chat' | 'models' | 'images' | 'tools' | 'about'
+type Tab = 'general' | 'api' | 'chat' | 'models' | 'images' | 'tools' | 'agent' | 'about'
 
 export type SettingsTab = Tab
 
@@ -37,6 +37,7 @@ const TAB_LABELS: Record<Tab, string> = {
   models: 'Models',
   images: 'Images',
   tools: 'Tools',
+  agent: 'Agent',
   about: 'About',
 }
 
@@ -192,6 +193,72 @@ export default function SettingsModal({
     })
   const setImageGen = (patch: Partial<typeof imageGen>) =>
     onConfig({ imageGen: { ...imageGen, ...patch } })
+
+  /* --------------------------------------------------- agent mode (Pi) */
+
+  const agent = config.agent || ({ workspace: '', enabled: false })
+  const setAgent = (patch: Partial<typeof agent>) => onConfig({ agent: { ...agent, ...patch } })
+
+  const [piStatus, setPiStatus] = useState<{
+    installed: boolean
+    version: string | null
+    pinned: string
+  } | null>(null)
+  const [piBusy, setPiBusy] = useState(false)
+  const [piProgress, setPiProgress] = useState<{ phase: string; pct?: number | null } | null>(null)
+  const [piNote, setPiNote] = useState<{ kind: 'idle' | 'ok' | 'err'; msg: string }>({ kind: 'idle', msg: '' })
+
+  const agentPhaseLabel =
+    piProgress?.phase === 'download'
+      ? `Downloading${piProgress.pct != null ? ` · ${piProgress.pct}%` : ''}`
+      : piProgress?.phase === 'verify'
+        ? 'Checking the download against the published checksum'
+        : piProgress?.phase === 'extract'
+          ? 'Unpacking'
+          : piProgress?.phase === 'checksums'
+            ? 'Reading the release checksums'
+            : 'Installing'
+
+  const refreshPi = async () => {
+    const st = await window.zen.pi.status()
+    setPiStatus(st)
+    return st
+  }
+
+  useEffect(() => {
+    if (tab === 'agent') void refreshPi()
+  }, [tab])
+
+  useEffect(() => window.zen.pi.onProgress(setPiProgress), [])
+
+  const installPi = async () => {
+    setPiBusy(true)
+    setPiNote({ kind: 'idle', msg: '' })
+    setPiProgress({ phase: 'checksums' })
+    try {
+      const res = await window.zen.pi.install()
+      const st = await refreshPi()
+      if (res?.error) setPiNote({ kind: 'err', msg: res.error })
+      else if (st?.installed) setPiNote({ kind: 'ok', msg: `Pi ${st.version} is installed. Switch agent mode on in the chat.` })
+    } catch (err: any) {
+      setPiNote({ kind: 'err', msg: String(err?.message || err) })
+    } finally {
+      setPiBusy(false)
+      setPiProgress(null)
+    }
+  }
+
+  const uninstallPi = async () => {
+    setAgent({ enabled: false })
+    await window.zen.pi.uninstall()
+    await refreshPi()
+    setPiNote({ kind: 'idle', msg: 'Pi removed, and agent mode is off. Nothing of it is left behind.' })
+  }
+
+  const chooseWorkspace = async () => {
+    const folder = await window.zen.pi.pickWorkspace()
+    if (folder) setAgent({ workspace: folder })
+  }
 
   const [falModels, setFalModels] = useState<FalModel[]>([])
   const [falFilter, setFalFilter] = useState('')
@@ -439,7 +506,7 @@ export default function SettingsModal({
 
         <div className="flex min-h-0 flex-1">
           <div className="w-[150px] shrink-0 border-r border-[#2a2a2a] p-2">
-            {(['general', 'api', 'chat', 'models', 'images', 'tools', 'about'] as Tab[]).map((t) => (
+            {(['general', 'api', 'chat', 'models', 'images', 'tools', 'agent', 'about'] as Tab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -810,6 +877,117 @@ export default function SettingsModal({
                     </label>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {tab === 'agent' && (
+              <div className="space-y-3">
+                <Field
+                  label="Agent mode"
+                  hint="Hands for the model you already selected. Add Pi once here, then switch agent mode on in the chat: it can read and write files and run commands in one folder you pick."
+                >
+                  <div className="rounded-xl border border-[#2a2a2a] bg-[#121212] p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-[13px] text-ink">
+                          {piStatus?.installed ? `Pi ${piStatus.version} is installed` : 'Pi is not installed'}
+                        </div>
+                        <div className="mt-0.5 text-[11.5px] leading-snug text-faint">
+                          {piBusy
+                            ? agentPhaseLabel
+                            : piStatus?.installed
+                              ? 'Off by default. Agent mode is switched on in the chat, and switched off again when you are done.'
+                              : `Downloads Pi ${piStatus?.pinned || ''} from its own release, checks the published SHA-256 before unpacking it, and keeps it beside your data. About 42 MB — no npm, no Node to install.`}
+                        </div>
+                      </div>
+                      {piStatus?.installed ? (
+                        <button
+                          onClick={uninstallPi}
+                          disabled={piBusy}
+                          className="flex h-[34px] shrink-0 items-center rounded-lg border border-[#333] px-3 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink disabled:opacity-50"
+                        >
+                          Remove
+                        </button>
+                      ) : (
+                        <button
+                          onClick={installPi}
+                          disabled={piBusy || !piStatus}
+                          className="flex h-[34px] shrink-0 items-center gap-1.5 rounded-lg border border-[#3f6db5] bg-[#1b2a3f] px-3 text-[12.5px] text-[#cfe0f5] transition hover:bg-[#22354f] disabled:opacity-50"
+                        >
+                          <RefreshCw size={13} className={piBusy ? 'animate-spin' : ''} />
+                          {piBusy ? 'Installing…' : 'Install Pi'}
+                        </button>
+                      )}
+                    </div>
+                    {piBusy && (
+                      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#242424]">
+                        <div
+                          className="h-full rounded-full bg-[#3f6db5] transition-all"
+                          style={{ width: `${piProgress?.pct ?? 6}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </Field>
+
+                <div className="rounded-xl border border-[#3a2f1a] bg-[#1d1710] p-3 text-[11.5px] leading-snug text-[#e6cf9f]">
+                  <strong className="font-medium">While agent mode is on, Pi runs with the rights of your Windows account</strong>{' '}
+                  in the folder below — it has no permission prompts of its own. Keep the folder narrow and switch the toggle
+                  off when you are done. Nothing is downloaded, installed or scheduled until you press Install, and the API key
+                  is handed to it in memory, never written to its config.
+                </div>
+
+                <Field
+                  label="Workspace folder"
+                  hint="The folder the agent may work in. It can create and change files here, and runs commands with this as the working directory."
+                >
+                  <div className="flex gap-2">
+                    <input className={inputCls} value={agent.workspace || ''} readOnly placeholder="No folder chosen yet" />
+                    <button
+                      onClick={chooseWorkspace}
+                      className="flex h-[38px] shrink-0 items-center rounded-lg border border-[#333] px-3 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink"
+                    >
+                      Choose…
+                    </button>
+                    <button
+                      onClick={() => void window.zen.pi.openWorkspace()}
+                      disabled={!agent.workspace}
+                      className="flex h-[38px] shrink-0 items-center rounded-lg border border-[#333] px-3 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink disabled:opacity-50"
+                    >
+                      Open
+                    </button>
+                  </div>
+                </Field>
+
+                <Field
+                  label="What an agent turn costs"
+                  hint="Agent turns use the model selected in the chat, over the same key and endpoint as your ordinary messages."
+                >
+                  <p className="text-[11.5px] leading-snug text-faint">
+                    One agent turn makes several model calls where a chat message makes one, so it spends more tokens. Nothing
+                    else is billed and no second key is needed. Switch the toggle off and the next message costs exactly what it
+                    always did.
+                  </p>
+                </Field>
+
+                {piNote.msg && (
+                  <div
+                    className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-[12.5px] ${
+                      piNote.kind === 'err'
+                        ? 'border-[#522020] bg-[#2a1414] text-[#ffb3b3]'
+                        : piNote.kind === 'ok'
+                          ? 'border-[#25401f] bg-[#16210f] text-[#b9e2a8]'
+                          : 'border-[#2a2a2a] bg-[#121212] text-muted'
+                    }`}
+                  >
+                    {piNote.kind === 'err' ? (
+                      <TriangleAlert size={13} className="mt-[1px] shrink-0" />
+                    ) : (
+                      <Check size={13} className="mt-[1px] shrink-0" />
+                    )}
+                    <span className="min-w-0 flex-1">{piNote.msg}</span>
+                  </div>
+                )}
               </div>
             )}
 

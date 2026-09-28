@@ -107,6 +107,14 @@ export interface ImageGenConfig {
   size: string
 }
 
+/** Agent mode: the optional hands-on engine. Off unless the user turns it on. */
+export interface AgentConfig {
+  /** the folder Pi may work in while agent mode is on; '' until one is chosen */
+  workspace: string
+  /** remembered toggle position — it can only be on once Pi is installed */
+  enabled: boolean
+}
+
 export interface Config {
   baseUrl: string
   apiKey: string
@@ -135,6 +143,8 @@ export interface Config {
   searchUrl: string
   /** fal.ai image generation (hosted; local models are not wired in yet) */
   imageGen: ImageGenConfig
+  /** agent mode: Pi runs in the backend with hands, in a folder the user picks */
+  agent: AgentConfig
   profiles: Profile[]
   modelPrefs: Record<string, ModelPref>
 }
