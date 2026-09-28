@@ -124,6 +124,38 @@ export default function App() {
     [conversations, activeId],
   )
 
+  /* ------------------------------------------------------- agent mode (Pi) */
+
+  // Agent mode is offered only once Pi is really installed — the toggle stays greyed out
+  // otherwise, rather than pretending to do something it cannot do.
+  const [agentReady, setAgentReady] = useState(false)
+  const agentReadyRef = useRef(false)
+  const refreshAgent = useCallback(() => {
+    window.zen.pi
+      .status()
+      .then((st) => {
+        const on = Boolean(st && st.installed)
+        agentReadyRef.current = on
+        setAgentReady(on)
+      })
+      .catch(() => {
+        agentReadyRef.current = false
+        setAgentReady(false)
+      })
+  }, [])
+
+  useEffect(() => {
+    refreshAgent()
+  }, [refreshAgent])
+
+  // coming back from Settings is when a fresh install becomes available
+  useEffect(() => {
+    if (settingsOpen) return
+    refreshAgent()
+  }, [settingsOpen, refreshAgent])
+
+  const agentMode = Boolean(config.agent?.enabled) && agentReady
+
   /* ---------------------------------------------------------------- load */
 
   useEffect(() => {
@@ -340,18 +372,29 @@ export default function App() {
       activeRequest.current = requestId
       setBusy(true)
 
-      window.zen.chat
-        .start({
-          requestId,
-          cfg: { ...cfg },
-          systemPrompt: cfg.systemPrompt,
-          messages: history.map((m) => ({
-            role: m.role,
-            content: m.content,
-            images: (m.images || []).map((i) => i.url),
-          })),
-        })
-        .catch((err: Error) => {
+      // With agent mode on the turn goes to Pi instead, carrying the same requestId, so its
+      // events land in the very same stream the chat already draws. With it off, this is
+      // exactly the chat it always was: no process, nothing extra.
+      const pending =
+        cfg.agent?.enabled && agentReadyRef.current
+          ? window.zen.pi.turn({
+              requestId,
+              prompt: history[history.length - 1]?.content || '',
+              model: cfg.model,
+              workspace: cfg.agent?.workspace,
+            })
+          : window.zen.chat.start({
+              requestId,
+              cfg: { ...cfg },
+              systemPrompt: cfg.systemPrompt,
+              messages: history.map((m) => ({
+                role: m.role,
+                content: m.content,
+                images: (m.images || []).map((i) => i.url),
+              })),
+            })
+
+      pending.catch((err: Error) => {
           const s = streams.current.get(requestId)
           if (s) {
             s.error = err.message
@@ -1018,6 +1061,14 @@ export default function App() {
           imageModeAvailable={Boolean(config.imageGen?.enabled)}
           refEdit={refEdit}
           onSetRefEdit={setRefEdit}
+          agentMode={agentMode}
+          onToggleAgent={() =>
+            patchConfig({
+              agent: { workspace: config.agent?.workspace || '', enabled: !config.agent?.enabled },
+            })
+          }
+          agentAvailable={agentReady}
+          agentWorkspace={config.agent?.workspace}
           modelLabel={modelLabel}
         />
       </main>

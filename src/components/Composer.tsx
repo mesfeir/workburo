@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { ArrowUp, Brain, Image as ImageIcon, Mic, Plus, Square, X } from 'lucide-react'
+import { ArrowUp, Brain, Image as ImageIcon, Mic, Plus, Square, Terminal, X } from 'lucide-react'
 import type { Attachment } from '../types'
 
 export default function Composer({
@@ -19,6 +19,10 @@ export default function Composer({
   imageModeAvailable,
   refEdit,
   onSetRefEdit,
+  agentMode,
+  onToggleAgent,
+  agentAvailable,
+  agentWorkspace,
   modelLabel,
   disabled,
 }: {
@@ -41,6 +45,13 @@ export default function Composer({
   /** with a reference attached: edit it at fal, or let the model read it */
   refEdit: boolean
   onSetRefEdit: (v: boolean) => void
+  /** hand the next turns to Pi, which can touch files in the workspace folder */
+  agentMode: boolean
+  onToggleAgent: () => void
+  /** only offered once Pi is installed, in Settings → Agent */
+  agentAvailable: boolean
+  /** shown in the tooltip, so the folder it may change is never a mystery */
+  agentWorkspace?: string
   modelLabel: string
   disabled?: boolean
 }) {
@@ -178,6 +189,26 @@ export default function Composer({
                 Image
               </button>
             )}
+
+            <button
+              onClick={onToggleAgent}
+              disabled={!agentAvailable}
+              title={
+                !agentAvailable
+                  ? 'Agent mode needs Pi — install it in Settings → Agent'
+                  : agentMode
+                    ? `Agent mode is on — Pi works in ${agentWorkspace || 'the workspace folder'}`
+                    : 'Hand this turn to Pi, which can read, write and run things in your workspace folder'
+              }
+              className={`flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-[13px] transition ${
+                agentMode
+                  ? 'border-[#3f6db5] bg-[#20365a] text-[#dfeaff]'
+                  : 'border-white/15 text-[#cfcfcf] hover:bg-white/10'
+              } ${!agentAvailable ? 'cursor-default opacity-45 hover:bg-transparent' : ''}`}
+            >
+              <Terminal size={14} />
+              Agent
+            </button>
 
             <button
               onClick={onToggleThinking}

@@ -1423,6 +1423,13 @@ ipcMain.handle('chat:start', async (event, req) => {
 })
 
 ipcMain.handle('chat:abort', (_e, { requestId }) => {
+  // Stop must stop an agent turn too: same button, same request id, different process.
+  const agentTurn = activeAgentTurns.get(requestId)
+  if (agentTurn) {
+    agentTurn.kill()
+    activeAgentTurns.delete(requestId)
+    return true
+  }
   const ac = inflight.get(requestId)
   if (ac) {
     ac.abort()
