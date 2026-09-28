@@ -89,6 +89,12 @@ export interface ZenApi {
     saveAs: (file: string) => Promise<{ ok: boolean; path?: string; error?: string; canceled?: boolean }>
     /** a picture on disk as a data URL, for handing straight back to fal as a reference */
     dataUrl: (path: string) => Promise<{ ok: boolean; url?: string; error?: string }>
+    /** per-image prices for a list of endpoints, for the pickers; omits the ones fal does not publish */
+    prices: (
+      key: string,
+      models: string[],
+      size?: { width?: number; height?: number },
+    ) => Promise<{ ok: boolean; prices: Record<string, { text: string; perImage: number | null }> }>
     openFolder: () => Promise<{ ok: boolean; error: string | null }>
     onProgress: (handler: (p: { requestId: string; phase: string; detail?: string }) => void) => () => void
   }

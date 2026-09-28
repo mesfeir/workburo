@@ -261,6 +261,11 @@ export default function SettingsModal({
   }
 
   const [falModels, setFalModels] = useState<FalModel[]>([])
+  /** what each listed endpoint charges per picture at the selected size, straight from fal */
+  const [falPrices, setFalPrices] = useState<Record<string, { text: string; perImage: number | null }>>({})
+  const [falPricesBusy, setFalPricesBusy] = useState(false)
+  /** the order the list is shown in — price is the useful comparison between endpoints */
+  const [falSort, setFalSort] = useState<'name' | 'cheap' | 'dear'>('name')
   const [falFilter, setFalFilter] = useState('')
   const [showFalKey, setShowFalKey] = useState(false)
   const [falBusy, setFalBusy] = useState(false)
@@ -328,6 +333,25 @@ export default function SettingsModal({
       for (const m of editors.models) if (!seen.has(m.id)) list.push(m)
     }
     setFalModels(list)
+    // The price of every listed endpoint, so each one can show it beside its own name instead of
+    // being explained in a panel elsewhere. One call for the whole list (main caches fal's rates
+    // for a week); the size matters because most endpoints bill by the megapixel.
+    const rateSize = (() => {
+      const s = sizes.find((x) => x.id === (imageGen.size || 'square_hd'))
+      return s ? { width: s.width, height: s.height } : {}
+    })()
+    setFalPricesBusy(true)
+    window.zen.images
+      .prices(
+        key,
+        list.slice(0, 150).map((m) => m.id),
+        rateSize,
+      )
+      .then((pr) => {
+        if (pr?.ok) setFalPrices((p) => ({ ...p, ...pr.prices }))
+      })
+      .catch(() => {})
+      .finally(() => setFalPricesBusy(false))
     if (!imageGen.model && list.length) setImageGen({ model: list[0].id })
     setFalStatus({
       kind: 'ok',
@@ -504,11 +528,22 @@ export default function SettingsModal({
     onConfig({ modelPrefs: { ...config.modelPrefs, [id]: { ...(config.modelPrefs?.[id] || {}), vision: next } } })
   }
 
-  const falFiltered = falModels.filter((m) => {
-    const q = falFilter.trim().toLowerCase()
-    if (!q) return true
-    return m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q)
-  })
+  const falFiltered = falModels
+    .filter((m) => {
+      const q = falFilter.trim().toLowerCase()
+      if (!q) return true
+      return m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q)
+    })
+    .sort((a, b) => {
+      if (falSort === 'name') return 0
+      const pa = falPrices[a.id]?.perImage
+      const pb = falPrices[b.id]?.perImage
+      // an endpoint fal publishes no rate for has nothing to compare, so it sorts to the end
+      if (pa == null && pb == null) return a.id.localeCompare(b.id)
+      if (pa == null) return 1
+      if (pb == null) return -1
+      return falSort === 'cheap' ? pa - pb : pb - pa
+    })
   const selectedFal = falModels.find((m) => m.id === imageGen.model) || null
 
   // Endpoints that take a reference image. The chosen one is always offered, even
@@ -1365,6 +1400,47 @@ export default function SettingsModal({
                     onChange={(e) => setFalFilter(e.target.value)}
                   />
                   {falModels.length > 0 && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="text-[11.5px] text-faint">Sort</span>
+                      <div
+                        data-fal-sort
+                        className="flex overflow-hidden rounded-lg border border-[#2a2a2a]"
+                      >
+                        {(
+                          [
+                            ['name', 'Name'],
+                            ['cheap', 'Price ↑'],
+                            ['dear', 'Price ↓'],
+                          ] as const
+                        ).map(([k, label]) => (
+                          <button
+                            key={k}
+                            onClick={() => setFalSort(k)}
+                            data-fal-sort-key={k}
+                            title={
+                              k === 'name'
+                                ? 'The order fal lists them in'
+                                : k === 'cheap'
+                                  ? 'Cheapest per picture at the selected size first'
+                                  : 'Most expensive first'
+                            }
+                            className={`px-2 py-1 text-[11.5px] transition ${
+                              falSort === k
+                                ? 'bg-[#20365a] text-[#dfeaff]'
+                                : 'text-muted hover:bg-white/[.05]'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      {falPricesBusy ? (
+                        <span className="text-[11.5px] text-faint">prices…</span>
+                      ) : null}
+                    </div>
+                  )}
+
+                  {falModels.length > 0 && (
                     <div
                       data-fal-models
                       className="mt-2 max-h-[210px] divide-y divide-[#232323] overflow-y-auto rounded-xl border border-[#2a2a2a]"
@@ -1385,9 +1461,20 @@ export default function SettingsModal({
                             }`}
                           >
                             <span className="min-w-0 flex-1">
-                              <span className="block truncate text-[13px] text-[#dcdcdc]">{m.name}</span>
+                              <span className="flex items-baseline gap-2">
+                                <span className="truncate text-[13px] text-[#dcdcdc]">{m.name}</span>
+                                {/* what it costs, right beside the name — the decision is made here,
+                                    not in a panel further down the form */}
+                                <span
+                                  data-row-price={falPrices[m.id]?.text ? 'yes' : 'no'}
+                                  className="shrink-0 text-[11px] text-faint tabular-nums"
+                                >
+                                  {falPrices[m.id]?.text ||
+                                    (falPricesBusy || falPrices[m.id] === undefined ? '' : 'no published price')}
+                                </span>
+                              </span>
                               <span className="block truncate font-mono text-[10.5px] text-faint">{m.id}</span>
-                              {m.pricing && (
+                              {m.pricing && !falPrices[m.id]?.text && (
                                 <span className="mt-0.5 block truncate text-[10.5px] text-[#9a9a9a]">{m.pricing}</span>
                               )}
                             </span>
@@ -1402,33 +1489,30 @@ export default function SettingsModal({
                   )}
                 </Field>
 
+                {/* Not a panel of its own any more: the per-endpoint price sits beside each name in
+                    the list above. This line carries only what a row cannot say — what the chosen
+                    size and count come to. */}
                 <div
                   data-fal-cost={falCost?.text ? 'yes' : 'no'}
-                  className="rounded-xl border border-[#2a2a2a] bg-[#121212] px-3 py-2 text-[11.5px] leading-snug text-faint"
+                  className="text-[11.5px] leading-snug text-faint"
                 >
                   {falCost?.text ? (
-                    <>
-                      <strong className="font-medium text-muted">Cost</strong> —{' '}
-                      {falCost.rate && falCost.rate !== falCost.text ? <span className="text-muted">{falCost.rate} · </span> : null}
-                      {falCost.perImage == null ? (
-                        <>this model is billed by {falCost.text.replace(/^\$[0-9.]+ per /, '')}, so what one image costs depends on the run.</>
-                      ) : (
-                        <>
-                          <span className="text-[#dcdcdc]">{falCost.text}</span> at this size
-                          {falCost.megapixels ? ` (fal bills ${falCost.megapixels} MP — a part megapixel rounds up)` : ''}
-                          {imageGen.count > 1 ? ` · about ${falCost.forCount} for ${imageGen.count} images` : ''}.
-                        </>
-                      )}
-                    </>
+                    falCost.perImage == null ? (
+                      <>
+                        Billed by {falCost.text.replace(/^\$[0-9.]+ per /, '')}, so what one image costs
+                        depends on the run.
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-[#dcdcdc]">{falCost.text}</span> at the size selected
+                        {falCost.megapixels ? ` (${falCost.megapixels} MP — fal rounds part megapixels up)` : ''}
+                        {imageGen.count > 1 ? ` · about ${falCost.forCount} for ${imageGen.count} images` : ''}.
+                      </>
+                    )
                   ) : selectedFal?.pricing ? (
-                    <>
-                      <strong className="font-medium text-muted">Cost</strong> — {selectedFal.pricing}
-                    </>
+                    <>{selectedFal.pricing}</>
                   ) : (
-                    <>
-                      <strong className="font-medium text-muted">Cost</strong> — fal publishes no rate for this model, so its own
-                      page is the only place to check before drawing a batch.
-                    </>
+                    <>fal publishes no rate for this model, so its own page is the only place to check.</>
                   )}
                 </div>
 

@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld('zen', {
   },
   images: {
     models: (key, categories) => ipcRenderer.invoke('images:models', { key, categories }),
+    prices: (key, models, size) => ipcRenderer.invoke('images:prices', { key, models, ...(size || {}) }),
     cost: (req) => ipcRenderer.invoke('images:cost', req),
     options: () => ipcRenderer.invoke('images:options'),
     generate: (req) => ipcRenderer.invoke('images:generate', req),

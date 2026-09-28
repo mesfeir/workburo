@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar'
 import ChatView from './components/ChatView'
 import Composer from './components/Composer'
 import ModelPicker from './components/ModelPicker'
+import ImageModelPicker from './components/ImageModelPicker'
 import SettingsModal, { type SettingsTab } from './components/SettingsModal'
 import GalleryModal from './components/GalleryModal'
 import { probeImage, readFilesAsImages, shrinkImage } from './lib/image'
@@ -1090,6 +1091,18 @@ export default function App() {
             onProbe={probeModel}
             probingId={probing}
             onConfigure={() => setSettingsOpen(true)}
+          />
+          {/* the image model sits beside the chat model: same decision, same place, with what it
+              costs per picture in the small text next to the name */}
+          <ImageModelPicker
+            config={config}
+            onChange={(id) =>
+              patchConfig({ imageGen: { ...(config.imageGen || {}), model: id } })
+            }
+            onConfigure={() => {
+              setSettingsTab('images')
+              setSettingsOpen(true)
+            }}
           />
           <div className="flex-1" />
           <button

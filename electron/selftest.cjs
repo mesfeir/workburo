@@ -1,6 +1,8 @@
 // End-to-end self-test: drives the REAL renderer UI inside the REAL app,
 // exercises the real network stack, and captures screenshots + a JSON report.
-// Run with:  npx electron . --selftest <api-key> [--keep]
+// Run with:  ZEN_SELFTEST_KEY=<api-key> npx electron . --selftest [--keep]
+// The key is taken from the environment, never from argv — a command line is readable by any
+// process on the machine, so a key passed there leaks.
 
 const fs = require('node:fs')
 const path = require('node:path')

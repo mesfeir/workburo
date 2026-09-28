@@ -21,7 +21,9 @@ const falImages = require('./images.cjs')
 const DEV_URL = 'http://localhost:5173'
 const isDev = !app.isPackaged
 
-// --selftest <api-key> [--keep]  drives the real UI and writes a report + screenshots
+// --selftest [--keep]  drives the real UI and writes a report + screenshots.
+// The relay key comes from ZEN_SELFTEST_KEY in the environment, never from the command line: a
+// process command line is readable by any process on the machine, which is how a key leaks.
 const SELFTEST = process.argv.includes('--selftest')
 // --capture <api-key>  drives a curated conversation and writes README screenshots
 const CAPTURE = process.argv.includes('--capture')
@@ -30,6 +32,15 @@ const KEEP_OPEN = process.argv.includes('--keep')
 const START_HIDDEN = process.argv.includes('--hidden')
 // the argument written alongside the exe in the Windows "Run" key
 const STARTUP_FLAG = '--hidden'
+/**
+ * A key for a test run: from the environment, never argv.
+ *
+ * Anything on a command line is visible to every process on the box — a probe during this work
+ * read `electron.exe . --selftest oc_sk_…` straight out of the Windows process table. Secrets go
+ * in the environment (or a file the caller deletes), and argv carries flags only.
+ */
+const testKey = () => String(process.env.ZEN_SELFTEST_KEY || '').trim()
+
 const argAfter = (flag) => {
   const i = process.argv.indexOf(flag)
   return i >= 0 ? process.argv[i + 1] : undefined
@@ -711,7 +722,7 @@ app.whenReady().then(() => {
   if (SELFTEST) {
     const seeded = defaultStore()
     seeded.config.baseUrl = 'https://opencode.ai/zen/go/v1'
-    seeded.config.apiKey = argAfter('--selftest') || ''
+    seeded.config.apiKey = argAfter('--selftest') || testKey() || ''
     seeded.config.model = 'deepseek-v4.1-flash'
     seeded.config.thinking = true
     seeded.config.maxTokens = 4096
@@ -767,7 +778,7 @@ app.whenReady().then(() => {
   if (CAPTURE) {
     const seeded = defaultStore()
     seeded.config.baseUrl = 'https://opencode.ai/zen/go/v1'
-    seeded.config.apiKey = argAfter('--capture') || ''
+    seeded.config.apiKey = argAfter('--capture') || testKey() || ''
     seeded.config.model = seeded.config.model || 'deepseek-v4.1-flash'
     writeStore(seeded)
 
@@ -1878,6 +1889,39 @@ ipcMain.handle('images:cost', async (_e, { pricing, model, width, height, count 
 ipcMain.handle('images:models', async (_e, { key, categories }) =>
   falImages.listModels(String(key || ''), { categories: String(categories || '') }),
 )
+
+/**
+ * What each of these endpoints charges per image, for the pickers.
+ *
+ * One call for a whole list: the price has to sit beside the model's own name, and asking per
+ * model from the renderer would fire a request each. Rates are cached for a week, sizes matter
+ * because most endpoints bill by the megapixel, and anything fal does not publish is simply left
+ * out of the reply — the UI says "no published price" rather than inventing one.
+ */
+ipcMain.handle('images:prices', async (_e, { key, models, width, height }) => {
+  const list = (Array.isArray(models) ? models : []).slice(0, 150)
+  const useKey = String(key || '') || (readStore().config.imageGen || {}).falKey || ''
+  const prices = {}
+  await Promise.all(
+    list.map(async (raw) => {
+      const id = String(raw || '')
+      if (!id) return
+      try {
+        const rate = await falImages.priceFor(id, useKey)
+        if (!rate) return
+        const per = falImages.costFromRate(rate, { width, height })
+        if (!per) return
+        prices[id] =
+          per.perImage == null
+            ? { text: per.basis, perImage: null }
+            : { text: `${falImages.formatCost(per.perImage)} each`, perImage: per.perImage }
+      } catch {
+        // a model without a published price is not an error, it just has no number
+      }
+    }),
+  )
+  return { ok: true, prices }
+})
 
 /**
  * A pasted screenshot can be many megabytes, and the reference travels inline as a
