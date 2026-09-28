@@ -94,12 +94,17 @@ async function falFetch(url, { key, method = 'GET', body, timeout = 60000 } = {}
  * The authenticated catalogue. Also the honest way to test a key: fal answers
  * 401 for a bad key and 200 for a good one.
  */
-async function listModels(key, { pages = 3 } = {}) {
+async function listModels(key, { pages = 3, categories = '' } = {}) {
   if (!key) return { ok: false, error: 'No fal.ai API key saved yet.' }
   const out = []
   let cursor = ''
   for (let i = 0; i < pages; i += 1) {
-    const url = `${CATALOGUE}?limit=200${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`
+    // fal's /models takes ?categories= (plural). Asking for image-to-image is what surfaces the
+    // instruction editors — nano-banana, kontext, gpt-image, seedream — the endpoints that change
+    // a picture you already have rather than drawing a new one from the words alone.
+    const url =
+      `${CATALOGUE}?limit=200${categories ? `&categories=${encodeURIComponent(categories)}` : ''}` +
+      `${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`
     const res = await falFetch(url, { key, timeout: 30000 })
     if (!res.ok) return { ok: false, error: describeError(res.status, res.json || res.text), status: res.status }
     const models = res.json?.models || []
@@ -120,6 +125,9 @@ async function listModels(key, { pages = 3 } = {}) {
     }))
     .filter((m) => m.id && IMAGE_CATEGORIES.includes(m.category))
     .filter((m) => !/deprecated|removed|hidden/i.test(m.status))
+    // fal's category query is fuzzy: its image-to-image list also carries video and audio models.
+    // Never offer an "image model" that hands back a video.
+    .filter((m) => !/video|tts|sound|audio|upscale|upscal|background|\/remove|face-swap|\/train/i.test(m.id))
 
   // pricing comes from the public catalogue; it is a nicety, never a hard fail
   const pricing = await pricingMap()
@@ -407,7 +415,7 @@ function imageParamFor(props) {
  * Build the smallest body the model actually understands: prompt always, the
  * rest only when the schema declares it.
  */
-async function buildBody(model, { prompt, count, size, imageUrl, schemaUrl }) {
+async function buildBody(model, { prompt, count, size, imageUrl, strength, schemaUrl }) {
   const schema = await schemaFor(model, schemaUrl)
   const props = schema?.properties || {}
   const body = { prompt }
@@ -453,6 +461,17 @@ async function buildBody(model, { prompt, count, size, imageUrl, schemaUrl }) {
       }
     }
     body[param.key] = param.isArray ? [imageUrl] : imageUrl
+    // FLUX-style image-to-image endpoints re-draw from the prompt and only *guide* themselves with
+    // the reference. At fal's default (0.95) the picture you sent comes back looking like a new one
+    // drawn from your words — which is exactly what "it ignored my image" means. Lower keeps the
+    // picture and applies the change. Instruction editors (nano-banana, kontext) have no strength
+    // and need none: they follow the instruction and keep the picture.
+    if (props.strength) {
+      const wanted = Number(strength)
+      const keep = Number.isFinite(wanted) ? wanted : 0.85
+      body.strength = Math.max(0.1, Math.min(keep, 1))
+      applied.push(`strength=${body.strength} (keeps the picture you sent)`)
+    }
     // never log the data URI itself, only how big it is
     applied.push(`${param.key}=reference image (${Math.round(String(imageUrl).length / 1024)} KB inline)`)
   }
@@ -504,6 +523,7 @@ async function generate({
   count = 1,
   size,
   imageUrl,
+  strength,
   imagesDir,
   endpoints,
   onProgress = () => {},
@@ -525,6 +545,7 @@ async function generate({
     count,
     size,
     imageUrl,
+    strength,
     schemaUrl: ep.schema,
   })
   if (bodyError) return { ok: false, error: bodyError }

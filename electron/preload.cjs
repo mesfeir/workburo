@@ -25,7 +25,7 @@ contextBridge.exposeInMainWorld('zen', {
     probe: (searchUrl) => ipcRenderer.invoke('tools:probe', { searchUrl }),
   },
   images: {
-    models: (key) => ipcRenderer.invoke('images:models', { key }),
+    models: (key, categories) => ipcRenderer.invoke('images:models', { key, categories }),
     cost: (req) => ipcRenderer.invoke('images:cost', req),
     options: () => ipcRenderer.invoke('images:options'),
     generate: (req) => ipcRenderer.invoke('images:generate', req),

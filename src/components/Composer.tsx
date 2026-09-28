@@ -139,7 +139,10 @@ export default function Composer({
           </div>
         )}
 
-        <div className="flex items-end gap-1.5 rounded-[28px] bg-pill px-2.5 py-2 shadow-[0_2px_14px_rgba(0,0,0,.35)]">
+        {/* The input row keeps its shape and the mode switches sit under it: side by side they ate
+            the textarea at narrow widths until there was nowhere left to type. */}
+        <div className="rounded-[26px] bg-pill px-2.5 py-2 shadow-[0_2px_14px_rgba(0,0,0,.35)]">
+          <div className="flex items-end gap-1.5">
           <button
             onClick={onPickImages}
             title="Attach images"
@@ -171,6 +174,40 @@ export default function Composer({
           />
 
           <div className="mb-[2px] flex shrink-0 items-center gap-1">
+            <button
+              title="Voice input — no speech-to-text provider configured"
+              disabled
+              className="grid h-8 w-8 cursor-default place-items-center rounded-full text-[#6f6f6f]"
+            >
+              <Mic size={17} />
+            </button>
+
+            {busy ? (
+              <button
+                onClick={onStop}
+                title="Stop generating"
+                className="grid h-8 w-8 place-items-center rounded-full bg-[#e8e8e8] text-black transition hover:bg-white"
+              >
+                <Square size={13} fill="currentColor" />
+              </button>
+            ) : (
+              <button
+                onClick={onSend}
+                disabled={!canSend}
+                title="Send"
+                className={`grid h-8 w-8 place-items-center rounded-full transition ${
+                  canSend ? 'bg-accent text-white hover:bg-[#4180f0]' : 'bg-[#3a3a3a] text-[#8a8a8a]'
+                }`}
+              >
+                <ArrowUp size={17} strokeWidth={2.5} />
+              </button>
+            )}
+          </div>
+          </div>
+
+          {/* the mode switches: under the input, where a narrow window can never push them over
+              the textarea */}
+          <div data-modes className="mt-1.5 flex flex-wrap items-center gap-1 px-0.5">
             {imageModeAvailable && (
               <button
                 onClick={onToggleImageMode}
@@ -222,35 +259,6 @@ export default function Composer({
               <Brain size={14} />
               Think
             </button>
-
-            <button
-              title="Voice input — no speech-to-text provider configured"
-              disabled
-              className="grid h-8 w-8 cursor-default place-items-center rounded-full text-[#6f6f6f]"
-            >
-              <Mic size={17} />
-            </button>
-
-            {busy ? (
-              <button
-                onClick={onStop}
-                title="Stop generating"
-                className="grid h-8 w-8 place-items-center rounded-full bg-[#e8e8e8] text-black transition hover:bg-white"
-              >
-                <Square size={13} fill="currentColor" />
-              </button>
-            ) : (
-              <button
-                onClick={onSend}
-                disabled={!canSend}
-                title="Send"
-                className={`grid h-8 w-8 place-items-center rounded-full transition ${
-                  canSend ? 'bg-accent text-white hover:bg-[#4180f0]' : 'bg-[#3a3a3a] text-[#8a8a8a]'
-                }`}
-              >
-                <ArrowUp size={17} strokeWidth={2.5} />
-              </button>
-            )}
           </div>
         </div>
 

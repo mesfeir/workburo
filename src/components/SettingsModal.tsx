@@ -187,7 +187,7 @@ export default function SettingsModal({
       provider: 'fal' as const,
       falKey: '',
       model: '',
-      editModel: 'fal-ai/flux/dev/image-to-image',
+      editModel: 'fal-ai/nano-banana/edit',
       count: 1,
       size: 'square_hd',
     })
@@ -311,13 +311,22 @@ export default function SettingsModal({
     setFalBusy(true)
     setFalStatus({ kind: 'busy', msg: 'Checking the key and loading the catalogue…' })
     const r = await window.zen.images.models(key)
-    setFalBusy(false)
     if (!r.ok) {
+      setFalBusy(false)
       setFalModels([])
       setFalStatus({ kind: 'err', msg: r.error || 'Could not load models from fal.ai.' })
       return
     }
+    // Ask for the editors as well: the plain catalogue carries the drawing models, while the
+    // endpoints that change a picture you already have are reached through fal's image-to-image
+    // category.
+    const editors = await window.zen.images.models(key, 'image-to-image')
+    setFalBusy(false)
     const list = r.models || []
+    if (editors.ok && Array.isArray(editors.models)) {
+      const seen = new Set(list.map((m) => m.id))
+      for (const m of editors.models) if (!seen.has(m.id)) list.push(m)
+    }
     setFalModels(list)
     if (!imageGen.model && list.length) setImageGen({ model: list[0].id })
     setFalStatus({
@@ -504,21 +513,30 @@ export default function SettingsModal({
 
   // Endpoints that take a reference image. The chosen one is always offered, even
   // before the catalogue is loaded, so a saved choice is never silently dropped.
+  // Endpoints that can change a picture you already have. fal's catalogue metadata tags only a few
+  // of them, so the instruction-editor families are matched by name too — those are the ones that
+  // follow your instruction and keep the picture, instead of re-drawing from your words.
   const editChoices = (() => {
+    const EDITOR = /\/edit$|image-to-image|kontext|nano-banana|gpt-image|qwen-image-edit/i
     const ids = new Set(
-      falModels.filter((m) => m.category === 'image-to-image').map((m) => m.id),
+      falModels
+        .filter((m) => m.category === 'image-to-image' || EDITOR.test(m.id))
+        .filter((m) => !/\/text-to-image$/i.test(m.id))
+        .map((m) => m.id),
     )
-    const cur = imageGen.editModel || 'fal-ai/flux/dev/image-to-image'
+    const cur = imageGen.editModel || 'fal-ai/nano-banana/edit'
     if (cur) ids.add(cur)
-    return [...ids].map(
-      (id) =>
-        falModels.find((m) => m.id === id) || {
-          id,
-          name: id,
-          description: '',
-          category: 'image-to-image',
-        },
-    )
+    return [...ids]
+      .map(
+        (id) =>
+          falModels.find((m) => m.id === id) || {
+            id,
+            name: id,
+            description: '',
+            category: 'image-to-image',
+          },
+      )
+      .sort((a, b) => String(a.name).localeCompare(String(b.name)))
   })()
 
   return (
@@ -1421,7 +1439,7 @@ export default function SettingsModal({
                   <select
                     data-fal-editmodel
                     className={inputCls}
-                    value={imageGen.editModel || 'fal-ai/flux/dev/image-to-image'}
+                    value={imageGen.editModel || 'fal-ai/nano-banana/edit'}
                     onChange={(e) => setImageGen({ editModel: e.target.value })}
                   >
                     {editChoices.map((m) => (
@@ -1435,6 +1453,32 @@ export default function SettingsModal({
                       ? 'Load models above to choose from fal’s image-to-image endpoints.'
                       : `${editChoices.length} endpoint${editChoices.length === 1 ? '' : 's'} here accept a reference image.`}
                   </div>
+                  {/* the family matters more than the name: it decides whether you get your picture
+                      back, changed, or a new picture inspired by it */}
+                  <div data-editmodel-kind className="mt-1.5 text-[11.5px] text-faint">
+                    {/flux\/dev\/image-to-image|flux-2-pro\/edit/i.test(imageGen.editModel || '') &&
+                    !/kontext/i.test(imageGen.editModel || '')
+                      ? 'This one re-draws a new picture guided by yours, so details drift. For “the same picture, with my change”, pick a Nano Banana, Kontext or GPT Image edit endpoint.'
+                      : 'This one follows your instruction and keeps the picture you sent — the same image, changed as asked.'}
+                  </div>
+                  {imageGen.editModelMovedFrom ? (
+                    <div
+                      data-editmodel-moved
+                      className="mt-2 flex items-start gap-2 rounded-lg border border-[#4a3d1f] bg-[#241f12] px-2.5 py-2 text-[11.5px] text-[#e8d9a8]"
+                    >
+                      <span className="flex-1">
+                        Moved you off {imageGen.editModelMovedFrom}, which re-drew the picture from your
+                        words instead of changing it. Switch back in the list above whenever you like.
+                      </span>
+                      <button
+                        onClick={() => setImageGen({ editModelMovedFrom: '' })}
+                        title="Understood"
+                        className="text-[#c8b070] transition hover:text-ink"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  ) : null}
                 </Field>
 
                 <div className="grid grid-cols-2 gap-3">

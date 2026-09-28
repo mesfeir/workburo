@@ -154,11 +154,7 @@ export default function Sidebar({
           icon={<ImageIcon size={17} />}
           label="Images"
           onClick={onOpenImages}
-          title={
-            config.imageGen?.enabled
-              ? 'Image generation is on — configure the provider in Settings'
-              : 'Image generation — set up a provider in Settings'
-          }
+          title="Every picture you have attached or drawn, and the settings behind them"
         />
         <NavRow icon={<Library size={17} />} label="Library" disabled title="Saved outputs — coming soon" />
         <NavRow icon={<CalendarClock size={17} />} label="Scheduled" disabled title="Scheduled prompts — coming soon" />

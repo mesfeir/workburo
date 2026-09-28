@@ -101,6 +101,8 @@ export interface ImageGenConfig {
   model: string
   /** fal endpoint used when a message carries a reference image to edit */
   editModel?: string
+  /** set when the app moved this setting for you, so Settings can say so instead of doing it silently */
+  editModelMovedFrom?: string
   /** images per prompt */
   count: number
   /** size preset id, used only when the model declares image_size */

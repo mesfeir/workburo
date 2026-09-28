@@ -64,7 +64,7 @@ export interface ZenApi {
     }>
   }
   images: {
-    models: (key: string) => Promise<{ ok: boolean; models?: FalModel[]; total?: number; error?: string; status?: number }>
+    models: (key: string, categories?: string) => Promise<{ ok: boolean; models?: FalModel[]; total?: number; error?: string; status?: number }>
     /** what the selected model charges for the selected size, resolved in the main process */
     cost: (req: { pricing?: string; model?: string; width?: number; height?: number; count?: number }) => Promise<{
       ok: boolean

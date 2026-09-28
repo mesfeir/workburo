@@ -118,6 +118,13 @@ look complete.
   once you have gone elsewhere — 30 seconds out of focus by default, both switchable in Settings →
   General. Nothing is minimised while an answer or a picture is still on its way; a run in progress
   keeps the window on screen, and it puts itself away once the work is done.
+- **Images in the sidebar** — the Images item under *New chat* opens a **gallery of every picture
+  you have attached or drawn**, newest first, filterable (All / Drawn / Attached) and labelled with
+  the chat it came from. Click one to open that chat; the image *settings* sit behind the gear in
+  the gallery header, so they are one click away instead of in the way.
+- **Mode switches under the input** — Image, Agent and Think sit on their own row *below* the
+  composer. Beside the input they crowded the textarea out at narrow widths until there was nowhere
+  left to type.
 - **Input rail** — small ticks down the right edge, one per message you sent. Hover one to
   preview it, click it to jump straight back to that point in the conversation. It only appears
   when the transcript actually scrolls, and sits beside the scrollbar rather than over it.

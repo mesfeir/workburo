@@ -278,7 +278,30 @@ async function generateImage(args, opts = {}) {
     }
   }
 
-  const model = String(args.model || cfg.model || '').trim()
+  // Which picture is being changed, if any. main supplies the pictures that are actually in the
+  // conversation; the model only names one, so it can never invent an image out of nowhere — and a
+  // model with no vision can still work on a picture it cannot see.
+  const wanted = String(args.reference || '').trim().toLowerCase()
+  const refs = cfg.references || {}
+  let reference = null
+  if (wanted) {
+    reference = wanted === 'last' || wanted === 'attached' ? refs[wanted] || refs.last || null : null
+    if (!reference || !reference.url) {
+      return {
+        ok: false,
+        error:
+          'There is no picture in this conversation to change — ' +
+          (wanted === 'attached'
+            ? 'nothing was attached to that message.'
+            : 'nothing has been attached or drawn here yet.') +
+          ' Draw one first, or attach a picture, then ask again.',
+      }
+    }
+  }
+
+  const model = String(
+    (reference ? cfg.editModel || args.model || cfg.model : args.model || cfg.model) || '',
+  ).trim()
   if (!model) return { ok: false, error: 'No fal.ai model is selected. Pick one in Settings → Images.' }
 
   const count = Math.min(Math.max(Number(args.count) || 1, 1), 4)
@@ -297,6 +320,9 @@ async function generateImage(args, opts = {}) {
     prompt,
     count,
     size,
+    // the reference travels inline: the picture is already here, and the endpoint is the one that
+    // follows an instruction instead of re-drawing from the words alone
+    imageUrl: reference ? reference.url : '',
     imagesDir: cfg.imagesDir,
     onProgress: cfg.onProgress,
   })
@@ -304,6 +330,20 @@ async function generateImage(args, opts = {}) {
 
   const images = result.images || []
   const secs = ((result.tookMs || 0) / 1000).toFixed(1)
+
+  if (reference) {
+    return {
+      ok: true,
+      images,
+      sources: [],
+      text:
+        `Changed the picture (${reference.name}) with ${model} in ${secs}s, following the user's ` +
+        `instruction. The conversation now shows the changed picture${images.length === 1 ? '' : 's'}. ` +
+        'Describe what changed in a sentence — never say you drew it from scratch, and do not repeat ' +
+        'the instruction back.',
+    }
+  }
+
   return {
     ok: true,
     images,
@@ -407,10 +447,16 @@ const REGISTRY = {
       function: {
         name: 'generate_image',
         description:
-          'Create a picture and show it to the user in the chat. Call this whenever the user wants to ' +
-          'SEE something rather than read about it: "create an image of …", "draw …", "make a picture / ' +
-          'logo / poster / character of …", "show me how it would look", "what would X look like", or any ' +
-          'other request for a visual. Write the prompt as a rich visual description — subject, style, ' +
+          'Create or change a picture and show it in the conversation. Call this whenever the user ' +
+          'wants to SEE something rather than read about it: "create an image of …", "draw …", "make a ' +
+          'picture / logo / poster / character of …", "show me how it would look", "what would X look ' +
+          'like" — and equally when they want a picture that is already in the conversation changed: ' +
+          '"add a hat to it", "make it blue", "change the background", "make it bigger", "recreate ' +
+          'this but …". When they mean a picture that is already there — the one they attached, or one ' +
+          'you drew — pass reference ("last" for the most recent, "attached" for the picture in their ' +
+          'current message) and write the prompt as the instruction for that change. That edits their ' +
+          'picture; calling this with no reference draws a brand new one from scratch instead. ' +
+          'Write the prompt as a rich visual description — subject, style, ' +
           'lighting, framing — because the words you send are the only instruction the image model gets. ' +
           'The picture appears in the conversation itself, so never answer a request like this by ' +
           'describing the scene in words instead of calling this tool.',
@@ -420,8 +466,17 @@ const REGISTRY = {
             prompt: {
               type: 'string',
               description:
-                'What to draw, as a detailed visual description. Expand the user\'s words into a prompt ' +
-                'an image model can use: subject, setting, style, lighting, colours, framing.',
+                'What to draw, as a detailed visual description. Expand the user’s words into a prompt ' +
+                'an image model can use: subject, setting, style, lighting, colours, framing. When ' +
+                'editing with a reference, this is the instruction for the change.',
+            },
+            reference: {
+              type: 'string',
+              enum: ['last', 'attached'],
+              description:
+                'Which picture already in the conversation to change. "last" = the most recent one, ' +
+                'whether the user attached it or you drew it. "attached" = the picture in the user’s ' +
+                'current message. Leave it out only when drawing something new.',
             },
             count: { type: 'integer', description: 'How many images to make, 1-4 (default 1)' },
             size: {

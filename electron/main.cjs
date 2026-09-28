@@ -133,7 +133,7 @@ function defaultStore() {
         falKey: '',
         model: 'fal-ai/flux/schnell',
         // used when a message carries a reference image
-        editModel: 'fal-ai/flux/dev/image-to-image',
+        editModel: 'fal-ai/nano-banana/edit',
         count: 1,
         size: 'square_hd',
       },
@@ -158,8 +158,20 @@ function readStore() {
     const raw = fs.readFileSync(storePath(), 'utf8')
     const parsed = JSON.parse(raw)
     const base = defaultStore()
+    const cfg = { ...base.config, ...(parsed.config || {}) }
+    // One-time nudge, shown in Settings → Images rather than done behind the user's back: the old
+    // default edit endpoint re-draws from the prompt and barely uses the picture it is given, which
+    // is why "make it bigger" came back as a new picture. An instruction editor is what "the same
+    // picture, with my change" actually needs.
+    if (cfg.imageGen && cfg.imageGen.editModel === 'fal-ai/flux/dev/image-to-image') {
+      cfg.imageGen = {
+        ...cfg.imageGen,
+        editModel: 'fal-ai/nano-banana/edit',
+        editModelMovedFrom: 'fal-ai/flux/dev/image-to-image',
+      }
+    }
     return restoreInlineImages({
-      config: { ...base.config, ...(parsed.config || {}) },
+      config: cfg,
       conversations: Array.isArray(parsed.conversations) ? parsed.conversations : [],
       activeId: parsed.activeId || null,
       models: Array.isArray(parsed.models) ? parsed.models : [],
@@ -891,6 +903,32 @@ const IMAGE_TOOL_NOTE =
   '"what would X look like" — call generate_image with a detailed visual prompt instead of describing ' +
   'the scene in words. The picture appears in the conversation itself.'
 
+// The picture rules — what a conversation contains, and which picture the image tool may be
+// pointed at — live in ./pictures.cjs so they can be tested directly. main supplies the one thing
+// that file cannot have: a way to read a drawn picture back off disk.
+const pictures = require('./pictures.cjs')
+
+/**
+ * The pictures the image tool may be pointed at. The model only ever *names* one ("last"), and main
+ * resolves it here — so a model with no vision can still change a picture it cannot see, and a
+ * model can never invent an image out of nowhere.
+ *
+ * A drawn picture is kept on disk with its URL stripped out of the store, so this reads the file
+ * back rather than trusting the message to carry the bytes.
+ */
+function referencesFor(messages) {
+  return pictures.referencesFor(messages, fileToDataUrl)
+}
+
+/**
+ * What pictures exist in this conversation, said out loud to the model. Without this, "add a hat
+ * to it" reads as a request to draw something new — which is exactly how a generated picture got
+ * recreated from scratch instead of edited.
+ */
+function pictureNote(messages) {
+  return pictures.pictureNote(messages)
+}
+
 /* ---------------------------------------------------------------- request */
 
 // toChatMessages lives in ./messages.cjs — see the note there about images on assistant turns.
@@ -1332,7 +1370,9 @@ ipcMain.handle('chat:start', async (event, req) => {
     (cfg.toolToggles || {}).generate_image !== false &&
     !!cfg.imageGen?.falKey
   const systemPrompt = drawReady
-    ? [String(req.systemPrompt || '').trim(), IMAGE_TOOL_NOTE].filter(Boolean).join('\n\n')
+    ? [String(req.systemPrompt || '').trim(), IMAGE_TOOL_NOTE, pictureNote(messages)]
+        .filter(Boolean)
+        .join('\n\n')
     : req.systemPrompt
   const send = (payload) => {
     if (!event.sender.isDestroyed()) event.sender.send('chat:event', { requestId, ...payload })
@@ -1482,6 +1522,12 @@ ipcMain.handle('chat:start', async (event, req) => {
           images: {
             key: cfg.imageGen?.falKey || '',
             model: cfg.imageGen?.model || '',
+            // an edit runs on the edit endpoint: the models that follow an instruction and keep
+            // the picture, instead of re-drawing from the words alone
+            editModel: cfg.imageGen?.editModel || '',
+            // the pictures that are actually in this conversation, so the model can name one it
+            // cannot see ("last") and still get exactly that picture changed
+            references: referencesFor(messages),
             imagesDir: imagesDir(),
             onProgress: (p) => send({ type: 'image', value: { id: tc.id, ...p } }),
           },
@@ -1829,7 +1875,9 @@ ipcMain.handle('images:cost', async (_e, { pricing, model, width, height, count 
   }
 })
 
-ipcMain.handle('images:models', async (_e, { key }) => falImages.listModels(String(key || '')))
+ipcMain.handle('images:models', async (_e, { key, categories }) =>
+  falImages.listModels(String(key || ''), { categories: String(categories || '') }),
+)
 
 /**
  * A pasted screenshot can be many megabytes, and the reference travels inline as a

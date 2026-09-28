@@ -16,7 +16,9 @@
     "selftest": "electron . --selftest",
     "test:images": "node scripts/test-images.cjs",
     "test:agent": "node scripts/test-agent.cjs",
-    "test:messages": "node scripts/test-messages.cjs"
+    "test:messages": "node scripts/test-messages.cjs",
+    "test:pricing": "node scripts/test-pricing.cjs",
+    "test:edit": "node scripts/test-edit.cjs"
   },
   "dependencies": {
     "highlight.js": "^11.10.0",

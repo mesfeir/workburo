@@ -701,6 +701,101 @@ async function run({
     `visible=${isVisible()} minimised=${isMinimized()}`,
   )
 
+  // ---------- 11c. the input at its narrowest: the mode switches must not eat it
+  win.setSize(380, 640)
+  await sleep(800)
+  const layout = await inPage(win, function () {
+    const ta = document.querySelector('textarea')
+    const modes = document.querySelector('[data-modes]')
+    const t = ta ? ta.getBoundingClientRect() : null
+    const m = modes ? modes.getBoundingClientRect() : null
+    return {
+      hasModes: !!m,
+      inputWidth: t ? Math.round(t.width) : 0,
+      inputBottom: t ? Math.round(t.bottom) : 0,
+      modesTop: m ? Math.round(m.top) : 0,
+      modesLabels: modes ? String(modes.innerText || '').replace(/\s+/g, ' ').trim() : '',
+      overlapping:
+        !!(t && m && m.top < t.bottom - 2 && m.left < t.right && m.right > t.left && m.left < t.right),
+    }
+  })
+  record(
+    'the mode switches sit under the input, not beside it',
+    layout.hasModes && layout.modesTop >= layout.inputBottom - 2,
+    `switches top=${layout.modesTop}, input bottom=${layout.inputBottom} · "${layout.modesLabels}"`,
+  )
+  record(
+    'the input keeps real room to type in at the narrowest window',
+    layout.inputWidth >= 150,
+    `${layout.inputWidth}px of input in a 380px window`,
+  )
+  record(
+    'and no switch is stacked over the input',
+    !layout.overlapping,
+    layout.overlapping ? 'a switch overlaps the textarea' : 'clear',
+  )
+  win.setSize(480, 660)
+  await sleep(600)
+  await shot(win, '11c-composer-modes')
+
+  // ---------- 11d. the Images item is a gallery of pictures, not the image settings
+  await inPage(win, function () {
+    if (document.querySelector('nav button')) return true
+    const show = [...document.querySelectorAll('button')].find((b) =>
+      /show sidebar/i.test(b.getAttribute('title') || ''),
+    )
+    if (show) show.click()
+    return true
+  })
+  await sleep(600)
+  const clickedImages = await inPage(win, function () {
+    const row = [...document.querySelectorAll('nav button')].find((b) =>
+      /Images/.test(b.innerText || ''),
+    )
+    if (!row) return false
+    row.click()
+    return true
+  })
+  await sleep(800)
+  const gallery = await inPage(win, function () {
+    const panel = document.querySelector('[data-gallery]')
+    return {
+      open: !!panel,
+      count: panel ? String(panel.querySelector('[data-gallery-count]')?.innerText || '').trim() : '',
+      tiles: panel ? panel.querySelectorAll('[data-gallery-grid] button').length : 0,
+      filters: panel
+        ? String(panel.querySelector('[data-gallery-filter]')?.innerText || '').replace(/\s+/g, ' ').trim()
+        : '',
+      settingsAlsoOpen: !!document.querySelector('[data-fal-editmodel]'),
+    }
+  })
+  record(
+    'the Images item opens a gallery of pictures, not the image settings',
+    clickedImages && gallery.open && !gallery.settingsAlsoOpen,
+    gallery.open
+      ? `"${gallery.count}" · tiles=${gallery.tiles} · filters "${gallery.filters}"`
+      : 'no gallery appeared',
+  )
+  record(
+    'the gallery lists the pictures from this conversation',
+    gallery.tiles >= 1,
+    `${gallery.tiles} tile(s) shown`,
+  )
+  await shot(win, '11d-gallery')
+  const clickedTile = await inPage(win, function () {
+    const tile = document.querySelector('[data-gallery-grid] button')
+    if (!tile) return false
+    tile.click()
+    return true
+  })
+  await sleep(800)
+  const galleryClosed = await inPage(win, () => !document.querySelector('[data-gallery]'))
+  record(
+    'clicking a picture opens the chat it came from',
+    clickedTile && galleryClosed,
+    clickedTile ? `gallery closed=${galleryClosed}` : 'no tile to click',
+  )
+
   const rebind = await inPage(
     win,
     function (current) {
@@ -1097,17 +1192,28 @@ async function run({
     const sel = document.querySelector('[data-fal-editmodel]')
     if (!sel) return null
     const opts = Array.from(sel.options).map((o) => o.value)
+    const kind = document.querySelector('[data-editmodel-kind]')
     return {
       value: sel.value,
       options: opts.length,
-      hasDefault: opts.includes('fal-ai/flux/dev/image-to-image'),
+      // the chosen endpoint must be one the picker actually offers, and it must be an editing
+      // endpoint — not a drawing one that would ignore the picture
+      chosen: sel.value,
+      offersChosen: opts.includes(sel.value),
+      isEditor: /image-to-image|\/edit$|-edit/.test(sel.value),
       allImageToImage: opts.every((v) => /image-to-image|\/edit$|-edit/.test(v)),
+      kind: kind ? String(kind.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 80) : '',
     }
   })
   record(
-    'the edit endpoint is choosable in Settings → Images, defaulting to flux/dev/i2i',
-    imagesTab === true && Boolean(editPicker) && editPicker.hasDefault,
+    'the edit endpoint is choosable in Settings → Images, and is an editing endpoint',
+    imagesTab === true && Boolean(editPicker) && editPicker.offersChosen && editPicker.isEditor,
     JSON.stringify(editPicker),
+  )
+  record(
+    'the picker says whether the chosen endpoint keeps your picture or re-draws it',
+    Boolean(editPicker) && /keeps the picture you sent|re-draws a new picture/.test(editPicker.kind || ''),
+    `"${editPicker?.kind || ''}"`,
   )
   record(
     'the picker offers image-to-image endpoints, not text-to-image ones',

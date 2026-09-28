@@ -49,7 +49,17 @@ rather than a mode you switch on:
   consulted, so there is no "here is what I see in your image" step and no re-described prompt.
   The reply is fal's picture, or fal's reason.
 - **Which endpoint** is `editModel`, chosen in Settings → Images from fal's own `image-to-image`
-  list; the default is `fal-ai/flux/dev/image-to-image`.
+  list. Two families behave very differently, and the picker says which is which:
+  - **Instruction editors** — `fal-ai/nano-banana/edit` (the default, ~$0.04 an image),
+    `fal-ai/flux-pro/kontext` (~$0.04), `openai/gpt-image-2/edit`, `…/seedream/…/edit`. These read
+    your instruction and change *that* picture: subject, framing and details survive.
+  - **Re-drawing image-to-image** — everything FLUX `…/image-to-image`. These make a new picture
+    guided by yours, so details drift even when the instruction asks for one small change. Still
+    offered, because occasionally that is what you want.
+- **A strength that keeps your picture.** FLUX-style endpoints take a `strength`, and fal's default
+  is 0.95 — high enough that the words win and your picture is only a hint. That is why "make it
+  bigger" came back as a new picture. The app sends **0.85** whenever an endpoint declares a
+  `strength`, and sends nothing at all to the instruction editors, which have no such parameter.
 - **Which parameter** the reference goes in comes from that endpoint's schema, not from a guess:
   `image_url`, `image_urls` (a one-item list), `image`, `input_image`, `init_image` and similar are
   probed in that order, and counters or sizing options (`num_images`, `image_size`) are explicitly
@@ -64,6 +74,17 @@ rather than a mode you switch on:
 - **The switch beside the thumbnail** ("Edit image" / "Ask about it") keeps the ordinary vision path
   reachable — attaching a picture to ask *what is in it* still works, it is just no longer the
   default gesture. The switch resets to **Edit image** when the attachments are cleared.
+- **Editing a picture that is already in the conversation.** Nothing has to be re-attached: ask, and
+  the model calls the image tool with a `reference`. `reference: "last"` is the most recent picture
+  in the conversation — the one you attached, or the one just drawn; `reference: "attached"` is the
+  picture in your current message. The model only *names* one and **main resolves the actual
+  image**: a drawn picture is read back off disk when the store holds no URL for it, and a request
+  with no picture to act on is refused plainly ("there is no picture in this conversation to
+  change") instead of quietly drawing something unrelated. This is also how a model with no vision
+  can still change a picture it cannot see.
+- **The model is told what exists.** Every turn that can draw carries a line listing the
+  conversation's pictures, oldest first, marking the most recent. Without it, "add a hat to it"
+  reads as a request to draw something new — which is exactly how a picture came back recreated.
 - **Cost** is the same per-megapixel rate as generation, billed on the output.
 
 ### Cost, for reference

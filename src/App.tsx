@@ -5,6 +5,7 @@ import ChatView from './components/ChatView'
 import Composer from './components/Composer'
 import ModelPicker from './components/ModelPicker'
 import SettingsModal, { type SettingsTab } from './components/SettingsModal'
+import GalleryModal from './components/GalleryModal'
 import { probeImage, readFilesAsImages, shrinkImage } from './lib/image'
 import type {
   Attachment,
@@ -133,6 +134,7 @@ export default function App() {
   const [refEdit, setRefEdit] = useState(true)
   /** which settings tab to open on, when something other than us asks for it */
   const [settingsTab, setSettingsTab] = useState<SettingsTab | undefined>(undefined)
+  const [galleryOpen, setGalleryOpen] = useState(false)
   /** live image requests -> the message they will fill in */
   const genRef = useRef(new Map<string, { convId: string; msgId: string }>())
 
@@ -469,7 +471,7 @@ export default function App() {
   const runFalEdit = useCallback(async (convId: string, prompt: string, refUrl: string) => {
     const cfg = configRef.current
     const im = cfg.imageGen
-    const model = im?.editModel || 'fal-ai/flux/dev/image-to-image'
+    const model = im?.editModel || 'fal-ai/nano-banana/edit'
     const asstId = uid()
     const placeholder: ChatMessage = {
       id: asstId,
@@ -1008,10 +1010,7 @@ export default function App() {
               onRename={renameConv}
               onPin={pinConv}
               onOpenSettings={() => setSettingsOpen(true)}
-              onOpenImages={() => {
-                setSettingsTab('images')
-                setSettingsOpen(true)
-              }}
+              onOpenImages={() => setGalleryOpen(true)}
               onCollapse={() => setSidebarOpen(false)}
             />
           </div>
@@ -1132,6 +1131,23 @@ export default function App() {
           onProbe={probeModel}
           probing={probing}
           initialTab={settingsTab}
+        />
+      )}
+
+      {galleryOpen && (
+        <GalleryModal
+          conversations={conversations}
+          onClose={() => setGalleryOpen(false)}
+          onOpenChat={(id) => {
+            setActiveId(id)
+            setImages([])
+            setGalleryOpen(false)
+          }}
+          onOpenSettings={() => {
+            setGalleryOpen(false)
+            setSettingsTab('images')
+            setSettingsOpen(true)
+          }}
         />
       )}
 
