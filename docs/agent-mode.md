@@ -1,6 +1,24 @@
 # Agent mode — Pi in the backend, hands on the machine
 
-**Status: engine proven by spike, not yet wired into the app.**
+**Status: wired into the app.** Settings → Agent installs Pi with one button; the composer's
+**Agent** pill routes a turn to it, and switched off nothing changes at all. The installed build
+needs a rebuild (`npm run dist`) before it carries this — the copy in the Start Menu is older.
+
+## How it behaves
+
+- **Install**: Settings → Agent → *Install Pi*. A checksum-verified download of Pi's own release,
+  unpacked beside the app's data, with live progress; *Remove* deletes the folder and switches
+  agent mode off. Nothing is downloaded, installed or scheduled until that button is pressed.
+- **Workspace**: chosen in the same panel, and named in the composer pill's tooltip while agent
+  mode is on, so what the agent may change is never a mystery.
+- **Toggle**: greyed out with an explanation until Pi is really installed. With it on, the turn
+  goes to Pi over the same request id, so its work lands in the existing stream — text, reasoning,
+  tool rows with pass/fail, usage — and the same Stop button ends it.
+- **Off**: no process is spawned, no config is generated, and the message costs exactly what it
+  always did.
+- **Model**: whatever is selected in the composer. Pi's provider config is regenerated from the
+  app's own settings on every turn, so the two can never drift apart.
+
 
 Agent mode is an opt-in toggle in the chat: when it is on, a turn is handed to
 [Pi](https://pi.dev) — the agent harness — instead of going straight to the chat model. Pi runs the
