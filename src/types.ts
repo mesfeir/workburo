@@ -131,6 +131,10 @@ export interface Config {
   /** global summon shortcut, Electron accelerator syntax ('' = disabled) */
   hotkey: string
   startWithWindows: boolean
+  /** keep the window above other windows (default true) */
+  alwaysOnTop?: boolean
+  /** seconds out of focus before the window minimises itself; 0 never does (default 30) */
+  autoMinimizeSec?: number
   /** let the model call tools (web search, page reading, weather, time) */
   toolsEnabled: boolean
   /** per-tool on/off, keyed by tool name */

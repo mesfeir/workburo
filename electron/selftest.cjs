@@ -221,7 +221,28 @@ async function pickModel(win, name) {
 
 /* --------------------------------------------------------------- runner */
 
-async function run({ win, apiKey, toggle, hide, isVisible, isRegistered, readBounds, setLogin, getLogin, isPackaged, reapplyStored, hasFalKey = false }) {
+async function run({
+  win,
+  apiKey,
+  toggle,
+  hide,
+  isVisible,
+  isRegistered,
+  readBounds,
+  setLogin,
+  getLogin,
+  isPackaged,
+  reapplyStored,
+  hasFalKey = false,
+  alwaysOnTop,
+  isMinimized,
+  minimize,
+  restore,
+  showInactive,
+  armAutoMinimize,
+  autoMinimizeSecs,
+  workInFlight,
+}) {
   const results = []
 
   // surface renderer-side errors so a silent failure can't hide
@@ -519,11 +540,22 @@ async function run({ win, apiKey, toggle, hide, isVisible, isRegistered, readBou
   )
   await sleep(2500)
   const rejErr = await inPage(win, pageHasError)
+  // The app no longer lets a text-only model fail the request: the picture is left out and the
+  // model is remembered as text-only, with the reason shown in the message's own note. Either
+  // outcome tells the user what happened; silence would not.
+  const rejNote = await inPage(win, function () {
+    const all = document.querySelectorAll('[data-msg]')
+    const wrap = all[all.length - 1]
+    return wrap ? String(wrap.innerText || '') : ''
+  })
+  const toldClearly = /does not support image inputs/i.test(rejErr) || /could not take the picture/i.test(rejNote)
   record(
     'text-only model failure is surfaced clearly',
-    picked3 && /does not support image inputs/i.test(rejErr),
+    picked3 && toldClearly,
     `glm-5.3 selected=${picked3}; ${
-      rejErr ? `user saw: "${rejErr.slice(0, 110)}"` : 'NO ERROR SHOWN to the user'
+      toldClearly
+        ? `user saw: "${(rejErr || rejNote).replace(/\s+/g, ' ').slice(0, 130)}"`
+        : 'NOTHING SAID TO THE USER about the picture'
     }`,
   )
   await shot(win, '08-text-only-model')
@@ -638,6 +670,37 @@ async function run({ win, apiKey, toggle, hide, isVisible, isRegistered, readBou
     `hidden=${wasHidden} then visible=${backVisible}`,
   )
 
+  // ---------- 11b. window behaviour: above other windows, and away by itself
+  record('the window is kept above other windows', alwaysOnTop() === true, `alwaysOnTop=${alwaysOnTop()}`)
+
+  const delaySecs = autoMinimizeSecs()
+  record('a minimise delay is configured', delaySecs > 0, `${delaySecs}s out of focus before it tucks itself away`)
+
+  // win.blur() does not move focus on every desktop, so show the window again without focusing it:
+  // visible and genuinely unfocused is the case being tested, and it is the case a summon-away
+  // launcher actually lives in.
+  hide()
+  await sleep(400)
+  showInactive()
+  await sleep(600)
+  const unfocused = !win.isFocused()
+  armAutoMinimize({ autoMinimizeSec: 0.5 })
+  await sleep(1800)
+  const tuckedAway = isMinimized()
+  record(
+    'it minimises itself once focus has been gone for the delay',
+    unfocused && tuckedAway,
+    `unfocused=${unfocused} minimised=${tuckedAway}`,
+  )
+
+  toggle()
+  await sleep(900)
+  record(
+    'the summon shortcut brings it back from minimised',
+    isVisible() && !isMinimized(),
+    `visible=${isVisible()} minimised=${isMinimized()}`,
+  )
+
   const rebind = await inPage(
     win,
     function (current) {
@@ -707,6 +770,29 @@ async function run({ win, apiKey, toggle, hide, isVisible, isRegistered, readBou
     'Use your get_weather tool for London right now, then tell me the temperature and the conditions.',
   ])
   await inPage(win, pageSend)
+
+  // while this answer is still on its way the window must not tuck itself away: losing sight of a
+  // run in progress is worse than one extra window on screen
+  win.blur()
+  await sleep(300)
+  armAutoMinimize({ autoMinimizeSec: 0.5 })
+  let sawWork = false
+  let minimisedWhileBusy = false
+  for (let i = 0; i < 7; i += 1) {
+    await sleep(400)
+    if (workInFlight()) {
+      sawWork = true
+      if (isMinimized()) minimisedWhileBusy = true
+    }
+  }
+  record(
+    'a run in progress keeps the window on screen instead of tucking it away',
+    sawWork && !minimisedWhileBusy,
+    `work in flight seen=${sawWork} minimised while busy=${minimisedWhileBusy}`,
+  )
+  restore()
+  await sleep(500)
+
   await waitFor(
     win,
     new Function(`return function(){ return document.querySelectorAll('.prose-zen').length > ${beforeTools} }`)(),

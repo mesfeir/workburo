@@ -142,6 +142,9 @@ function defaultStore() {
         { name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', affinity: false },
         { name: 'LM Studio (local)', baseUrl: 'http://127.0.0.1:1234/v1', affinity: false },
       ],
+      // window behaviour: above other windows by default, and out of the way after a delay
+      alwaysOnTop: true,
+      autoMinimizeSec: 30,
       modelPrefs: {}, // modelId -> { vision?: boolean, protocol?: string, note?: string }
     },
     conversations: [],
@@ -268,6 +271,13 @@ function createWindow() {
   win.on('move', scheduleWindowState)
   win.on('close', writeWindowState)
 
+  // above other windows, and away by itself once you have gone elsewhere
+  win.on('blur', () => armAutoMinimize(readStore().config))
+  win.on('focus', cancelAutoMinimize)
+  win.on('minimize', cancelAutoMinimize)
+  win.on('restore', cancelAutoMinimize)
+  applyAlwaysOnTop(readStore().config)
+
   if (isDev) {
     win.loadURL(DEV_URL)
   } else {
@@ -308,6 +318,57 @@ function toggleWindow() {
   if (!win || win.isDestroyed()) return createWindow()
   if (win.isVisible() && win.isFocused()) hideWindow()
   else showWindow()
+}
+
+/**
+ * Window behaviour.
+ *
+ * This is a summoned launcher, so it sits above other windows and, once it has been left alone,
+ * tucks itself away. The delay starts when the window loses focus and is called off if focus comes
+ * back. Nothing is minimised while an answer or a picture is still on its way — losing sight of a
+ * run in progress is worse than one extra window on screen — and a busy moment is asked about
+ * again rather than skipped, so the window does put itself away once the work is done.
+ */
+let autoMinTimer = null
+let imageJobs = 0
+let lastAutoMinSec = null
+
+function workInFlight() {
+  return inflight.size > 0 || activeAgentTurns.size > 0 || imageJobs > 0
+}
+
+function autoMinimizeSecs(cfg) {
+  const raw = cfg && cfg.autoMinimizeSec != null ? Number(cfg.autoMinimizeSec) : 30
+  return Number.isFinite(raw) && raw > 0 ? raw : 0
+}
+
+function applyAlwaysOnTop(cfg) {
+  if (!win || win.isDestroyed()) return
+  // 'floating' rather than plain topmost: above ordinary windows without fighting full-screen apps
+  win.setAlwaysOnTop(cfg ? cfg.alwaysOnTop !== false : true, 'floating')
+}
+
+function cancelAutoMinimize() {
+  if (autoMinTimer) clearTimeout(autoMinTimer)
+  autoMinTimer = null
+}
+
+function armAutoMinimize(cfg) {
+  cancelAutoMinimize()
+  const secs = autoMinimizeSecs(cfg)
+  if (!win || win.isDestroyed() || secs <= 0) return
+  if (win.isFocused() || win.isMinimized() || !win.isVisible()) return
+  autoMinTimer = setTimeout(() => {
+    autoMinTimer = null
+    if (!win || win.isDestroyed()) return
+    if (win.isFocused() || win.isMinimized() || !win.isVisible()) return
+    if (workInFlight()) {
+      armAutoMinimize(cfg)
+      return
+    }
+    win.minimize()
+  }, secs * 1000)
+  if (autoMinTimer.unref) autoMinTimer.unref()
 }
 
 function sendToRenderer(channel, payload) {
@@ -662,6 +723,14 @@ app.whenReady().then(() => {
           toggle: toggleWindow,
           hide: hideWindow,
           isVisible: () => win.isVisible(),
+          showInactive: () => win.showInactive(),
+          alwaysOnTop: () => win.isAlwaysOnTop(),
+          isMinimized: () => win.isMinimized(),
+          minimize: () => win.minimize(),
+          restore: () => showWindow(),
+          armAutoMinimize,
+          autoMinimizeSecs: () => autoMinimizeSecs(readStore().config),
+          workInFlight,
           isRegistered: (a) => globalShortcut.isRegistered(a),
           readBounds: () => win.getNormalBounds(),
           setLogin: setStartWithWindows,
@@ -1633,6 +1702,14 @@ ipcMain.handle('store:save', (_e, data) => {
     config.modelPrefs = prefs
   }
   scheduleSave({ ...data, config })
+
+  // a change to the window behaviour takes effect at once, without a restart
+  applyAlwaysOnTop(config)
+  if (autoMinimizeSecs(config) !== lastAutoMinSec) {
+    lastAutoMinSec = autoMinimizeSecs(config)
+    if (lastAutoMinSec > 0 && win && !win.isDestroyed() && !win.isFocused()) armAutoMinimize(config)
+    else cancelAutoMinimize()
+  }
   return true
 })
 ipcMain.handle('store:flush', (_e, data) => writeStore(data))
@@ -1827,6 +1904,9 @@ ipcMain.handle('images:generate', async (_e, req) => {
         'That reference image could not be read, so there was nothing to edit. Attach it again as a PNG or JPEG.',
     }
   }
+  // from here on a picture is being drawn: the count is held until the job ends, so the window
+  // does not tuck itself away mid-run. Every exit from here is inside the try/finally below.
+  imageJobs += 1
   try {
     return await falImages.generate({
       key: String(key || ''),
@@ -1841,6 +1921,9 @@ ipcMain.handle('images:generate', async (_e, req) => {
     })
   } catch (err) {
     return { ok: false, error: err?.message || 'Image generation failed.' }
+  } finally {
+    // a picture being drawn counts as work: the window does not tuck itself away mid-run
+    imageJobs -= 1
   }
 })
 

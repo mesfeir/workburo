@@ -60,6 +60,9 @@ const DEFAULTS: Config = {
   searchUrl: 'http://localhost:8888',
   profiles: [],
   modelPrefs: {},
+  // above other windows, and out of the way a delay after focus is lost
+  alwaysOnTop: true,
+  autoMinimizeSec: 30,
   agent: {
     workspace: '',
     enabled: false,

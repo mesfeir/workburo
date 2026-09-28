@@ -114,6 +114,10 @@ look complete.
   widen the window again.
 - **Start with Windows**, optionally, and quietly in the tray — no window stealing focus at
   login.
+- **Kept above other windows**, so the summon shortcut always finds it, and it **tucks itself away**
+  once you have gone elsewhere — 30 seconds out of focus by default, both switchable in Settings →
+  General. Nothing is minimised while an answer or a picture is still on its way; a run in progress
+  keeps the window on screen, and it puts itself away once the work is done.
 - **Input rail** — small ticks down the right edge, one per message you sent. Hover one to
   preview it, click it to jump straight back to that point in the conversation. It only appears
   when the transcript actually scrolls, and sits beside the scrollbar rather than over it.
@@ -255,7 +259,9 @@ composer, pasting a real image, switching models, reloading — and asserts on w
 rendered. It covers the shell, the compact layout, model discovery, a streamed completion,
 markdown and table rendering, image input on a vision model, protocol fallback, error
 surfacing, the settings modal, persistence across a reload, the summon shortcut (registered /
-disclosed / toggled / rebound / restored) and the start-with-Windows round trip.
+disclosed / toggled / rebound / restored), the start-with-Windows round trip, and the window
+behaviour — kept above other windows, tucking itself away a delay after focus is gone, coming back
+from minimised on the summon shortcut, and staying on screen while an answer is still arriving.
 
 ```bash
 # with the dev server running

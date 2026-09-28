@@ -553,6 +553,44 @@ export default function SettingsModal({
             {tab === 'general' && (
               <div className="space-y-5">
                 <Field
+                  label="Window behaviour"
+                  hint="Zen Chat sits above other windows so the summon shortcut always finds it, and tucks itself away once you have gone elsewhere. Nothing is minimised while an answer or a picture is still on its way."
+                >
+                  <label className="flex items-center gap-2.5">
+                    <input
+                      type="checkbox"
+                      data-always-on-top
+                      checked={config.alwaysOnTop !== false}
+                      onChange={(e) => onConfig({ alwaysOnTop: e.target.checked })}
+                      className="h-4 w-4 accent-[#3f6db5]"
+                    />
+                    <span className="text-[13px] text-[#dcdcdc]">Always keep it on top</span>
+                  </label>
+                  <div className="mt-3 flex flex-wrap items-center gap-2.5">
+                    <span className="text-[13px] text-[#dcdcdc]">Minimise after</span>
+                    <select
+                      data-auto-minimize
+                      className={inputCls + ' max-w-[170px]'}
+                      value={String(config.autoMinimizeSec ?? 30)}
+                      onChange={(e) => onConfig({ autoMinimizeSec: Number(e.target.value) })}
+                    >
+                      {[
+                        ['0', 'Never'],
+                        ['15', '15 seconds'],
+                        ['30', '30 seconds'],
+                        ['60', '1 minute'],
+                        ['300', '5 minutes'],
+                      ].map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="text-[12px] text-faint">of the window being out of focus</span>
+                  </div>
+                </Field>
+
+                <Field
                   label="Summon shortcut"
                   hint="Click the box, then press your combination. It works from anywhere in Windows and toggles Zen Chat open or closed."
                 >
