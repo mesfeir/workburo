@@ -3,6 +3,13 @@ export type Role = 'system' | 'user' | 'assistant'
 export interface Attachment {
   name?: string
   url: string
+  /** generated images are kept on disk; the renderer gets a data URL for display */
+  path?: string
+  width?: number | null
+  height?: number | null
+  bytes?: number
+  /** a saved generation whose file could not be read back */
+  missing?: boolean
 }
 
 export interface Usage {
@@ -84,6 +91,20 @@ export interface Profile {
   affinity: boolean
 }
 
+export interface ImageGenConfig {
+  /** shows the image mode toggle in the composer */
+  enabled: boolean
+  provider: 'fal'
+  /** fal.ai key — stored locally, sent only to fal.ai */
+  falKey: string
+  /** fal endpoint id, e.g. fal-ai/flux/schnell */
+  model: string
+  /** images per prompt */
+  count: number
+  /** size preset id, used only when the model declares image_size */
+  size: string
+}
+
 export interface Config {
   baseUrl: string
   apiKey: string
@@ -110,6 +131,8 @@ export interface Config {
   maxToolRounds: number
   /** SearXNG-compatible JSON search endpoint */
   searchUrl: string
+  /** fal.ai image generation (hosted; local models are not wired in yet) */
+  imageGen: ImageGenConfig
   profiles: Profile[]
   modelPrefs: Record<string, ModelPref>
 }

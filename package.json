@@ -13,7 +13,8 @@
     "start": "npm run build && electron .",
     "dist": "npm run build && electron-builder --win --dir && node scripts/apply-icon.cjs && electron-builder --win nsis portable --prepackaged release/win-unpacked",
     "dist:dir": "npm run build && electron-builder --win --dir && node scripts/apply-icon.cjs",
-    "selftest": "electron . --selftest"
+    "selftest": "electron . --selftest",
+    "test:images": "node scripts/test-images.cjs"
   },
   "dependencies": {
     "highlight.js": "^11.10.0",

@@ -7,6 +7,38 @@ export interface HotkeyStatus {
   error: string | null
 }
 
+export interface FalModel {
+  id: string
+  name: string
+  description: string
+  category: string
+  status?: string
+  license?: string
+  thumbnail?: string
+  pricing?: string
+}
+
+export interface GeneratedImage {
+  path: string
+  name: string
+  url: string
+  width: number | null
+  height: number | null
+  bytes: number
+}
+
+export interface ImageGenResult {
+  ok: boolean
+  error?: string
+  status?: number
+  images?: GeneratedImage[]
+  model?: string
+  requestId?: string
+  tookMs?: number
+  params?: string[]
+  seed?: number | null
+}
+
 export interface ZenApi {
   store: {
     get: () => Promise<StoreShape>
@@ -30,6 +62,23 @@ export interface ZenApi {
       preview: string
       sources: { title: string; url: string }[]
     }>
+  }
+  images: {
+    models: (
+      key: string,
+    ) => Promise<{ ok: boolean; models?: FalModel[]; total?: number; error?: string; status?: number }>
+    options: () => Promise<{ sizes: { id: string; label: string }[] }>
+    generate: (req: {
+      requestId: string
+      key: string
+      model: string
+      prompt: string
+      count: number
+      size: string
+    }) => Promise<ImageGenResult>
+    saveAs: (file: string) => Promise<{ ok: boolean; path?: string; error?: string; canceled?: boolean }>
+    openFolder: () => Promise<{ ok: boolean; error: string | null }>
+    onProgress: (handler: (p: { requestId: string; phase: string; detail?: string }) => void) => () => void
   }
   app: {
     info: () => Promise<{

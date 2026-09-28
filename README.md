@@ -70,6 +70,27 @@ look complete.
 - **Local-first storage** — every conversation in one JSON file you can open, back up, or
   hand-edit. No database, no cloud sync, no lock-in.
 
+**Images out, not just in**
+
+- **Hosted image generation.** Put a [fal.ai](https://fal.ai/dashboard/keys) key in Settings →
+  Images and an **Image** button appears in the composer: describe the picture, get the picture,
+  in the conversation. Off by default.
+- **The live fal catalogue, not a hardcoded list.** The picker is loaded from fal.ai's own API,
+  so it offers every text-to-image and image-to-image endpoint your key can reach — 226 of them
+  at the time of writing — each with its own description, and its price wherever fal publishes
+  one. Cheapest draft model and most expensive flagship are both one click away.
+- **Requests are built from each model's own schema.** Zen Chat fetches the endpoint's OpenAPI
+  spec and sends only the parameters that model actually declares, so moving from `schnell` to a
+  model that takes no `image_size` doesn't earn you a 422.
+- **Progress you can watch**, streamed from the main process onto the message: queued →
+  generating → downloading.
+- **Real files, not blobs in a database.** Pictures are written next to your chat store and the
+  conversation keeps only the path, so a hundred of them don't bloat the file you back up. Each
+  has a save-a-copy button; delete one from disk and the transcript says the file is missing
+  rather than showing a broken image.
+- **It says what it's doing.** While image mode is on, the composer tells you that your prompt is
+  being sent to fal.ai to be drawn — because that is exactly what a hosted generator does.
+
 **Made to be summoned, not opened**
 
 - **Global summon hotkey** (default `Alt+Space`, rebindable) shows and hides the window like a
@@ -132,8 +153,13 @@ so SmartScreen will show "unknown publisher" until you sign it with your own cer
 2. Pick a preset or paste a base URL — for example `https://opencode.ai/zen/go/v1`.
 3. Paste your key and hit **Test connection**. The model list loads on success.
 4. In **Models**, hit ⚡ on the models you care about so their real capabilities are recorded.
+5. Optional, for pictures: in **Images**, paste your fal.ai key, hit **Test key & load models**,
+   pick a model and tick **Enable image generation**. An **Image** button then appears in the
+   composer.
 
 ![Zen Chat settings, showing endpoint presets, the base URL and a masked API key field](docs/screenshots/readme-settings.png)
+
+![Zen Chat's Images settings pane: the fal.ai key field, a green "Key accepted · 226 image models listed" status, and the live model list with T2I badges](docs/screenshots/readme-images.png)
 
 ## Keyboard
 
@@ -227,6 +253,15 @@ npx electron . --selftest <api-key>
 It writes screenshots plus a `report.json` to `ZEN_SHOT_DIR` (default `%TEMP%\..\zen-shots`),
 and leaves the start-with-Windows registry entry **disabled** on purpose.
 
+The image pipeline has its own test, which runs offline against a stand-in that replays fal's
+response shapes — so the queue polling, the schema-driven request body, the download and the file
+writing are all exercised without a key or a network:
+
+```bash
+node scripts/test-images.cjs        # offline half always runs
+FAL_KEY=... node scripts/test-images.cjs   # adds the live catalogue, schema and key checks
+```
+
 The README screenshots are regenerated the same way, from the real UI, against an isolated
 seeded profile:
 
@@ -236,11 +271,13 @@ npx electron . --capture <api-key>
 
 ## Roadmap
 
-- **Image generation** — researched and measured, not shipped. Local Sana-Sprint / Flux 2 Klein
-  and a hosted fallback were benchmarked for speed, VRAM and quality; the full write-up,
-  including why the hosted option was rejected, is in
-  [`docs/image-generation.md`](docs/image-generation.md). The **Images** entry in the sidebar
-  stays disabled until this is real.
+- **Local image generation** — measured, not wired in. Sana-Sprint, SANA-1.5 and Flux 2 Klein 4B
+  were all benchmarked for speed, VRAM and quality on real hardware, including the exact VRAM
+  spike and why hosted fal.ai was chosen for the first cut. The numbers and the design for a
+  local sidecar are in [`docs/image-generation.md`](docs/image-generation.md). Local would mean a
+  model download with its encoder and VAE, so it is deliberately not the first thing shipped.
+- **Image-to-image / editing** — the picker already lists fal's edit endpoints; wiring the
+  attached image through to them is the next step.
 - **Encrypted key storage** (Windows DPAPI).
 - **Voice input**, and the **Library / Scheduled / Plugins / Projects** entries — currently
   disabled and labelled *coming soon*.
@@ -255,6 +292,10 @@ npx electron . --capture <api-key>
   Manager → Startup apps. It can be turned off from either place.
 - **Token counts and costs are whatever your endpoint reports.** Some report nothing, in which
   case the app shows nothing rather than inventing a number.
+- **Image generation is hosted only.** There is no local pipeline yet, so it needs a fal.ai key
+  and an account with credit, and your prompts leave the machine when you use it. Generated
+  pictures are kept as files beside the store and are not cleaned up automatically.
+- **The fal key is stored in the same plain-text JSON** as the chat key.
 
 ## FAQ
 
@@ -276,6 +317,12 @@ common ones purely to save you typing.
 Yes, if the model can. Hit ⚡ next to a model in Settings → Models to find out for real, then
 paste or drag an image into the composer. If the model can't take images, the app says so
 clearly instead of silently dropping the attachment.
+
+**Can it make images?**
+Yes — with a [fal.ai](https://fal.ai/dashboard/keys) key, enabled in Settings → Images. The
+composer then grows an **Image** button, and the model list is pulled live from fal.ai so you can
+pick anything from the cheapest draft model to a flagship. Generation is hosted: your prompt goes
+to fal.ai and you pay their per-image rate. Local generation is benchmarked but not wired in yet.
 
 **Can it search the web?**
 Yes — through your own SearXNG instance, or with a model that has server-side search on the

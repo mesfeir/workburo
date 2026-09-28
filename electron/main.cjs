@@ -16,6 +16,7 @@ const {
 } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
+const falImages = require('./images.cjs')
 
 const DEV_URL = 'http://localhost:5173'
 const isDev = !app.isPackaged
@@ -62,6 +63,47 @@ function storePath() {
   return path.join(app.getPath('userData'), 'zen-chat-store.json')
 }
 
+/** where generated images are written; the store only keeps the path */
+function imagesDir() {
+  return path.join(app.getPath('userData'), 'images')
+}
+
+/** generated images live on disk — never inline megabytes of base64 into the store */
+function stripInlineImages(store) {
+  for (const c of Array.isArray(store?.conversations) ? store.conversations : []) {
+    for (const m of c.messages || []) {
+      if (!Array.isArray(m.images)) continue
+      m.images = m.images.map((im) =>
+        im && im.path
+          ? { name: im.name, path: im.path, width: im.width, height: im.height, bytes: im.bytes, url: '' }
+          : im,
+      )
+    }
+  }
+  return store
+}
+
+/** read the bytes back for display; a missing file is surfaced, never hidden */
+function restoreInlineImages(store) {
+  for (const c of Array.isArray(store?.conversations) ? store.conversations : []) {
+    for (const m of c.messages || []) {
+      if (!Array.isArray(m.images)) continue
+      m.images = m.images.map((im) => {
+        if (!im || !im.path || im.url) return im
+        try {
+          const buf = fs.readFileSync(im.path)
+          const ext = path.extname(im.path).slice(1).toLowerCase()
+          const mime = ext === 'png' ? 'png' : ext === 'webp' ? 'webp' : 'jpeg'
+          return { ...im, url: `data:image/${mime};base64,${buf.toString('base64')}` }
+        } catch {
+          return { ...im, missing: true }
+        }
+      })
+    }
+  }
+  return store
+}
+
 function defaultStore() {
   return {
     config: {
@@ -80,6 +122,14 @@ function defaultStore() {
       hotkey: 'Alt+Space',
       startWithWindows: false,
       titleModel: '',
+      imageGen: {
+        enabled: false,
+        provider: 'fal',
+        falKey: '',
+        model: 'fal-ai/flux/schnell',
+        count: 1,
+        size: 'square_hd',
+      },
       profiles: [
         { name: 'OpenCode Zen (Go)', baseUrl: 'https://opencode.ai/zen/go/v1', affinity: true },
         { name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', affinity: false },
@@ -98,12 +148,12 @@ function readStore() {
     const raw = fs.readFileSync(storePath(), 'utf8')
     const parsed = JSON.parse(raw)
     const base = defaultStore()
-    return {
+    return restoreInlineImages({
       config: { ...base.config, ...(parsed.config || {}) },
       conversations: Array.isArray(parsed.conversations) ? parsed.conversations : [],
       activeId: parsed.activeId || null,
       models: Array.isArray(parsed.models) ? parsed.models : [],
-    }
+    })
   } catch {
     return defaultStore()
   }
@@ -113,7 +163,7 @@ let saveTimer = null
 function writeStore(data) {
   try {
     fs.mkdirSync(path.dirname(storePath()), { recursive: true })
-    fs.writeFileSync(storePath(), JSON.stringify(data, null, 2), 'utf8')
+    fs.writeFileSync(storePath(), JSON.stringify(stripInlineImages(data), null, 2), 'utf8')
     return true
   } catch (err) {
     console.error('[store] write failed', err)
@@ -1387,6 +1437,54 @@ ipcMain.handle('window:resetBounds', () => {
 })
 
 ipcMain.handle('app:openStore', () => shell.showItemInFolder(storePath()))
+
+/* ------------------------------------------------------------ IPC: images */
+// Hosted generation via fal.ai. The key never leaves the main process, and a
+// prompt only ever goes to fal when the user has switched image mode on.
+
+ipcMain.handle('images:options', () => ({ sizes: falImages.SIZE_PRESETS }))
+
+ipcMain.handle('images:models', async (_e, { key }) => falImages.listModels(String(key || '')))
+
+ipcMain.handle('images:generate', async (_e, req) => {
+  const { key, model, prompt, count, size, requestId } = req || {}
+  try {
+    return await falImages.generate({
+      key: String(key || ''),
+      model: String(model || ''),
+      prompt: String(prompt || ''),
+      count: Number(count) || 1,
+      size: String(size || ''),
+      imagesDir: imagesDir(),
+      onProgress: (p) => sendToRenderer('images:progress', { requestId, ...p }),
+    })
+  } catch (err) {
+    return { ok: false, error: err?.message || 'Image generation failed.' }
+  }
+})
+
+ipcMain.handle('images:saveAs', async (_e, { file }) => {
+  try {
+    const src = String(file || '')
+    if (!src || !fs.existsSync(src)) return { ok: false, error: 'That image file is no longer on disk.' }
+    const r = await dialog.showSaveDialog(win, { title: 'Save image', defaultPath: path.basename(src) })
+    if (r.canceled || !r.filePath) return { ok: false, canceled: true }
+    fs.copyFileSync(src, r.filePath)
+    return { ok: true, path: r.filePath }
+  } catch (err) {
+    return { ok: false, error: err?.message || 'Could not save the image.' }
+  }
+})
+
+ipcMain.handle('images:openFolder', async () => {
+  try {
+    fs.mkdirSync(imagesDir(), { recursive: true })
+    const err = await shell.openPath(imagesDir())
+    return { ok: !err, error: err || null }
+  } catch (err) {
+    return { ok: false, error: err?.message || 'Could not open the folder.' }
+  }
+})
 
 ipcMain.handle('app:pickImages', async () => {
   const r = await dialog.showOpenDialog(win, {

@@ -5,16 +5,18 @@ import {
   EyeOff,
   FolderOpen,
   Globe,
+  Image as ImageIcon,
   KeyRound,
   Minimize2,
   RefreshCw,
   HelpCircle,
+  Sparkles,
   TriangleAlert,
   X,
   Zap,
 } from 'lucide-react'
 import type { Config, ModelInfo, StoreShape } from '../types'
-import type { HotkeyStatus } from '../global'
+import type { FalModel, HotkeyStatus } from '../global'
 
 const INSTRUCTION_PRESETS = [
   'Keep it short.',
@@ -24,13 +26,16 @@ const INSTRUCTION_PRESETS = [
   'Ask before assuming.',
 ]
 
-type Tab = 'general' | 'api' | 'chat' | 'models' | 'tools' | 'about'
+type Tab = 'general' | 'api' | 'chat' | 'models' | 'images' | 'tools' | 'about'
+
+export type SettingsTab = Tab
 
 const TAB_LABELS: Record<Tab, string> = {
   general: 'General',
   api: 'API & key',
   chat: 'Chat',
   models: 'Models',
+  images: 'Images',
   tools: 'Tools',
   about: 'About',
 }
@@ -144,6 +149,7 @@ export default function SettingsModal({
   onClose,
   onProbe,
   probing,
+  initialTab,
 }: {
   config: Config
   models: ModelInfo[]
@@ -152,8 +158,10 @@ export default function SettingsModal({
   onClose: () => void
   onProbe: (id: string) => void
   probing: string | null
+  /** open straight onto a tab, e.g. from the sidebar's Images entry */
+  initialTab?: Tab
 }) {
-  const [tab, setTab] = useState<Tab>('api')
+  const [tab, setTab] = useState<Tab>(initialTab || 'api')
   const [showKey, setShowKey] = useState(false)
   const [status, setStatus] = useState<{ kind: 'idle' | 'busy' | 'ok' | 'err'; msg: string }>({
     kind: 'idle',
@@ -169,9 +177,106 @@ export default function SettingsModal({
   const [searchTest, setSearchTest] = useState<{ ok: boolean; msg: string } | null>(null)
   const [testing, setTesting] = useState(false)
 
+  /* ------------------------------------------------------ fal.ai images */
+
+  const imageGen =
+    config.imageGen ||
+    ({ enabled: false, provider: 'fal' as const, falKey: '', model: '', count: 1, size: 'square_hd' })
+  const setImageGen = (patch: Partial<typeof imageGen>) =>
+    onConfig({ imageGen: { ...imageGen, ...patch } })
+
+  const [falModels, setFalModels] = useState<FalModel[]>([])
+  const [falFilter, setFalFilter] = useState('')
+  const [showFalKey, setShowFalKey] = useState(false)
+  const [falBusy, setFalBusy] = useState(false)
+  const [falStatus, setFalStatus] = useState<{ kind: 'idle' | 'busy' | 'ok' | 'err'; msg: string }>({
+    kind: 'idle',
+    msg: '',
+  })
+  const [sizes, setSizes] = useState<{ id: string; label: string }[]>([])
+  const [genTest, setGenTest] = useState<{ ok: boolean; url?: string; msg: string } | null>(null)
+  const falLoadedFor = useRef('')
+
+  const loadFalModels = async () => {
+    const key = (imageGen.falKey || '').trim()
+    if (!key) {
+      setFalStatus({ kind: 'err', msg: 'Add your fal.ai key first.' })
+      return
+    }
+    setFalBusy(true)
+    setFalStatus({ kind: 'busy', msg: 'Checking the key and loading the catalogue…' })
+    const r = await window.zen.images.models(key)
+    setFalBusy(false)
+    if (!r.ok) {
+      setFalModels([])
+      setFalStatus({ kind: 'err', msg: r.error || 'Could not load models from fal.ai.' })
+      return
+    }
+    const list = r.models || []
+    setFalModels(list)
+    if (!imageGen.model && list.length) setImageGen({ model: list[0].id })
+    setFalStatus({
+      kind: 'ok',
+      msg: `Key accepted · ${list.length} image model${list.length === 1 ? '' : 's'} listed from ${r.total ?? list.length} endpoints.`,
+    })
+  }
+
+  const runTestGeneration = async () => {
+    const key = (imageGen.falKey || '').trim()
+    const model = (imageGen.model || '').trim()
+    if (!key || !model) {
+      setGenTest({ ok: false, msg: 'Set a key and choose a model first.' })
+      return
+    }
+    setGenTest({ ok: false, msg: `Drawing one 512px test image with ${model}…` })
+    setFalBusy(true)
+    const r = await window.zen.images.generate({
+      requestId: 'settings-test',
+      key,
+      model,
+      prompt: 'a single red dot centred on a plain white background',
+      count: 1,
+      size: 'square',
+    })
+    setFalBusy(false)
+    if (!r.ok) {
+      setGenTest({ ok: false, msg: r.error || 'Generation failed.' })
+      return
+    }
+    const img = (r.images || [])[0]
+    setGenTest({
+      ok: true,
+      url: img?.url,
+      msg: `Generated in ${((r.tookMs || 0) / 1000).toFixed(1)}s${r.params?.length ? ` · sent ${r.params.join(', ')}` : ''}`,
+    })
+  }
+
   useEffect(() => {
     window.zen.tools.list().then(setToolList)
   }, [])
+
+  // size presets come from the same module that validates a model's schema
+  useEffect(() => {
+    window.zen.images
+      .options()
+      .then((r) => setSizes(r?.sizes || []))
+      .catch(() => {})
+  }, [])
+
+  // opening the tab with a key already saved loads the catalogue once
+  useEffect(() => {
+    if (tab !== 'images') return
+    const key = (config.imageGen?.falKey || '').trim()
+    if (!key || falLoadedFor.current === key) return
+    falLoadedFor.current = key
+    loadFalModels()
+  }, [tab, config.imageGen?.falKey])
+
+  // an outside caller — the sidebar's Images entry — can ask for a tab, including
+  // when this modal is already open
+  useEffect(() => {
+    if (initialTab) setTab(initialTab)
+  }, [initialTab])
 
   // refs so the unmount cleanup can't clobber a shortcut the user just committed
   const recordingRef = useRef(false)
@@ -285,6 +390,13 @@ export default function SettingsModal({
     onConfig({ modelPrefs: { ...config.modelPrefs, [id]: { ...(config.modelPrefs?.[id] || {}), vision: next } } })
   }
 
+  const falFiltered = falModels.filter((m) => {
+    const q = falFilter.trim().toLowerCase()
+    if (!q) return true
+    return m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q)
+  })
+  const selectedFal = falModels.find((m) => m.id === imageGen.model) || null
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" onMouseDown={onClose}>
       <div
@@ -300,7 +412,7 @@ export default function SettingsModal({
 
         <div className="flex min-h-0 flex-1">
           <div className="w-[150px] shrink-0 border-r border-[#2a2a2a] p-2">
-            {(['general', 'api', 'chat', 'models', 'tools', 'about'] as Tab[]).map((t) => (
+            {(['general', 'api', 'chat', 'models', 'images', 'tools', 'about'] as Tab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -858,6 +970,215 @@ export default function SettingsModal({
                       </div>
                     )
                   })}
+                </div>
+              </div>
+            )}
+
+            {tab === 'images' && (
+              <div className="space-y-3">
+                <Field
+                  label="Image generation"
+                  hint="Hosted drawing through fal.ai. The key lives in your local store file and is sent only to fal.ai — never to your chat endpoint."
+                >
+                  <label className="flex items-center gap-2.5">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(imageGen.enabled)}
+                      onChange={(e) => setImageGen({ enabled: e.target.checked })}
+                      className="h-4 w-4 accent-[#3f6db5]"
+                    />
+                    <span className="text-[13px] text-[#dcdcdc]">
+                      Enable image generation — adds an <strong className="font-medium">Image</strong> button to the
+                      composer
+                    </span>
+                  </label>
+                </Field>
+
+                <div className="rounded-xl border border-[#2a2a2a] bg-[#121212] p-3 text-[11.5px] leading-snug text-faint">
+                  <strong className="font-medium text-muted">Only hosted generation is wired in.</strong> The local SANA
+                  and Flux work is measured and written up in the repo docs, but nothing here loads a local pipeline
+                  yet — every image this app makes is drawn by fal.ai and billed to your fal account.
+                </div>
+
+                <Field
+                  label="fal.ai API key"
+                  hint="Create one at fal.ai/dashboard/keys. Stored locally in zen-chat-store.json — never committed, never logged."
+                >
+                  <div className="flex gap-2">
+                    <input
+                      className={inputCls}
+                      type={showFalKey ? 'text' : 'password'}
+                      placeholder="key-id:secret"
+                      value={imageGen.falKey || ''}
+                      spellCheck={false}
+                      onChange={(e) => setImageGen({ falKey: e.target.value })}
+                    />
+                    <button
+                      onClick={() => setShowFalKey((s) => !s)}
+                      title={showFalKey ? 'Hide key' : 'Show key'}
+                      className="grid h-[38px] w-10 shrink-0 place-items-center rounded-lg border border-[#333] text-muted transition hover:bg-white/[.06] hover:text-ink"
+                    >
+                      {showFalKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                    <button
+                      onClick={loadFalModels}
+                      disabled={falBusy || !imageGen.falKey}
+                      className="flex h-[38px] shrink-0 items-center gap-1.5 rounded-lg border border-[#333] px-3 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink disabled:opacity-50"
+                    >
+                      <RefreshCw size={13} className={falBusy ? 'animate-spin' : ''} />
+                      Test key &amp; load models
+                    </button>
+                  </div>
+                </Field>
+
+                {falStatus.msg && (
+                  <div
+                    data-fal-status={falStatus.kind}
+                    className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-[12.5px] ${
+                      falStatus.kind === 'err'
+                        ? 'border-[#522020] bg-[#2a1414] text-[#ffb3b3]'
+                        : falStatus.kind === 'ok'
+                          ? 'border-[#25401f] bg-[#16210f] text-[#b9e2a8]'
+                          : 'border-[#2a2a2a] bg-[#121212] text-muted'
+                    }`}
+                  >
+                    {falStatus.kind === 'err' ? (
+                      <TriangleAlert size={13} className="mt-[1px] shrink-0" />
+                    ) : (
+                      <Check size={13} className="mt-[1px] shrink-0" />
+                    )}
+                    <span className="min-w-0 flex-1">{falStatus.msg}</span>
+                  </div>
+                )}
+
+                <Field
+                  label="Model"
+                  hint={
+                    selectedFal
+                      ? `${selectedFal.name} · ${selectedFal.category}${
+                          selectedFal.pricing ? ` · ${selectedFal.pricing}` : ''
+                        }`
+                      : 'Load models to choose one — fal lists both text-to-image and image-to-image endpoints.'
+                  }
+                >
+                  <input
+                    className={inputCls}
+                    placeholder="Filter fal models"
+                    value={falFilter}
+                    onChange={(e) => setFalFilter(e.target.value)}
+                  />
+                  {falModels.length > 0 && (
+                    <div
+                      data-fal-models
+                      className="mt-2 max-h-[210px] divide-y divide-[#232323] overflow-y-auto rounded-xl border border-[#2a2a2a]"
+                    >
+                      {falFiltered.length === 0 && (
+                        <div className="px-3 py-3 text-[12.5px] text-faint">No model matches that filter.</div>
+                      )}
+                      {falFiltered.map((m) => {
+                        const on = m.id === imageGen.model
+                        return (
+                          <button
+                            key={m.id}
+                            data-fal-model={m.id}
+                            data-selected={on ? 'yes' : undefined}
+                            onClick={() => setImageGen({ model: m.id })}
+                            className={`flex w-full items-center gap-2 px-3 py-2 text-left transition ${
+                              on ? 'bg-[#20365a]' : 'hover:bg-white/[.03]'
+                            }`}
+                          >
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-[13px] text-[#dcdcdc]">{m.name}</span>
+                              <span className="block truncate font-mono text-[10.5px] text-faint">{m.id}</span>
+                            </span>
+                            <span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[9.5px] tracking-wide text-[#bdbdbd] uppercase">
+                              {m.category === 'text-to-image' ? 't2i' : 'i2i'}
+                            </span>
+                            {on && <Check size={13} className="shrink-0 text-[#8ab4f8]" />}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </Field>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Images per prompt">
+                    <select
+                      className={inputCls}
+                      value={imageGen.count}
+                      onChange={(e) => setImageGen({ count: Number(e.target.value) })}
+                    >
+                      {[1, 2, 3, 4].map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Size" hint="Only applied when the model declares image_size.">
+                    <select
+                      className={inputCls}
+                      value={imageGen.size}
+                      onChange={(e) => setImageGen({ size: e.target.value })}
+                    >
+                      {sizes.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.label}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+
+                <div className="rounded-xl border border-[#2a2a2a] bg-[#121212] p-3">
+                  <div className="mb-1 flex items-center gap-1.5 text-[13px] font-medium text-muted">
+                    <ImageIcon size={13} className="text-faint" /> Test generation
+                  </div>
+                  <div className="mb-2 text-[11.5px] leading-snug text-faint">
+                    Testing the key is free. This button actually draws: 1 image at 512px on the model above, billed by
+                    fal.ai at that model's own rate.
+                  </div>
+                  <button
+                    onClick={runTestGeneration}
+                    disabled={falBusy || !imageGen.falKey || !imageGen.model}
+                    className="flex items-center gap-1.5 rounded-lg border border-[#333] px-3 py-1.5 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink disabled:opacity-50"
+                  >
+                    <Sparkles size={13} /> Generate one test image
+                  </button>
+                  {genTest && (
+                    <div
+                      data-gen-test={genTest.ok ? 'ok' : 'err'}
+                      className={`mt-2 flex items-start gap-2.5 rounded-lg border px-3 py-2 text-[12.5px] ${
+                        genTest.ok
+                          ? 'border-[#25401f] bg-[#16210f] text-[#b9e2a8]'
+                          : 'border-[#522020] bg-[#2a1414] text-[#ffb3b3]'
+                      }`}
+                    >
+                      {genTest.url ? (
+                        <img
+                          src={genTest.url}
+                          alt="fal.ai test generation"
+                          className="h-16 w-16 shrink-0 rounded-lg border border-white/10 object-cover"
+                        />
+                      ) : (
+                        <TriangleAlert size={13} className="mt-[1px] shrink-0" />
+                      )}
+                      <span className="min-w-0 flex-1 break-words">{genTest.msg}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-[#2a2a2a] bg-[#121212] p-3">
+                  <div className="min-w-0 text-[11.5px] leading-snug text-faint">
+                    Generated images are written as real files beside your store; the chat file keeps only their paths.
+                  </div>
+                  <button
+                    onClick={() => window.zen.images.openFolder()}
+                    className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#333] px-2.5 py-1.5 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink"
+                  >
+                    <FolderOpen size={13} /> Open folder
+                  </button>
                 </div>
               </div>
             )}

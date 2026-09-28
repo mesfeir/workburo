@@ -4,7 +4,7 @@ import Sidebar from './components/Sidebar'
 import ChatView from './components/ChatView'
 import Composer from './components/Composer'
 import ModelPicker from './components/ModelPicker'
-import SettingsModal from './components/SettingsModal'
+import SettingsModal, { type SettingsTab } from './components/SettingsModal'
 import { probeImage, readFilesAsImages, shrinkImage } from './lib/image'
 import type {
   Attachment,
@@ -41,6 +41,14 @@ const DEFAULTS: Config = {
   searchUrl: 'http://localhost:8888',
   profiles: [],
   modelPrefs: {},
+  imageGen: {
+    enabled: false,
+    provider: 'fal',
+    falKey: '',
+    model: 'fal-ai/flux/schnell',
+    count: 1,
+    size: 'square_hd',
+  },
 }
 
 // below this width the sidebar becomes an overlay drawer — the default window is
@@ -91,6 +99,12 @@ export default function App() {
   const [probing, setProbing] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  /** composer is aimed at the image generator instead of the chat model */
+  const [imageMode, setImageMode] = useState(false)
+  /** which settings tab to open on, when something other than us asks for it */
+  const [settingsTab, setSettingsTab] = useState<SettingsTab | undefined>(undefined)
+  /** live image requests -> the message they will fill in */
+  const genRef = useRef(new Map<string, { convId: string; msgId: string }>())
 
   const streams = useRef(new Map<string, StreamState>())
   const activeRequest = useRef<string | null>(null)
@@ -402,6 +416,139 @@ export default function App() {
     [input, images, busy, activeId, conversations, runRequest],
   )
 
+  /* ---------------------------------------------------- image generation */
+
+  // fal reports progress from the main process; show it on the pending message
+  useEffect(() => {
+    return window.zen.images.onProgress((p) => {
+      const target = genRef.current.get(p.requestId)
+      if (!target) return
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id !== target.convId
+            ? c
+            : {
+                ...c,
+                messages: c.messages.map((m) =>
+                  m.id === target.msgId ? { ...m, note: `fal · ${p.detail || p.phase}` } : m,
+                ),
+              },
+        ),
+      )
+    })
+  }, [])
+
+  // image mode can only stay armed while a provider is switched on
+  useEffect(() => {
+    if (!config.imageGen?.enabled && imageMode) setImageMode(false)
+  }, [config.imageGen?.enabled, imageMode])
+
+  const generateImage = useCallback(async () => {
+    const cfg = configRef.current
+    const im = cfg.imageGen
+    const text = input.trim()
+    if (!text || busy) return
+    if (!im?.enabled) {
+      setToast('Image generation is switched off — enable it in Settings → Images.')
+      setTimeout(() => setToast(null), 5000)
+      return
+    }
+    if (!im.falKey) {
+      setToast('No fal.ai key saved — add one in Settings → Images.')
+      setTimeout(() => setToast(null), 5000)
+      return
+    }
+
+    const userMsg: ChatMessage = { id: uid(), role: 'user', content: text, createdAt: Date.now() }
+    const asstId = uid()
+    const placeholder: ChatMessage = {
+      id: asstId,
+      role: 'assistant',
+      content: '',
+      images: [],
+      model: im.model,
+      note: 'fal · starting',
+      createdAt: Date.now(),
+      streaming: false,
+      finished: false,
+    }
+
+    let convId = activeId
+    if (!convId || !conversations.some((c) => c.id === convId)) {
+      convId = uid()
+      const conv: Conversation = {
+        id: convId,
+        title: titleFrom(text, 0),
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        messages: [userMsg, placeholder],
+      }
+      setConversations((prev) => [conv, ...prev])
+      setActiveId(convId)
+    } else {
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id !== convId
+            ? c
+            : { ...c, messages: [...c.messages, userMsg, placeholder], updatedAt: Date.now() },
+        ),
+      )
+    }
+    setInput('')
+    setBusy(true)
+
+    const requestId = uid()
+    genRef.current.set(requestId, { convId, msgId: asstId })
+
+    const res = await window.zen.images.generate({
+      requestId,
+      key: im.falKey || '',
+      model: im.model || '',
+      prompt: text,
+      count: Number(im.count) || 1,
+      size: im.size || '',
+    })
+    genRef.current.delete(requestId)
+    setBusy(false)
+
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id !== convId
+          ? c
+          : {
+              ...c,
+              updatedAt: Date.now(),
+              messages: c.messages.map((m) =>
+                m.id !== asstId
+                  ? m
+                  : {
+                      ...m,
+                      images: res.ok
+                        ? (res.images || []).map((g) => ({
+                            name: g.name,
+                            url: g.url,
+                            path: g.path,
+                            width: g.width,
+                            height: g.height,
+                            bytes: g.bytes,
+                          }))
+                        : [],
+                      error: res.ok ? null : res.error || 'Image generation failed.',
+                      note: res.ok ? `fal · ${((res.tookMs || 0) / 1000).toFixed(1)}s` : 'fal',
+                      finished: true,
+                    },
+              ),
+            },
+      ),
+    )
+  }, [input, busy, activeId, conversations])
+
+  // the composer's send goes to whichever mode is armed
+  const submit = useCallback(() => {
+    if (imageMode) void generateImage()
+    else send()
+  }, [imageMode, generateImage, send])
+
   const regenerate = useCallback(
     (messageId: string) => {
       if (!active || busy) return
@@ -639,6 +786,10 @@ export default function App() {
               onRename={renameConv}
               onPin={pinConv}
               onOpenSettings={() => setSettingsOpen(true)}
+              onOpenImages={() => {
+                setSettingsTab('images')
+                setSettingsOpen(true)
+              }}
               onCollapse={() => setSidebarOpen(false)}
             />
           </div>
@@ -710,6 +861,7 @@ export default function App() {
         <ChatView
           conversation={active}
           config={config}
+          imageMode={imageMode}
           onRetry={regenerate}
           onPickSuggestion={(t) => {
             setInput(t)
@@ -719,7 +871,7 @@ export default function App() {
         <Composer
           value={input}
           onChange={setInput}
-          onSend={() => send()}
+          onSend={submit}
           onStop={stop}
           images={images}
           onAddImages={addImages}
@@ -728,6 +880,9 @@ export default function App() {
           busy={busy}
           thinking={config.thinking}
           onToggleThinking={() => patchConfig({ thinking: !config.thinking })}
+          imageMode={imageMode}
+          onToggleImageMode={() => setImageMode((v) => !v)}
+          imageModeAvailable={Boolean(config.imageGen?.enabled)}
           modelLabel={modelLabel}
         />
       </main>
@@ -738,9 +893,13 @@ export default function App() {
           models={models}
           onConfig={patchConfig}
           onModels={setModels}
-          onClose={() => setSettingsOpen(false)}
+          onClose={() => {
+            setSettingsOpen(false)
+            setSettingsTab(undefined)
+          }}
           onProbe={probeModel}
           probing={probing}
+          initialTab={settingsTab}
         />
       )}
 

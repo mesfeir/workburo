@@ -147,6 +147,68 @@ function pageCollapseReasoning() {
   return true
 }
 
+/* ------------------------------------------- image generation, for proving it */
+
+function pageClickButtonMatching(text, within) {
+  const scope = within ? document.querySelector(within) : document
+  if (!scope) return false
+  const want = String(text).toLowerCase()
+  const btn = Array.from(scope.querySelectorAll('button')).find((b) =>
+    (b.textContent || '').toLowerCase().includes(want),
+  )
+  if (!btn) return false
+  btn.click()
+  return true
+}
+
+function pageFalStatus() {
+  const el = document.querySelector('[data-fal-status]')
+  return el ? { kind: el.getAttribute('data-fal-status'), text: (el.textContent || '').trim() } : null
+}
+
+function pageFalModelCount() {
+  return document.querySelectorAll('[data-fal-model]').length
+}
+
+function pageSelectedFalModel() {
+  const el = document.querySelector('[data-fal-model][data-selected="yes"]')
+  return el ? { id: el.getAttribute('data-fal-model') } : null
+}
+
+function pageGenTest() {
+  const el = document.querySelector('[data-gen-test]')
+  return el ? { kind: el.getAttribute('data-gen-test'), text: (el.textContent || '').trim() } : null
+}
+
+function pageCloseSettings() {
+  const root = document.querySelector('.fixed.inset-0.z-50')
+  if (!root) return false
+  root.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+  return true
+}
+
+function pageArmImageMode() {
+  const btn = Array.from(document.querySelectorAll('button')).find((b) =>
+    /Generate an image instead/.test(b.getAttribute('title') || ''),
+  )
+  if (!btn) return false
+  btn.click()
+  return true
+}
+
+/** what the last assistant turn is showing: rendered images, placeholders, an error */
+function pageLastTurn() {
+  const all = document.querySelectorAll('[data-msg]')
+  const wrap = all[all.length - 1]
+  if (!wrap) return null
+  const err = wrap.querySelector('[data-msg-error]')
+  return {
+    images: wrap.querySelectorAll('[data-images] img').length,
+    missing: wrap.querySelectorAll('[data-image-missing]').length,
+    error: err ? (err.innerText || '').replace(/\s+/g, ' ').slice(0, 200) : '',
+  }
+}
+
 /** titles for the seeded history, so the sidebar looks like a used app */
 const SEED_TITLES = [
   'Debounce helper in TypeScript',
@@ -224,6 +286,16 @@ async function run({ win, storePath, readStore, writeStore, apiKey }) {
       thinking: true,
       // the session id is a real per-install identifier — never publish the real one
       affinityId: 'zen-chat-demo-0000',
+      // the fal key is read from the environment, so it never rides on a command line
+      imageGen: {
+        ...(base.config.imageGen || {}),
+        enabled: true,
+        provider: 'fal',
+        falKey: process.env.ZEN_FAL_KEY || base.config.imageGen?.falKey || '',
+        model: process.env.ZEN_FAL_MODEL || 'fal-ai/flux/schnell',
+        count: 1,
+        size: 'square_hd',
+      },
     },
     conversations: seedConversations(now),
     activeId: null,
@@ -284,6 +356,107 @@ async function run({ win, storePath, readStore, writeStore, apiKey }) {
   await inPage(win, pageDismissBanner).catch(() => false)
   await sleep(500)
   shots.push(await shot(win, 'readme-settings'))
+
+  // ---- 4. image generation: the settings pane, with a live model list
+  console.log(
+    `   image gen seeded: enabled=${seeded.config.imageGen?.enabled} ` +
+      `key=${seeded.config.imageGen?.falKey ? 'present' : 'MISSING'}`,
+  )
+  await inPage(win, pageOpenSettings)
+  await sleep(1200)
+  console.log(
+    `   opened the Images tab: ${await inPage(win, pageClickButtonMatching, [
+      'Images',
+      '.fixed.inset-0.z-50',
+    ])}`,
+  )
+  let models = 0
+  for (let i = 0; i < 20; i += 1) {
+    models = await inPage(win, pageFalModelCount).catch(() => 0)
+    if (models > 0) break
+    await sleep(1000)
+  }
+  console.log(`   fal status: ${JSON.stringify(await inPage(win, pageFalStatus).catch(() => null))}`)
+  console.log(`   models in the picker: ${models}`)
+  console.log(`   selected: ${JSON.stringify(await inPage(win, pageSelectedFalModel).catch(() => null))}`)
+  shots.push(await shot(win, 'readme-images'))
+
+  // a real generation from the settings pane
+  await inPage(win, pageClickButtonMatching, ['Generate one test image'])
+  let gen = null
+  for (let i = 0; i < 30; i += 1) {
+    await sleep(1500)
+    gen = await inPage(win, pageGenTest).catch(() => null)
+    if (gen) break
+  }
+  console.log(`   test generation -> ${JSON.stringify(gen)}`)
+  shots.push(await shot(win, 'verify-images-settings'))
+
+  // ---- 5. the same thing through the composer, which is the real user path
+  await inPage(win, pageCloseSettings)
+  await sleep(900)
+  const armed = await inPage(win, pageArmImageMode).catch(() => false)
+  console.log(`   image mode armed in the composer: ${armed}`)
+  await sleep(400)
+  await inPage(win, pageType, ['a single red dot centred on a white background'])
+  await sleep(400)
+  await inPage(win, pageSend)
+  let turn = null
+  for (let i = 0; i < 40; i += 1) {
+    await sleep(1500)
+    turn = await inPage(win, pageLastTurn).catch(() => null)
+    if (turn && (turn.error || turn.images)) break
+  }
+  console.log(`   composer turn -> ${JSON.stringify(turn)}`)
+  shots.push(await shot(win, 'verify-images-composer'))
+
+  // ---- 6. persistence: a saved generation must still render after a restart,
+  // and a file the user deleted must say so rather than render a broken image
+  const imgDir = path.join(path.dirname(storePath), 'images')
+  fs.mkdirSync(imgDir, { recursive: true })
+  const fixture = path.join(imgDir, 'zen-fixture-1.png')
+  fs.copyFileSync(path.join(__dirname, '..', 'build', 'icon.png'), fixture)
+  const persisted = readStore()
+  const when = Date.now()
+  persisted.config.imageGen = { ...persisted.config.imageGen, enabled: true }
+  persisted.conversations = [
+    {
+      id: 'seed-image',
+      title: 'A red fox in falling snow',
+      createdAt: when,
+      updatedAt: when,
+      messages: [
+        {
+          id: 'seed-image-u',
+          role: 'user',
+          content: 'A red fox asleep in falling snow, cinematic',
+          createdAt: when,
+        },
+        {
+          id: 'seed-image-a',
+          role: 'assistant',
+          content: '',
+          model: 'fal-ai/flux/schnell',
+          note: 'fal · 1.4s',
+          images: [
+            { name: 'zen-fixture-1.png', path: fixture, url: '', width: 512, height: 512, bytes: 4813 },
+            { name: 'zen-deleted.png', path: path.join(imgDir, 'zen-deleted.png'), url: '', width: 512, height: 512 },
+          ],
+          createdAt: when,
+          finished: true,
+        },
+      ],
+    },
+    ...persisted.conversations,
+  ]
+  persisted.activeId = 'seed-image'
+  writeStore(persisted)
+  await win.webContents.reload()
+  await sleep(4500)
+  const after = await inPage(win, pageLastTurn).catch(() => null)
+  console.log(`   after a restart -> ${JSON.stringify(after)}`)
+  console.log('   (expected: 1 rendered image restored from disk, 1 missing-file placeholder)')
+  shots.push(await shot(win, 'verify-images-persist'))
 
   console.log(`\ncaptured ${shots.length} screenshot(s) into ${SHOT_DIR}`)
   return shots

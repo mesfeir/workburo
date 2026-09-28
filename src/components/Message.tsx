@@ -7,8 +7,10 @@ import {
   CloudSun,
   Clock3,
   Copy,
+  Download,
   FileText,
   Globe,
+  ImageOff,
   Link2,
   Loader2,
   RefreshCw,
@@ -18,7 +20,7 @@ import {
   Wrench,
 } from 'lucide-react'
 import Markdown from '../lib/Markdown'
-import type { ChatMessage, Source, ToolActivity } from '../types'
+import type { Attachment, ChatMessage, Source, ToolActivity } from '../types'
 
 function Reasoning({ text, streaming, ms }: { text: string; streaming?: boolean; ms?: number }) {
   const [open, setOpen] = useState(false)
@@ -48,24 +50,60 @@ function Reasoning({ text, streaming, ms }: { text: string; streaming?: boolean;
   )
 }
 
-function ImageGrid({ images }: { images: { url: string; name?: string }[] }) {
-  const [zoom, setZoom] = useState<string | null>(null)
+function ImageGrid({ images, large }: { images: Attachment[]; large?: boolean }) {
+  const [zoom, setZoom] = useState<Attachment | null>(null)
   if (!images?.length) return null
   return (
     <>
-      <div className={`flex flex-wrap gap-2 ${images.length ? 'mb-2' : ''}`}>
-        {images.map((im, i) => (
-          <button key={i} onClick={() => setZoom(im.url)} className="overflow-hidden rounded-xl border border-white/10">
-            <img src={im.url} alt={im.name || 'attachment'} className="max-h-[220px] max-w-[240px] object-cover" />
-          </button>
-        ))}
+      <div className={`flex flex-wrap gap-2 ${images.length ? 'mb-2' : ''}`} data-images>
+        {images.map((im, i) =>
+          !im.url || im.missing ? (
+            <div
+              key={i}
+              data-image-missing
+              className="flex h-24 w-44 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-[#3a3a3a] px-3 text-center text-[11.5px] text-faint"
+            >
+              <ImageOff size={15} />
+              <span>Image file missing</span>
+              <span className="w-full truncate font-mono text-[10px] opacity-70">{im.name}</span>
+            </div>
+          ) : (
+            <div key={i} className="group/img relative">
+              <button
+                onClick={() => setZoom(im)}
+                className="block overflow-hidden rounded-xl border border-white/10"
+              >
+                <img
+                  src={im.url}
+                  alt={im.name || 'attachment'}
+                  width={im.width || undefined}
+                  height={im.height || undefined}
+                  className={
+                    large
+                      ? 'max-h-[420px] max-w-[420px] object-contain'
+                      : 'max-h-[220px] max-w-[240px] object-cover'
+                  }
+                />
+              </button>
+              {im.path && (
+                <button
+                  onClick={() => window.zen.images.saveAs(im.path as string)}
+                  title="Save a copy"
+                  className="absolute top-1.5 right-1.5 grid h-7 w-7 place-items-center rounded-lg border border-white/20 bg-black/60 text-white opacity-0 transition group-hover/img:opacity-100"
+                >
+                  <Download size={13} />
+                </button>
+              )}
+            </div>
+          ),
+        )}
       </div>
       {zoom && (
         <div
           className="fixed inset-0 z-50 grid place-items-center bg-black/85 p-8"
           onClick={() => setZoom(null)}
         >
-          <img src={zoom} alt="" className="max-h-full max-w-full rounded-lg object-contain" />
+          <img src={zoom.url} alt="" className="max-h-full max-w-full rounded-lg object-contain" />
         </div>
       )}
     </>
@@ -221,6 +259,9 @@ export default function Message({
 
       <ToolRun tools={msg.tools || []} />
 
+      {/* generated images come back as their own attachment, above the text */}
+      {!!(msg.images || []).length && <ImageGrid images={msg.images || []} large />}
+
       {waiting && (
         <div className="thinking-dots flex items-center gap-1 py-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-[#8f8f8f]" />
@@ -262,7 +303,7 @@ export default function Message({
       )}
 
       {/* hover actions */}
-      {!msg.streaming && (msg.content || msg.error) && (
+      {!msg.streaming && (msg.content || msg.error || (msg.images || []).length) && (
         <div className="mt-1.5 flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
           <button
             onClick={copy}

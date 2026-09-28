@@ -10,6 +10,14 @@ const SUGGESTIONS = [
   'Compare two API design approaches',
 ]
 
+/** shown instead of the chat prompts while image mode is armed */
+const IMAGE_SUGGESTIONS = [
+  'A red fox asleep in falling snow, cinematic',
+  'Isometric cutaway of a tiny workshop, warm light',
+  'A seaside town at golden hour, film grain',
+  'Bold poster: geometric shapes, three colours',
+]
+
 /** a tick on the right-hand rail: one of your own messages, and where it sits */
 interface Mark {
   id: string
@@ -17,14 +25,15 @@ interface Mark {
   label: string
 }
 
-function EmptyState({ onPick }: { onPick: (t: string) => void }) {
+function EmptyState({ onPick, imageMode }: { onPick: (t: string) => void; imageMode?: boolean }) {
+  const list = imageMode ? IMAGE_SUGGESTIONS : SUGGESTIONS
   return (
     <div className="flex h-full flex-col items-center justify-center pb-24">
       <h1 className="mb-8 select-none text-[30px] font-normal tracking-[-0.02em] text-[#f2f2f2]">
-        Ready when you are.
+        {imageMode ? 'What should I draw?' : 'Ready when you are.'}
       </h1>
       <div className="grid w-full max-w-[560px] grid-cols-1 gap-2 sm:grid-cols-2">
-        {SUGGESTIONS.map((s) => (
+        {list.map((s) => (
           <button
             key={s}
             onClick={() => onPick(s)}
@@ -42,11 +51,14 @@ function EmptyState({ onPick }: { onPick: (t: string) => void }) {
 export default function ChatView({
   conversation,
   config,
+  imageMode,
   onRetry,
   onPickSuggestion,
 }: {
   conversation: Conversation | null
   config: Config
+  /** composer is aimed at the image generator */
+  imageMode?: boolean
   onRetry: (messageId: string) => void
   onPickSuggestion: (text: string) => void
 }) {
@@ -171,7 +183,7 @@ export default function ChatView({
     <div className="relative min-h-0 flex-1">
       <div ref={scroller} onScroll={onScroll} className="h-full overflow-y-auto">
         {!conversation || conversation.messages.length === 0 ? (
-          <EmptyState onPick={onPickSuggestion} />
+          <EmptyState onPick={onPickSuggestion} imageMode={imageMode} />
         ) : (
           <div className="mx-auto w-full max-w-[768px] px-4 py-6">
             {conversation.messages.map((m) => (

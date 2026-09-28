@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { ArrowUp, Brain, Mic, Plus, Square, X } from 'lucide-react'
+import { ArrowUp, Brain, Image as ImageIcon, Mic, Plus, Square, X } from 'lucide-react'
 import type { Attachment } from '../types'
 
 export default function Composer({
@@ -14,6 +14,9 @@ export default function Composer({
   busy,
   thinking,
   onToggleThinking,
+  imageMode,
+  onToggleImageMode,
+  imageModeAvailable,
   modelLabel,
   disabled,
 }: {
@@ -28,6 +31,11 @@ export default function Composer({
   busy: boolean
   thinking: boolean
   onToggleThinking: () => void
+  /** send the next prompt to the image generator instead of the chat model */
+  imageMode: boolean
+  onToggleImageMode: () => void
+  /** only offered when a hosted image provider is configured and switched on */
+  imageModeAvailable: boolean
   modelLabel: string
   disabled?: boolean
 }) {
@@ -111,11 +119,30 @@ export default function Composer({
                 if (canSend) onSend()
               }
             }}
-            placeholder="Ask anything"
+            placeholder={imageMode ? 'Describe the image you want' : 'Ask anything'}
             className="max-h-[208px] flex-1 resize-none bg-transparent px-1 py-[9px] text-[15.5px] leading-[1.5] placeholder:text-[#9a9a9a] disabled:opacity-60"
           />
 
           <div className="mb-[2px] flex shrink-0 items-center gap-1">
+            {imageModeAvailable && (
+              <button
+                onClick={onToggleImageMode}
+                title={
+                  imageMode
+                    ? 'Image mode is on — Enter generates a picture'
+                    : 'Generate an image instead of a chat reply'
+                }
+                className={`flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-[13px] transition ${
+                  imageMode
+                    ? 'border-[#3f6db5] bg-[#20365a] text-[#dfeaff]'
+                    : 'border-white/15 text-[#cfcfcf] hover:bg-white/10'
+                }`}
+              >
+                <ImageIcon size={14} />
+                Image
+              </button>
+            )}
+
             <button
               onClick={onToggleThinking}
               title={thinking ? 'Thinking is on' : 'Thinking is off'}
@@ -161,7 +188,9 @@ export default function Composer({
         </div>
 
         <div className="pt-2 text-center text-[11.5px] text-faint">
-          {modelLabel} · Zen Chat can make mistakes. Check important info.
+          {imageMode
+            ? 'Image mode · your prompt is sent to fal.ai to be drawn'
+            : `${modelLabel} · Zen Chat can make mistakes. Check important info.`}
         </div>
       </div>
     </div>

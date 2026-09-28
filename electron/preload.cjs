@@ -24,6 +24,18 @@ contextBridge.exposeInMainWorld('zen', {
     list: () => ipcRenderer.invoke('tools:list'),
     probe: (searchUrl) => ipcRenderer.invoke('tools:probe', { searchUrl }),
   },
+  images: {
+    models: (key) => ipcRenderer.invoke('images:models', { key }),
+    options: () => ipcRenderer.invoke('images:options'),
+    generate: (req) => ipcRenderer.invoke('images:generate', req),
+    saveAs: (file) => ipcRenderer.invoke('images:saveAs', { file }),
+    openFolder: () => ipcRenderer.invoke('images:openFolder'),
+    onProgress: (handler) => {
+      const listener = (_e, payload) => handler(payload)
+      ipcRenderer.on('images:progress', listener)
+      return () => ipcRenderer.removeListener('images:progress', listener)
+    },
+  },
   app: {
     info: () => ipcRenderer.invoke('app:info'),
     openStore: () => ipcRenderer.invoke('app:openStore'),

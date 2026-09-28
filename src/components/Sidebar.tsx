@@ -55,6 +55,7 @@ export default function Sidebar({
   onRename,
   onPin,
   onOpenSettings,
+  onOpenImages,
   onCollapse,
 }: {
   conversations: Conversation[]
@@ -66,6 +67,7 @@ export default function Sidebar({
   onRename: (id: string, title: string) => void
   onPin: (id: string) => void
   onOpenSettings: () => void
+  onOpenImages: () => void
   onCollapse: () => void
 }) {
   const [query, setQuery] = useState('')
@@ -148,7 +150,16 @@ export default function Sidebar({
       </div>
 
       <nav className="mt-1 space-y-px px-2">
-        <NavRow icon={<ImageIcon size={17} />} label="Images" disabled title="Image generation — not wired to this API yet" />
+        <NavRow
+          icon={<ImageIcon size={17} />}
+          label="Images"
+          onClick={onOpenImages}
+          title={
+            config.imageGen?.enabled
+              ? 'Image generation is on — configure the provider in Settings'
+              : 'Image generation — set up a provider in Settings'
+          }
+        />
         <NavRow icon={<Library size={17} />} label="Library" disabled title="Saved outputs — coming soon" />
         <NavRow icon={<CalendarClock size={17} />} label="Scheduled" disabled title="Scheduled prompts — coming soon" />
         <NavRow icon={<Plug size={17} />} label="Plugins" disabled title="Plugins — coming soon" />
