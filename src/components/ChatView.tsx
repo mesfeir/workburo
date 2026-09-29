@@ -113,8 +113,16 @@ export default function ChatView({
     const node = nodes.find((n) => n.getAttribute('data-user') === id)
     if (!node) return
     const delta = node.getBoundingClientRect().top - el.getBoundingClientRect().top
+    const target = Math.max(el.scrollTop + delta - 16, 0)
+    const before = el.scrollTop
     lastPin.current = Date.now()
-    el.scrollTo({ top: Math.max(el.scrollTop + delta - 16, 0), behavior: 'smooth' })
+    el.scrollTo({ top: target, behavior: 'smooth' })
+    // A window that is not being painted (minimised, hidden behind something, or a self-test running
+    // headless) never animates a smooth scroll, so the click would do nothing at all and the user
+    // could not tell whether it worked. If the position has not moved, place it directly instead.
+    window.setTimeout(() => {
+      if (Math.abs(el.scrollTop - before) < 2 && Math.abs(target - before) > 4) el.scrollTop = target
+    }, 400)
   }
 
   const pin = () => {

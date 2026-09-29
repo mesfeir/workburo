@@ -1501,9 +1501,18 @@ async function run({
     const first = document.querySelector('[data-user]')
     const sr = scroller ? scroller.getBoundingClientRect() : null
     const fr = first ? first.getBoundingClientRect() : null
+    const buttons = document.querySelectorAll('[data-rail] button')
+    const inner = scroller && scroller.firstElementChild
+    const markId = buttons[0] ? buttons[0].getAttribute('data-mark') : ''
     return {
       scrollTop: scroller ? Math.round(scroller.scrollTop) : -1,
       firstVisible: !!(sr && fr && fr.top >= sr.top - 4 && fr.top < sr.bottom),
+      // if this ever fails again, these say which of two things went wrong: the tick could not find
+      // its message, or the scroll itself did not happen
+      usersInScroller: inner ? inner.querySelectorAll('[data-user]').length : -1,
+      firstMarkId: markId,
+      markResolves: !!(inner && markId && inner.querySelector('[data-user="' + markId + '"]')),
+      scrollable: scroller ? scroller.scrollHeight > scroller.clientHeight : null,
     }
   })
   record(
