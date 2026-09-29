@@ -732,6 +732,31 @@ app.whenReady().then(() => {
     if (process.env.ZEN_FAL_KEY) {
       seeded.config.imageGen = { ...seeded.config.imageGen, falKey: process.env.ZEN_FAL_KEY, enabled: true }
     }
+    // A conversation that already has a document attached. This has to be written *before* the window
+    // loads: seeding it during the run never shows up (the sidebar has already rendered) and a reload
+    // does not help either, because the app writes its own state back over the file. Attaching one in
+    // the app needs the native dialog, so this is the only way the harness can check that an attached
+    // document is displayed and answered from.
+    const docFixture = path.join(__dirname, '..', 'scripts', 'fixtures', 'notes.md')
+    if (fs.existsSync(docFixture)) {
+      seeded.conversations = [
+        {
+          id: 'selftest-doc',
+          title: 'document test',
+          createdAt: Date.now(),
+          messages: [
+            {
+              id: 'selftest-doc-1',
+              role: 'user',
+              content: 'summarise the attached file',
+              createdAt: Date.now(),
+              documents: [{ name: 'notes.md', path: docFixture, kind: 'document', docKind: 'text' }],
+            },
+          ],
+        },
+        ...(seeded.conversations || []),
+      ]
+    }
     writeStore(seeded)
 
     createWindow()
@@ -913,6 +938,26 @@ const IMAGE_TOOL_NOTE =
   '"create an image of …", "draw …", "make a picture / logo / poster of …", "show me how it would look", ' +
   '"what would X look like" — call generate_image with a detailed visual prompt instead of describing ' +
   'the scene in words. The picture appears in the conversation itself.'
+
+/**
+ * What the model can do beyond talking.
+ *
+ * Being *offered* a tool is not the same as believing you have it. With create_document advertised but
+ * never mentioned, the model answered "I can't see an attached file" and described the spreadsheet it
+ * would make instead of making one — and no tool row appeared at all, which is how it was caught. Say
+ * plainly what it can do, and for the app tools say that acting is expected rather than explaining.
+ */
+const CREATE_TOOL_NOTE =
+  'You can make files for the user and save them: spreadsheets (.xlsx), Word documents (.docx), PDFs, ' +
+  'CSVs, markdown, plain text and JSON. When they ask for a file, a report, a table, a list, an export ' +
+  'or anything to be saved or downloaded, call create_document with the contents. Do not describe the ' +
+  'file, and never say you cannot make one — make it. When it succeeds, tell them where it went.'
+
+const APPS_TOOL_NOTE =
+  'The user has connected their own accounts (Gmail, Calendar, Slack, Drive and others). You can see ' +
+  'which are connected with list_connected_apps, look up what an app can do with search_app_tools, and ' +
+  'act with run_app_tool — sending, creating and posting in their real accounts. When they ask for ' +
+  'something one of those apps does, do it rather than explaining how they could.'
 
 // The picture rules — what a conversation contains, and which picture the image tool may be
 // pointed at — live in ./pictures.cjs so they can be tested directly. main supplies the one thing
@@ -1391,12 +1436,18 @@ ipcMain.handle('chat:start', async (event, req) => {
   // documents are named to the model whatever else is going on — that has nothing to do with
   // whether a picture can be drawn, so the note is added either way
   const docNote = documents.note(messages)
+  const canTools = cfg.toolsEnabled !== false
+  const toggles = cfg.toolToggles || {}
+  const abilities = []
+  if (canTools && toggles.create_document !== false) abilities.push(CREATE_TOOL_NOTE)
+  if (canTools && cfg.apps?.enabled) abilities.push(APPS_TOOL_NOTE)
   const systemPrompt = (drawReady
     ? [String(req.systemPrompt || '').trim(), IMAGE_TOOL_NOTE, pictureNote(messages)]
         .filter(Boolean)
         .join('\n\n')
     : String(req.systemPrompt || '')
   )
+    .concat(abilities.length ? `\n\n${abilities.join('\n\n')}` : '')
     .concat(docNote ? `\n\n${docNote}` : '')
     .trim()
   const send = (payload) => {

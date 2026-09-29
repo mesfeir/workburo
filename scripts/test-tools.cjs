@@ -9,8 +9,11 @@
  * Offline: no network, no key, no credits.
  */
 const assert = require('node:assert')
+const fs = require('node:fs')
+const path = require('node:path')
 
-const { chatToolDefs, responsesToolDefs, ALL_TOOLS, REGISTRY } = require('../electron/tools.cjs')
+const { chatToolDefs, responsesToolDefs, executeTool, ALL_TOOLS, REGISTRY } = require('../electron/tools.cjs')
+const create = require('../electron/create.cjs')
 
 /** The three that reach into someone's real accounts; hidden unless switched on. */
 const APP_TOOLS = new Set(['list_connected_apps', 'search_app_tools', 'run_app_tool'])
@@ -191,6 +194,67 @@ const drawOpts = (over = {}) => ({
   check('with no key it says where to fix it instead of drawing anything', () => {
     assert.strictEqual(noKey && noKey.ok, false, 'should refuse')
     assert.match(String(noKey.error), /Settings/i, 'the refusal should name the place to fix it')
+  })
+
+  /* ---------------------------------------- making a document, through the tool itself */
+  // main injects `docs.create` the same way it injects `images.generate`, so the wrapper can be
+  // checked with no key and no network. What matters is the contract: the writer is reached with
+  // what the model asked for, and the file comes back out of executeTool — a shape it drops is a
+  // spreadsheet the user never sees, which is exactly how the image tool once failed silently.
+  const madeCalls = []
+  const made = await executeTool(
+    'create_document',
+    JSON.stringify({ kind: 'csv', filename: 'fruits.csv', content: 'fruit,qty\napple,3\n' }),
+    {
+      docs: {
+        create: async (a) => {
+          madeCalls.push(a)
+          return {
+            ok: true,
+            file: { path: 'X:/out/fruits.csv', name: 'fruits.csv', kind: 'csv', bytes: 22 },
+            text: 'Saved fruits.csv',
+          }
+        },
+      },
+    },
+  )
+  check('create_document reaches the writer main injects, with what the model asked for', () => {
+    assert.strictEqual(made.ok, true, made.error)
+    assert.strictEqual(madeCalls.length, 1)
+    assert.strictEqual(madeCalls[0].kind, 'csv')
+    assert.strictEqual(madeCalls[0].filename, 'fruits.csv')
+    assert.match(String(madeCalls[0].content), /apple,3/)
+  })
+  check('and the file comes back out of executeTool, so the reply can show it', () => {
+    assert.ok(Array.isArray(made.files) && made.files.length === 1, JSON.stringify(made))
+    assert.strictEqual(made.files[0].name, 'fruits.csv')
+  })
+
+  const noWriter = await executeTool('create_document', JSON.stringify({ kind: 'csv', content: 'a\n' }), {})
+  check('with no writer wired in it refuses honestly rather than claiming a file', () => {
+    assert.strictEqual(noWriter.ok, false)
+    assert.ok(!noWriter.files || noWriter.files.length === 0, 'it must not invent a file')
+  })
+
+  const realDir = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'zen-tools-create-'))
+  const real = await executeTool(
+    'create_document',
+    JSON.stringify({ kind: 'xlsx', filename: 'real.xlsx', content: 'a,b\n1,2\n' }),
+    { docs: { create: (a) => create.create(a, { dir: realDir }) } },
+  )
+  check('and a real one is written where it says it was', () => {
+    assert.strictEqual(real.ok, true, real.error)
+    assert.ok(fs.existsSync(real.files[0].path), real.files[0].path)
+    assert.ok(real.files[0].bytes > 0, 'a zero-byte file is not a file')
+  })
+  check('a kind it cannot make is refused with the list it can', async () => {
+    const bad = await executeTool(
+      'create_document',
+      JSON.stringify({ kind: 'exe', filename: 'x.exe', content: 'MZ' }),
+      { docs: { create: (a) => create.create(a, { dir: realDir }) } },
+    )
+    assert.strictEqual(bad.ok, false)
+    assert.ok(/xlsx/.test(bad.error) && /pdf/.test(bad.error), bad.error)
   })
 
   console.log(`\n${passed}/${passed + failed} checks passed`)

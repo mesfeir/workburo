@@ -800,6 +800,10 @@ async function executeTool(name, argsRaw, opts = {}) {
       sources: r.sources || [],
       // only generate_image fills this in; every other tool leaves it empty
       images: r.images || [],
+      // files the tool made. This was missing, and the failure is quiet and total: the document is
+      // written, the model truthfully says it saved it, and nothing ever appears on the reply — the
+      // same silent drop the image tool had before its return shape was widened.
+      files: r.files || [],
       ok: r.ok !== false,
       error: r.error || null,
     }

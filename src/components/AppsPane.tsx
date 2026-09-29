@@ -154,7 +154,7 @@ export default function AppsPane({
   const withKey = !!saved.apiKey
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" data-apps-pane>
       <div>
         <h3 className="text-[15px] font-medium text-[#ececec]">Connected apps</h3>
         <p className="mt-1 text-[12.5px] leading-relaxed text-faint">

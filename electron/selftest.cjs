@@ -1579,32 +1579,20 @@ async function run({
     `kind=${firstDoc && firstDoc.kind} chars=${firstDoc && firstDoc.chars} name=${firstDoc && firstDoc.name}`,
   )
 
-  const seeded = await inPage(
-    win,
-    function (p, name) {
-      return window.zen.store.get().then(function (s) {
-        const conv = {
-          id: 'selftest-doc',
-          title: 'document test',
-          createdAt: Date.now(),
-          messages: [
-            {
-              id: 'selftest-doc-1',
-              role: 'user',
-              content: 'summarise the attached file',
-              createdAt: Date.now(),
-              documents: [{ name: name, path: p, kind: 'document', docKind: 'text', chars: 40 }],
-            },
-          ],
-        }
-        s.conversations = [conv].concat(s.conversations || [])
-        return window.zen.store.save(s).then(function () {
-          return true
-        })
-      })
-    },
-    [docFixture, 'notes.md'],
-  )
+  // The conversation with the attached document is seeded into the profile *before* the window loads
+  // (see main.cjs), so it is already in the sidebar list — no runtime seeding, which does not appear,
+  // and no reload, which the app's own save would undo.
+  //
+  // The conversation list lives in the drawer at this window size, so open it before looking.
+  await inPage(win, function () {
+    if (document.querySelector('aside')) return true
+    const b = Array.from(document.querySelectorAll('button')).find((x) =>
+      (x.getAttribute('title') || '').toLowerCase().includes('sidebar'),
+    )
+    if (b) b.click()
+    return !!b
+  })
+  await sleep(700)
   const openedDoc = await inPage(win, function () {
     const row = Array.from(document.querySelectorAll('button, [role="button"], a, li')).find((x) =>
       /document test/i.test(x.textContent || ''),
@@ -1619,8 +1607,8 @@ async function run({
   })
   record(
     'an attached document shows in the conversation, named, with its size',
-    seeded && !!docChip && /notes\.md/i.test(docChip),
-    `seeded=${seeded} opened=${openedDoc} chip="${docChip}"`,
+    !!openedDoc && !!docChip && /notes\.md/i.test(docChip),
+    `opened=${openedDoc} chip="${docChip}"`,
   )
 
   await inPage(win, pageType, ['What number appears in the attached file? Reply with just the number.'])
@@ -1628,8 +1616,12 @@ async function run({
   await waitFor(win, pageIdle, 180000, 400, 'answer from the document')
   await sleep(700)
   const docAnswer = await inPage(win, function () {
-    const all = document.querySelectorAll('.prose-zen')
-    return all.length ? (all[all.length - 1].innerText || '').replace(/\s+/g, ' ').slice(0, 200) : ''
+    // scoped to this turn's reply: reading the last .prose-zen on the page picked up an answer from
+    // an earlier section, which is exactly how a stale answer passes for a new one
+    const wraps = document.querySelectorAll('[data-msg]')
+    const last = wraps.length ? wraps[wraps.length - 1] : null
+    const el = last ? last.querySelector('.prose-zen') : null
+    return el ? (el.innerText || '').replace(/\s+/g, ' ').slice(0, 200) : ''
   })
   record(
     'and the model answers from the file’s contents, not from imagination',
@@ -1659,6 +1651,7 @@ async function run({
     const key = document.querySelector('[data-apps-key]')
     const sw = document.querySelector('[data-apps-enabled]')
     const list = document.querySelector('[data-apps-list]')
+    const paneEl = document.querySelector('[data-apps-pane]')
     return {
       key: !!key,
       keyType: key ? String(key.getAttribute('type') || '') : '',
@@ -1666,7 +1659,9 @@ async function run({
       sw: !!sw,
       swOn: sw ? !!sw.checked : null,
       list: !!list,
-      text: (document.body.innerText || '').replace(/\s+/g, ' ').slice(0, 500),
+      // the pane's own text, not the page's: the page's first 500 characters are the sidebar and the
+      // chat behind the modal, so a whole-body read never reaches the thing being asserted
+      paneText: paneEl ? (paneEl.innerText || '').replace(/\s+/g, ' ').slice(0, 400) : '',
     }
   })
   record(
@@ -1702,8 +1697,8 @@ async function run({
   )
   record(
     'the pane shows no app catalogue with no key — an empty state, not a fake one',
-    pane.list === false && /Composio API key/i.test(pane.text),
-    `list=${pane.list} text="${pane.text.slice(0, 120)}"`,
+    pane.list === false && /Composio API key/i.test(pane.paneText),
+    `list=${pane.list} pane="${pane.paneText.slice(0, 140)}"`,
   )
   await shot(win, '18-connected-apps')
 
@@ -1722,10 +1717,21 @@ async function run({
     const el = document.querySelector('[data-msg-files]')
     return el ? (el.innerText || '').replace(/\s+/g, ' ').slice(0, 200) : ''
   })
+  // what the tool rows say, so a failure tells me whether the model called the tool at all or called
+  // it and it failed — the difference between a prompt problem and a broken tool
+  const madeTools = await inPage(win, function () {
+    const wraps = document.querySelectorAll('[data-msg]')
+    const last = wraps.length ? wraps[wraps.length - 1] : null
+    if (!last) return ''
+    return Array.from(last.querySelectorAll('[data-tools] button'))
+      .map((b) => (b.innerText || '').replace(/\s+/g, ' ').trim())
+      .join(' | ')
+      .slice(0, 160)
+  })
   record(
     'a file the model makes appears on the reply, with a way to open it',
     /\.csv/i.test(madeCard),
-    `card="${madeCard}"`,
+    `card="${madeCard}" tools="${madeTools}"`,
   )
   const openButton = await inPage(win, function () {
     return !!document.querySelector('[data-open-file]')
