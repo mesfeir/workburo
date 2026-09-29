@@ -594,6 +594,7 @@ export default function SettingsModal({
             {(['general', 'api', 'chat', 'models', 'images', 'apps', 'tools', 'agent', 'about'] as Tab[]).map((t) => (
               <button
                 key={t}
+                data-settings-tab={t}
                 onClick={() => setTab(t)}
                 className={`mb-0.5 w-full rounded-lg px-3 py-2 text-left text-[13.5px] transition ${
                   tab === t ? 'bg-white/[.09] text-ink' : 'text-muted hover:bg-white/[.05]'

@@ -1207,6 +1207,7 @@ export default function App() {
           <button
             onClick={() => setSettingsOpen(true)}
             title="Settings (Ctrl+,)"
+            data-settings-open
             className="no-drag mr-1 grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-white/10 hover:text-ink"
           >
             <Settings2 size={16} />

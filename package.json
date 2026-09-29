@@ -22,6 +22,7 @@
     "test:tools": "node scripts/test-tools.cjs",
     "test:files": "node scripts/test-files.cjs",
     "test:documents": "node scripts/test-documents.cjs",
+    "test:composio": "node scripts/test-composio.cjs",
     "check:packaged": "node scripts/check-packaged-files.cjs"
   },
   "dependencies": {

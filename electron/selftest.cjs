@@ -1638,6 +1638,75 @@ async function run({
   )
   await shot(win, '17-documents')
 
+  // ---------- 18. connected apps: the door, and the truth told before there is a key
+  // These tools can send mail and post messages in someone's real accounts, so the two things worth
+  // proving are that the user can actually reach the switch, and that without a key nothing is
+  // invented — no app list, no connection claimed, no browser window opened by a Connect button that
+  // has no key to work with. Nothing here calls Composio.
+  const openedApps = await inPage(win, function () {
+    const gear = document.querySelector('[data-settings-open]')
+    if (gear) gear.click()
+    return !!gear
+  })
+  await sleep(700)
+  const tabbed = await inPage(win, function () {
+    const t = document.querySelector('[data-settings-tab="apps"]')
+    if (t) t.click()
+    return !!t
+  })
+  await sleep(600)
+  const pane = await inPage(win, function () {
+    const key = document.querySelector('[data-apps-key]')
+    const sw = document.querySelector('[data-apps-enabled]')
+    const list = document.querySelector('[data-apps-list]')
+    return {
+      key: !!key,
+      keyType: key ? String(key.getAttribute('type') || '') : '',
+      keyEmpty: key ? !String(key.value || '') : false,
+      sw: !!sw,
+      swOn: sw ? !!sw.checked : null,
+      list: !!list,
+      text: (document.body.innerText || '').replace(/\s+/g, ' ').slice(0, 500),
+    }
+  })
+  record(
+    'the Connected apps switch is reachable in Settings',
+    !!(openedApps && tabbed && pane.key && pane.sw),
+    `gear=${openedApps} tab=${tabbed} keyField=${pane.key} switch=${pane.sw}`,
+  )
+  record(
+    'and it starts switched off, so nothing can act in an account until asked',
+    pane.swOn === false,
+    `checked=${pane.swOn}`,
+  )
+  record(
+    'the key field is masked and empty — a key is never drawn on screen',
+    pane.keyType === 'password' && pane.keyEmpty,
+    `type=${pane.keyType} empty=${pane.keyEmpty}`,
+  )
+  const refusedList = await inPage(win, function () {
+    return window.zen.apps.list('gmail')
+  })
+  const refusedConnect = await inPage(win, function () {
+    return window.zen.apps.connect('gmail')
+  })
+  record(
+    'with no key it says what is missing instead of inventing an app list',
+    !!(refusedList && refusedList.ok === false && refusedList.needsKey === true && refusedList.error),
+    `ok=${refusedList && refusedList.ok} error="${(refusedList && refusedList.error) || ''}"`,
+  )
+  record(
+    'and Connect refuses rather than opening a browser with nothing to connect with',
+    !!(refusedConnect && refusedConnect.ok === false && !refusedConnect.url),
+    `ok=${refusedConnect && refusedConnect.ok} url=${refusedConnect && refusedConnect.url}`,
+  )
+  record(
+    'the pane shows no app catalogue with no key — an empty state, not a fake one',
+    pane.list === false && /Composio API key/i.test(pane.text),
+    `list=${pane.list} text="${pane.text.slice(0, 120)}"`,
+  )
+  await shot(win, '18-connected-apps')
+
   console.log('\n=== summary ===')
   const failed = results.filter((r) => !r.pass)
   console.log(`${results.length - failed.length}/${results.length} checks passed`)
