@@ -12,8 +12,9 @@
  * Run:  npm run check:packaged
  * Or point it at an install:  node scripts/check-packaged-files.cjs "C:/…/Programs/Zen Chat/Zen Chat.exe"
  *
- * It launches the packaged binary as plain Node (ELECTRON_RUN_AS_NODE), so no window appears and
- * nothing is written anywhere.
+ * It launches the packaged binary as plain Node (ELECTRON_RUN_AS_NODE), so no window appears. It
+ * writes four small documents into a temp folder to prove the writing half works in the built app,
+ * and touches nothing else.
  */
 const path = require('path')
 const { spawnSync } = require('child_process')
@@ -54,7 +55,41 @@ async function runInner() {
       if (!ok) bad++
     }
   }
-  console.log(bad ? `\n${bad} check(s) failed` : `\n${expect.length}/${expect.length} checks passed`)
+  // ---- and the writing half: the packaged app has to be able to MAKE files too.
+  // docx and pdfkit are ESM-typed packages with CommonJS entries, and an ESM import cannot read
+  // from inside an asar — so whether require('docx') resolves in the built app is a real packaging
+  // question, not a formality. Each kind is written and then read back with the readers above: a
+  // writer that reports success on its own proves nothing.
+  const fs = require('node:fs')
+  const os = require('node:os')
+  const create = require(path.join(process.resourcesPath, 'app.asar', 'electron', 'create.cjs'))
+  const documents = require(path.join(process.resourcesPath, 'app.asar', 'electron', 'documents.cjs'))
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zen-gate-create-'))
+  const made = [
+    ['csv', 'gate.csv', 'item,qty\nwidget,3\n', '', /widget,3/],
+    ['xlsx', 'gate.xlsx', 'item,qty\nwidget,3\n', '', /widget/],
+    ['docx', 'gate.docx', '# Gate heading\nGate body.', 'Gate title', /Gate body/],
+    ['pdf', 'gate.pdf', 'The number is 4729.', 'Gate title', /4729/],
+  ]
+  for (const [kind, name, content, title, want] of made) {
+    const r = await create.create({ kind, filename: name, content, title }, { dir })
+    if (!r.ok) {
+      console.log(`FAIL  a packaged app can write ${kind} — ${r.error}`)
+      bad++
+      continue
+    }
+    const back = await documents.readDocument(r.file.path, r.file.name)
+    const ok = back.ok === true && want.test(String(back.text || ''))
+    console.log(
+      `${ok ? 'PASS' : 'FAIL'}  a packaged app writes ${kind} and reads it back — ${JSON.stringify(
+        String(back.text || '').replace(/\s+/g, ' ').slice(0, 36),
+      )}`,
+    )
+    if (!ok) bad++
+  }
+
+  const total = expect.length + made.length
+  console.log(bad ? `\n${bad} check(s) failed` : `\n${total}/${total} checks passed`)
   process.exit(bad ? 1 : 0)
 }
 
