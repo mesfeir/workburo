@@ -65,6 +65,19 @@ async function runInner() {
   const create = require(path.join(process.resourcesPath, 'app.asar', 'electron', 'create.cjs'))
   const documents = require(path.join(process.resourcesPath, 'app.asar', 'electron', 'documents.cjs'))
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zen-gate-create-'))
+
+  // ---- the harness runs *inside* the app and attaches files by path, so the fixtures it uses have to
+  // be in the package. They were not: build.files listed electron/ and not scripts/, so every document
+  // check in the *packaged* harness failed while the dev suite passed clean — the feature was fine and
+  // its test data was missing from the build. Asserted here so it cannot go unnoticed again.
+  const asarRoot = path.join(process.resourcesPath, 'app.asar')
+  const neededFixtures = ['scripts/fixtures/notes.md', 'scripts/fixtures/sample.pdf']
+  const missingFixtures = neededFixtures.filter((rel) => !fs.existsSync(path.join(asarRoot, rel)))
+  console.log(
+    `${missingFixtures.length ? 'FAIL' : 'PASS'}  the fixtures the harness attaches are inside the packaged app — ` +
+      (missingFixtures.length ? `missing: ${missingFixtures.join(', ')}` : `${neededFixtures.length} present`),
+  )
+  if (missingFixtures.length) bad++
   const made = [
     ['csv', 'gate.csv', 'item,qty\nwidget,3\n', '', /widget,3/],
     ['xlsx', 'gate.xlsx', 'item,qty\nwidget,3\n', '', /widget/],
@@ -88,7 +101,9 @@ async function runInner() {
     if (!ok) bad++
   }
 
-  const total = expect.length + made.length
+  // +1 for the fixture-presence check above: a gate that prints a total it did not count can report
+  // 9/9 while ten lines have gone by, and one of them said FAIL.
+  const total = expect.length + made.length + 1
   console.log(bad ? `\n${bad} check(s) failed` : `\n${total}/${total} checks passed`)
   process.exit(bad ? 1 : 0)
 }

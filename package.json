@@ -66,6 +66,7 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
+      "scripts/fixtures/**/*",
       "package.json",
       "node_modules/**/*",
       "!**/node_modules/@napi-rs/**"
