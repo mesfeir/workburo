@@ -107,9 +107,14 @@ check(
   'description mentions changing and reference',
 )
 check(
-  'the tool accepts a reference, and only the two the app can resolve',
-  JSON.stringify(imageTool.parameters.properties.reference?.enum) === '["last","attached"]',
-  JSON.stringify(imageTool.parameters.properties.reference?.enum),
+  'the model may name a picture, but only one that is really there',
+  // This used to assert enum === ["last","attached"]. The app tells the model about the pictures by
+  // name ("2. shot.png — drawn"), so the model names them back, and a strict enum made the natural
+  // answer impossible. What matters is not the shape of the answer but that it cannot invent one:
+  // an unknown name resolves to nothing and the tool refuses, listing what does exist. The behaviour
+  // is pinned in scripts/test-tools.cjs ("a reference that cannot be found says what is there").
+  !Array.isArray(imageTool.parameters.properties.reference?.enum),
+  `enum=${JSON.stringify(imageTool.parameters.properties.reference?.enum)}`,
 )
 
 /** run the tool with a stand-in generator, so this part needs no key and no network */

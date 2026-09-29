@@ -282,19 +282,36 @@ async function generateImage(args, opts = {}) {
   // conversation; the model only names one, so it can never invent an image out of nowhere — and a
   // model with no vision can still work on a picture it cannot see.
   const wanted = String(args.reference || '').trim().toLowerCase()
-  const refs = cfg.references || {}
+  // main supplies the pictures that are in this conversation — as a map: last / attached / named /
+  // list. A plain array is tolerated too, in order, so a caller that passes one still works.
+  const refsIn = cfg.references
+  const refs = Array.isArray(refsIn)
+    ? { list: refsIn, last: refsIn[refsIn.length - 1] || null, named: {} }
+    : refsIn || {}
   let reference = null
   if (wanted) {
-    reference = wanted === 'last' || wanted === 'attached' ? refs[wanted] || refs.last || null : null
+    if (wanted === 'last' || wanted === 'attached' || wanted === 'recent') {
+      reference = refs[wanted] || refs.last || null
+    } else if (refs.named && refs.named[wanted]) {
+      // the exact name, which is how the model is told about the pictures in the first place
+      reference = refs.named[wanted]
+    } else if (/^[0-9]+$/.test(wanted) && Array.isArray(refs.list)) {
+      // or its position in that list, for "the second one"
+      reference = refs.list[Number(wanted) - 1] || null
+    }
     if (!reference || !reference.url) {
+      // Say what *is* here, so the next attempt can name it correctly — a bare refusal is what made
+      // the model give up and draw something new instead of changing the picture asked about.
+      const known = Array.isArray(refs.list)
+        ? refs.list.filter(Boolean).map((r) => r.name).filter(Boolean)
+        : []
       return {
         ok: false,
         error:
-          'There is no picture in this conversation to change — ' +
-          (wanted === 'attached'
-            ? 'nothing was attached to that message.'
-            : 'nothing has been attached or drawn here yet.') +
-          ' Draw one first, or attach a picture, then ask again.',
+          `There is no picture called "${wanted}" in this conversation.` +
+          (known.length
+            ? ` The pictures here are: ${known.join(', ')}. Name one of those, or say "last".`
+            : ' Nothing has been attached or drawn here yet — draw one first, or attach a picture, then ask again.'),
       }
     }
   }
@@ -454,8 +471,10 @@ const REGISTRY = {
           '"add a hat to it", "make it blue", "change the background", "make it bigger", "recreate ' +
           'this but …". When they mean a picture that is already there — the one they attached, or one ' +
           'you drew — pass reference ("last" for the most recent, "attached" for the picture in their ' +
-          'current message) and write the prompt as the instruction for that change. That edits their ' +
-          'picture; calling this with no reference draws a brand new one from scratch instead. ' +
+          'current message, or the picture’s name) and write the prompt as the instruction for that ' +
+          'change. Anyone who says "it", "this" or "the image" means a picture that already exists, ' +
+          'so pass reference — omitting it draws something new instead of changing theirs. ' +
+          'Calling this with no reference draws a brand new one from scratch. ' +
           'Write the prompt as a rich visual description — subject, style, ' +
           'lighting, framing — because the words you send are the only instruction the image model gets. ' +
           'The picture appears in the conversation itself, so never answer a request like this by ' +
@@ -472,11 +491,18 @@ const REGISTRY = {
             },
             reference: {
               type: 'string',
-              enum: ['last', 'attached'],
+              // No enum: the model is told about the pictures by name ("2. shot.png — drawn"), so it
+              // must be allowed to name one back. The wording is imperative because omitting it is
+              // silent and expensive: the instruction gets drawn from scratch instead of applied,
+              // and the user sees a picture unrelated to what they asked for.
               description:
                 'Which picture already in the conversation to change. "last" = the most recent one, ' +
                 'whether the user attached it or you drew it. "attached" = the picture in the user’s ' +
-                'current message. Leave it out only when drawing something new.',
+                'current message. Or the picture’s exact name, as listed in the notes above. ' +
+                'If the user’s message refers to a picture that already exists — "it", "this", ' +
+                '"the image", "the one you made" — you MUST pass reference; leaving it out draws a ' +
+                'brand new picture instead of changing theirs, which is not what they asked for. ' +
+                'Leave it out only when they want something new drawn.',
             },
             count: { type: 'integer', description: 'How many images to make, 1-4 (default 1)' },
             size: {

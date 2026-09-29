@@ -63,6 +63,18 @@ function referencesFor(messages, readFile) {
   return {
     last: pics.length ? resolve(pics[pics.length - 1]) : null,
     attached: lastUser ? resolve(picturesIn([lastUser])[0]) : null,
+    // The model is told about the pictures *by name* — pictureNote writes "2. shot.png — drawn (the
+    // most recent)" — so it will naturally name one back. Only "last" and "attached" used to be
+    // accepted, so every such request was refused with "no picture in this conversation", and the
+    // model, having failed, drew the instruction from scratch instead. The failures and the
+    // irrelevant pictures were one bug seen twice.
+    named: Object.fromEntries(
+      pics
+        .map((p) => [String(p.name || '').trim().toLowerCase(), resolve(p)])
+        .filter(([k, v]) => k && v),
+    ),
+    // and by position, for "the second one"
+    list: pics.map((p) => resolve(p)),
   }
 }
 
