@@ -1429,7 +1429,7 @@ async function run({
     if (t) t.click()
   })
   await sleep(900)
-  const restored = await inPage(win, function () {
+  const toolsRestored = await inPage(win, function () {
     const label = Array.from(document.querySelectorAll('label')).find((l) =>
       (l.textContent || '').includes('Let the model use tools'),
     )
@@ -1447,8 +1447,8 @@ async function run({
   await sleep(700)
   record(
     'and the switch goes back on, so the sections after this one have tools again',
-    restored === true,
-    `restored=${restored}`,
+    toolsRestored === true,
+    `restored=${toolsRestored}`,
   )
 
   // ---------- 16. the input rail: one tick per message you sent, click to jump back
