@@ -131,6 +131,9 @@ export default function App() {
 
   const [input, setInput] = useState('')
   const [images, setImages] = useState<Attachment[]>([])
+  /** Documents attached to the next message. Only their names, sizes and a short preview live
+   *  here — the text is read in main and never crosses into the page. */
+  const [documents, setDocuments] = useState<Attachment[]>([])
   const [busy, setBusy] = useState(false)
   const [compact, setCompact] = useState(() => window.innerWidth < COMPACT_WIDTH)
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= COMPACT_WIDTH)
@@ -461,6 +464,9 @@ export default function App() {
                 role: m.role,
                 content: m.content,
                 images: (m.images || []).map((i) => i.url),
+                // documents travel as a path, not as text: main reads them, so even a 200-page PDF
+                // never crosses into the page or back
+                documents: (m.documents || []).map((d) => ({ name: d.name, path: d.path })),
               })),
             })
 
@@ -647,6 +653,7 @@ export default function App() {
         role: 'user',
         content: text,
         images: attached,
+        documents: documents.length ? [...documents] : undefined,
         createdAt: Date.now(),
       }
 
@@ -685,6 +692,7 @@ export default function App() {
 
       setInput('')
       setImages([])
+      setDocuments([])
 
       // does the chosen model take images? warn early instead of burning a call.
       // An edit never reaches the chat model, so it is not affected either way.
@@ -902,6 +910,7 @@ export default function App() {
     setActiveId(null)
     setInput('')
     setImages([])
+    setDocuments([])
     if (window.innerWidth < COMPACT_WIDTH) setSidebarOpen(false)
   }, [busy, stop])
 
@@ -997,6 +1006,70 @@ export default function App() {
     setImages((prev) => [...prev, ...a])
   }, [])
 
+  /**
+   * What came back from main, sorted into thumbnails and chips.
+   *
+   * Images still go through the renderer's shrinker — attaching a 12MP photo should not put 12MP in
+   * the request. Documents are already read; a document that could not be read still becomes a chip,
+   * carrying the reason, because silently dropping the file the user just attached is the one thing
+   * this must never do.
+   */
+  const applyAdded = useCallback(
+    async (added: Attachment[]) => {
+      const pics: Attachment[] = []
+      const docs: Attachment[] = []
+      for (const a of added) {
+        if (a.kind !== 'document') {
+          if (a.error || !a.url) {
+            pics.push(a)
+            continue
+          }
+          try {
+            const shrunk = await shrinkImage(a.url)
+            pics.push({
+              ...a,
+              url: shrunk.url || a.url,
+              bytes: shrunk.bytes ?? a.bytes,
+              width: shrunk.width ?? a.width,
+              height: shrunk.height ?? a.height,
+            })
+          } catch {
+            pics.push(a)
+          }
+          continue
+        }
+        docs.push(a)
+      }
+      if (pics.length) addImages(pics)
+      if (docs.length) setDocuments((prev) => [...prev, ...docs])
+    },
+    [addImages],
+  )
+
+  /**
+   * Dropped files: their paths come from the preload, because Electron 32 removed File.path and a
+   * dropped document with no path cannot be read at all.
+   */
+  const addFiles = useCallback(
+    async (list: File[]) => {
+      const paths = list.map((f) => window.zen.files.pathFor(f)).filter(Boolean)
+      if (!paths.length) return
+      const res = await window.zen.files.add(paths)
+      await applyAdded((res && res.added) || [])
+    },
+    [applyAdded],
+  )
+
+  /** The ＋ button: the native picker, which is the only way to reach a PDF or a spreadsheet. */
+  const pickFiles = useCallback(async () => {
+    const res = await window.zen.files.add([])
+    await applyAdded((res && res.added) || [])
+  }, [applyAdded])
+
+  const removeDocument = useCallback((i: number) => {
+    setDocuments((prev) => prev.filter((_, x) => x !== i))
+  }, [])
+
   /* --------------------------------------------------------- shortcuts */
 
   useEffect(() => {
@@ -1036,8 +1109,8 @@ export default function App() {
     const drop = async (e: DragEvent) => {
       e.preventDefault()
       setDragging(false)
-      const files = Array.from(e.dataTransfer?.files || []).filter((f) => f.type.startsWith('image/'))
-      if (files.length) addImages(await readFilesAsImages(files))
+      const files = Array.from(e.dataTransfer?.files || [])
+      if (files.length) await addFiles(files)
     }
     window.addEventListener('dragover', over)
     window.addEventListener('dragleave', leave)
@@ -1047,7 +1120,7 @@ export default function App() {
       window.removeEventListener('dragleave', leave)
       window.removeEventListener('drop', drop)
     }
-  }, [addImages])
+  }, [addFiles])
 
   /* ---------------------------------------------------------------- ui */
 
@@ -1075,6 +1148,7 @@ export default function App() {
               onSelect={(id) => {
                 setActiveId(id)
                 setImages([])
+                setDocuments([])
                 if (compact) setSidebarOpen(false)
               }}
               onNew={newChat}
@@ -1183,6 +1257,9 @@ export default function App() {
           onAddImages={addImages}
           onPickImages={pickImages}
           onRemoveImage={(i) => setImages((prev) => prev.filter((_, x) => x !== i))}
+          documents={documents}
+          onPickFiles={pickFiles}
+          onRemoveDocument={removeDocument}
           busy={busy}
           thinking={config.thinking}
           onToggleThinking={() => patchConfig({ thinking: !config.thinking })}

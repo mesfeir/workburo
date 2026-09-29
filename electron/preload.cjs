@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron')
+const { contextBridge, ipcRenderer, webUtils } = require('electron')
 
 // One narrow, explicit surface for the renderer. No node, no fs, no keys in the page.
 contextBridge.exposeInMainWorld('zen', {
@@ -19,6 +19,20 @@ contextBridge.exposeInMainWorld('zen', {
   models: {
     list: (cfg, label) => ipcRenderer.invoke('models:list', { cfg, label }),
     probe: (cfg, model, testImage) => ipcRenderer.invoke('models:probe', { cfg, model, testImage }),
+  },
+  files: {
+    // the ＋ button and drag-and-drop both land here. Without paths it opens the native picker —
+    // the only way to reach a PDF or a spreadsheet, which an HTML file input cannot be given.
+    add: (paths) => ipcRenderer.invoke('files:add', { paths }),
+    // a dropped file's path on disk. Electron 32 removed File.path, so this is the way to ask;
+    // without it a dropped document has no path and nothing can read it.
+    pathFor: (file) => {
+      try {
+        return webUtils.getPathForFile(file) || ''
+      } catch {
+        return ''
+      }
+    },
   },
   tools: {
     list: () => ipcRenderer.invoke('tools:list'),

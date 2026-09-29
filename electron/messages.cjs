@@ -73,7 +73,8 @@ function toChatMessages (messages, systemPrompt, vision = 'unknown') {
     }
 
     if (!imgs.length) {
-      out.push({ role: m.role, content: m.content || '' })
+      // an attached document travels as text, after the user's own words
+      out.push({ role: m.role, content: m.docBlock ? withNote(m.content, m.docBlock) : m.content || '' })
       continue
     }
 
@@ -81,13 +82,19 @@ function toChatMessages (messages, systemPrompt, vision = 'unknown') {
     if (vision === 'no') {
       out.push({
         role: m.role,
-        content: withNote(m.content, imageNote(imgs, 'attached but not sent, this model is marked text-only')),
+        content: withNote(
+          m.content,
+          m.docBlock
+            ? withNote(m.docBlock, imageNote(imgs, 'attached but not sent, this model is marked text-only'))
+            : imageNote(imgs, 'attached but not sent, this model is marked text-only'),
+        ),
       })
       continue
     }
 
     const parts = []
-    if (m.content) parts.push({ type: 'text', text: m.content })
+    const text = m.docBlock ? withNote(m.content, m.docBlock) : m.content
+    if (text) parts.push({ type: 'text', text })
     for (const url of imgs) parts.push({ type: 'image_url', image_url: { url } })
     out.push({ role: m.role, content: parts })
   }

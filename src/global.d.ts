@@ -54,6 +54,16 @@ export interface ZenApi {
     list: (cfg: any, label?: string) => Promise<{ ok: boolean; models?: any[]; error?: string; base?: string }>
     probe: (cfg: any, model: string, testImage?: string) => Promise<any>
   }
+  files: {
+    /**
+     * The ＋ button and drag-and-drop. With `paths` it reads exactly those files; with none it opens
+     * the native picker. Documents come back already read (name, kind, characters, a preview);
+     * images come back as data URLs with their true size.
+     */
+    add: (paths?: string[]) => Promise<{ ok: boolean; added: Attachment[]; canceled?: boolean }>
+    /** a dropped file's path on disk — Electron 32 removed File.path */
+    pathFor: (file: File) => string
+  }
   tools: {
     list: () => Promise<{ name: string; label: string; describe: string }[]>
     probe: (searchUrl: string) => Promise<{

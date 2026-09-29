@@ -274,6 +274,25 @@ export default function Message({
       <div className="flex animate-fade-up justify-end py-2" data-user={msg.id}>
         <div className="max-w-[85%] rounded-[22px] bg-bubble px-4 py-2.5 text-[15.5px] leading-[1.6]">
           <ImageGrid images={msg.images || []} onUseImage={onUseImage} />
+          {(msg.documents || []).length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2" data-msg-documents>
+              {(msg.documents || []).map((d, i) => (
+                <div
+                  key={`${d.name}-${i}`}
+                  title={d.preview || d.name}
+                  className={`flex max-w-[300px] items-center gap-2 rounded-lg border px-2 py-1 ${
+                    d.error ? 'border-red-400/40 bg-red-500/10' : 'border-white/12 bg-white/[0.03]'
+                  }`}
+                >
+                  <FileText size={14} className="shrink-0 text-faint" />
+                  <span className="min-w-0 truncate text-[12px] text-[#ddd]">{d.name}</span>
+                  <span className="shrink-0 text-[11px] text-faint">
+                    {d.error ? 'could not be read' : d.chars ? `${d.chars.toLocaleString()} chars` : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
           {msg.content && <div className="whitespace-pre-wrap">{msg.content}</div>}
         </div>
       </div>

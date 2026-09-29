@@ -1559,6 +1559,85 @@ async function run({
   )
   await shot(win, '16-instructions')
 
+  // ---------- 17. documents: a reader with no way to attach anything is not a feature
+  // The reading layer was built and shipped an entire release before there was any door to it, so
+  // this checks the door: main really reads a file, the attachment comes back in a usable shape, the
+  // conversation shows it, and the model answers from its contents — a number that exists nowhere
+  // else ("4729" in the fixture), so a confident non-answer cannot pass by accident.
+  const docFixture = path.join(__dirname, '..', 'scripts', 'fixtures', 'notes.md')
+  const addedDoc = await inPage(
+    win,
+    function (p) {
+      return window.zen.files.add([p])
+    },
+    [docFixture],
+  )
+  const firstDoc = (addedDoc && addedDoc.added && addedDoc.added[0]) || null
+  record(
+    'attaching a document reads it, and says how much of it there is',
+    !!(firstDoc && firstDoc.kind === 'document' && firstDoc.chars > 0 && String(firstDoc.preview || '')),
+    `kind=${firstDoc && firstDoc.kind} chars=${firstDoc && firstDoc.chars} name=${firstDoc && firstDoc.name}`,
+  )
+
+  const seeded = await inPage(
+    win,
+    function (p, name) {
+      return window.zen.store.get().then(function (s) {
+        const conv = {
+          id: 'selftest-doc',
+          title: 'document test',
+          createdAt: Date.now(),
+          messages: [
+            {
+              id: 'selftest-doc-1',
+              role: 'user',
+              content: 'summarise the attached file',
+              createdAt: Date.now(),
+              documents: [{ name: name, path: p, kind: 'document', docKind: 'text', chars: 40 }],
+            },
+          ],
+        }
+        s.conversations = [conv].concat(s.conversations || [])
+        return window.zen.store.save(s).then(function () {
+          return true
+        })
+      })
+    },
+    [docFixture, 'notes.md'],
+  )
+  const openedDoc = await inPage(win, function () {
+    const row = Array.from(document.querySelectorAll('button, [role="button"], a, li')).find((x) =>
+      /document test/i.test(x.textContent || ''),
+    )
+    if (row) row.click()
+    return !!row
+  })
+  await sleep(1200)
+  const docChip = await inPage(win, function () {
+    const el = document.querySelector('[data-msg-documents]')
+    return el ? (el.innerText || '').replace(/\s+/g, ' ').slice(0, 90) : ''
+  })
+  record(
+    'an attached document shows in the conversation, named, with its size',
+    seeded && !!docChip && /notes\.md/i.test(docChip),
+    `seeded=${seeded} opened=${openedDoc} chip="${docChip}"`,
+  )
+
+  await inPage(win, pageType, ['What number appears in the attached file? Reply with just the number.'])
+  await inPage(win, pageSend)
+  await waitFor(win, pageIdle, 180000, 400, 'answer from the document')
+  await sleep(700)
+  const docAnswer = await inPage(win, function () {
+    const all = document.querySelectorAll('.prose-zen')
+    return all.length ? (all[all.length - 1].innerText || '').replace(/\s+/g, ' ').slice(0, 200) : ''
+  })
+  record(
+    'and the model answers from the file’s contents, not from imagination',
+    /4729/.test(docAnswer),
+    `reply="${docAnswer.slice(0, 140)}"`,
+  )
+  await shot(win, '17-documents')
+
   console.log('\n=== summary ===')
   const failed = results.filter((r) => !r.pass)
   console.log(`${results.length - failed.length}/${results.length} checks passed`)

@@ -10,6 +10,18 @@ export interface Attachment {
   bytes?: number
   /** a saved generation whose file could not be read back */
   missing?: boolean
+  /** 'document' for a PDF, spreadsheet, Word file or text file; images leave this unset */
+  kind?: 'image' | 'document'
+  /** for a document: the reader's own name for its type (pdf, sheet, docx, text …) */
+  docKind?: string
+  /** for a document: how many characters its text has */
+  chars?: number
+  /** for a document: the text did not all fit in one request */
+  truncated?: boolean
+  /** for a document: the first few hundred characters, so a chip can say something useful */
+  preview?: string
+  /** when it could not be read, why — shown, never swallowed */
+  error?: string
 }
 
 export interface Usage {
@@ -62,6 +74,8 @@ export interface ChatMessage {
   streaming?: boolean
   /** tool calls made while producing this message */
   tools?: ToolActivity[]
+  /** documents the user attached to this message; read in main, shown as chips here */
+  documents?: Attachment[]
   /** everything the answer was grounded in */
   sources?: Source[]
   /** how fast the answer came in, in tokens per second */

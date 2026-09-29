@@ -918,6 +918,8 @@ const IMAGE_TOOL_NOTE =
 // pointed at — live in ./pictures.cjs so they can be tested directly. main supplies the one thing
 // that file cannot have: a way to read a drawn picture back off disk.
 const pictures = require('./pictures.cjs')
+const files = require('./files.cjs')
+const documents = require('./documents.cjs')
 
 /**
  * The pictures the image tool may be pointed at. The model only ever *names* one ("last"), and main
@@ -1373,6 +1375,10 @@ async function runRound({ protocol, base, cfg, messages, systemPrompt, send, ac,
 
 ipcMain.handle('chat:start', async (event, req) => {
   const { requestId, cfg, messages } = req
+  // Attached documents are read here, before anything builds a request: the message builder is
+  // synchronous and reading a 200-page PDF is not. Whatever it could not read comes back as a
+  // reason the user will see, never as a silent gap.
+  await documents.hydrate(messages)
   // only claim the model can draw when there is actually a key to draw with. The
   // tool stays advertised either way, so asking for a picture with no key comes
   // back as "add one in Settings → Images" rather than a description.
@@ -1380,11 +1386,17 @@ ipcMain.handle('chat:start', async (event, req) => {
     cfg.toolsEnabled !== false &&
     (cfg.toolToggles || {}).generate_image !== false &&
     !!cfg.imageGen?.falKey
-  const systemPrompt = drawReady
+  // documents are named to the model whatever else is going on — that has nothing to do with
+  // whether a picture can be drawn, so the note is added either way
+  const docNote = documents.note(messages)
+  const systemPrompt = (drawReady
     ? [String(req.systemPrompt || '').trim(), IMAGE_TOOL_NOTE, pictureNote(messages)]
         .filter(Boolean)
         .join('\n\n')
-    : req.systemPrompt
+    : String(req.systemPrompt || '')
+  )
+    .concat(docNote ? `\n\n${docNote}` : '')
+    .trim()
   const send = (payload) => {
     if (!event.sender.isDestroyed()) event.sender.send('chat:event', { requestId, ...payload })
   }
@@ -2044,6 +2056,70 @@ async function runImageJob({ key, model, prompt, count, size, imageUrl, imagesDi
     imageJobs -= 1
   }
 }
+
+/**
+ * The ＋ button and drag-and-drop both land here.
+ *
+ * With `paths` (a dropped file) it reads exactly those; with none it opens the native picker, which
+ * is the only way to reach a PDF or a spreadsheet — an HTML file input cannot be given one, which is
+ * why only images ever made it in before. Images come back as data URLs with their size; documents
+ * come back as their text, already read, plus a preview. The renderer therefore never needs to know
+ * the difference, and never holds more than a few hundred characters of a document.
+ */
+ipcMain.handle('files:add', async (event, req = {}) => {
+  let paths = Array.isArray(req.paths) ? req.paths.filter((p) => typeof p === 'string' && p.trim()) : []
+  if (!paths.length) {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const picked = await dialog.showOpenDialog(win, {
+      title: 'Attach files',
+      buttonLabel: 'Attach',
+      properties: ['openFile', 'multiSelections'],
+      filters: files.acceptGroups(),
+    })
+    if (picked.canceled || !picked.filePaths.length) return { ok: true, added: [], canceled: true }
+    paths = picked.filePaths
+  }
+
+  const added = []
+  for (const abs of paths) {
+    const name = path.basename(abs)
+    let bytes = 0
+    try {
+      bytes = fs.statSync(abs).size
+    } catch {
+      added.push({ name, path: abs, kind: 'document', error: `${name} is no longer where it was.` })
+      continue
+    }
+
+    if (documents.classify(name) === 'image') {
+      let url = ''
+      try {
+        url = fileToDataUrl(abs)
+      } catch {
+        added.push({ name, path: abs, kind: 'image', bytes, error: `${name} could not be read as a picture.` })
+        continue
+      }
+      const size = nativeImage.createFromPath(abs).getSize()
+      added.push({ name, path: abs, kind: 'image', url, bytes, width: size.width || null, height: size.height || null })
+      continue
+    }
+
+    // a document: its text is read here and now, so the UI can say how much of it there is
+    const read = await documents.readDocument(abs, name)
+    added.push({
+      name,
+      path: abs,
+      kind: 'document',
+      docKind: read.docKind,
+      bytes,
+      chars: read.ok ? read.chars : 0,
+      truncated: !!read.truncated,
+      preview: read.ok ? read.text.slice(0, 400) : '',
+      error: read.ok ? '' : read.error,
+    })
+  }
+  return { ok: true, added }
+})
 
 ipcMain.handle('images:generate', async (_e, req) => {
   const { key, model, prompt, count, size, requestId, imageUrl } = req || {}

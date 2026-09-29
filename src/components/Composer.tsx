@@ -1,6 +1,16 @@
 import { useEffect, useRef } from 'react'
-import { ArrowUp, Brain, Image as ImageIcon, Mic, Plus, Square, Terminal, X } from 'lucide-react'
+import { ArrowUp, Brain, FileText, Image as ImageIcon, Mic, Plus, Square, Terminal, X } from 'lucide-react'
 import type { Attachment, Speed } from '../types'
+
+/** What a document chip calls the file: the reader's own kind, in words a person would use. */
+function docLabel(d: { docKind?: string }) {
+  const k = String(d.docKind || '').toLowerCase()
+  if (k === 'pdf') return 'PDF'
+  if (k === 'sheet') return 'Spreadsheet'
+  if (k === 'docx') return 'Word document'
+  if (k === 'text') return 'Text'
+  return 'Document'
+}
 
 export default function Composer({
   value,
@@ -11,6 +21,9 @@ export default function Composer({
   onAddImages,
   onPickImages,
   onRemoveImage,
+  documents,
+  onPickFiles,
+  onRemoveDocument,
   busy,
   thinking,
   onToggleThinking,
@@ -34,6 +47,11 @@ export default function Composer({
   onStop: () => void
   images: Attachment[]
   onAddImages: (a: Attachment[]) => void
+  /** documents attached to the next message: name, size and a short preview — never the text */
+  documents: Attachment[]
+  /** the ＋ button: the native picker, the only way to reach a PDF or a spreadsheet */
+  onPickFiles: () => void
+  onRemoveDocument: (i: number) => void
   onPickImages: () => void
   onRemoveImage: (i: number) => void
   busy: boolean
@@ -101,11 +119,45 @@ export default function Composer({
     if (focusNonce) ref.current?.focus()
   }, [focusNonce])
 
-  const canSend = (value.trim().length > 0 || images.length > 0) && !disabled
+  const canSend = (value.trim().length > 0 || images.length > 0 || documents.length > 0) && !disabled
 
   return (
     <div className="px-4 pb-2">
       <div className="mx-auto w-full max-w-[768px]">
+        {documents.length > 0 && (
+          <div className="mb-2 flex flex-wrap items-center gap-2 px-1" data-documents>
+            {documents.map((d, i) => (
+              <div
+                key={`${d.name}-${i}`}
+                data-doc-chip={d.docKind || 'file'}
+                title={d.error || d.preview || d.name}
+                className={`group relative flex max-w-[300px] items-center gap-2 rounded-xl border px-2.5 py-1.5 ${
+                  d.error ? 'border-red-400/40 bg-red-500/10' : 'border-white/15 bg-white/[0.04]'
+                }`}
+              >
+                <FileText size={15} className="shrink-0 text-faint" />
+                <span className="min-w-0">
+                  <span className="block truncate text-[12.5px] text-[#e8e8e8]">{d.name}</span>
+                  <span className="block truncate text-[11px] text-faint" data-doc-meta>
+                    {d.error
+                      ? d.error
+                      : `${docLabel(d)}${
+                          d.chars ? ` · ${d.chars.toLocaleString()} characters` : ''
+                        }${d.truncated ? ' · part of it' : ''}`}
+                  </span>
+                </span>
+                <button
+                  onClick={() => onRemoveDocument(i)}
+                  title="Remove"
+                  className="ml-0.5 shrink-0 rounded-full p-0.5 text-faint transition hover:text-[#e8e8e8]"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         {images.length > 0 && (
           <div className="mb-2 flex flex-wrap items-center gap-2 px-1">
             {images.map((im, i) => (
@@ -156,8 +208,9 @@ export default function Composer({
         <div className="rounded-[26px] bg-pill px-2.5 py-2 shadow-[0_2px_14px_rgba(0,0,0,.35)]">
           <div className="flex items-end gap-1.5">
           <button
-            onClick={onPickImages}
-            title="Attach images"
+            onClick={onPickFiles}
+            title="Attach files — PDF, Word, Excel, CSV, text or images"
+            data-attach
             className="mb-[3px] grid h-8 w-8 shrink-0 place-items-center rounded-full border border-white/25 text-[#e8e8e8] transition hover:bg-white/10"
           >
             <Plus size={17} />
