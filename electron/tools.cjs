@@ -311,7 +311,11 @@ async function generateImage(args, opts = {}) {
           `There is no picture called "${wanted}" in this conversation.` +
           (known.length
             ? ` The pictures here are: ${known.join(', ')}. Name one of those, or say "last".`
-            : ' Nothing has been attached or drawn here yet — draw one first, or attach a picture, then ask again.'),
+            : refs.present
+              ? ` There ${refs.present === 1 ? 'is a picture' : `are ${refs.present} pictures`} in this ` +
+                `conversation, but ${refs.present === 1 ? 'it' : 'they'} could not be read — the file may ` +
+                'have been moved or deleted.'
+              : ' Nothing has been attached or drawn here yet — draw one first, or attach a picture, then ask again.'),
       }
     }
   }

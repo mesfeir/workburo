@@ -501,6 +501,11 @@ export default function App() {
                 role: m.role,
                 content: m.content,
                 images: (m.images || []).map((i) => i.url),
+                // the names travel beside the urls: a url string is what a provider request needs,
+                // but a name is how the model is told which picture is which ("the screenshot I
+                // posted"), and how it can point back at one. Without them every picture is just
+                // "picture 3", which is no help when a conversation holds several.
+                imageNames: (m.images || []).map((i) => i.name || ''),
                 // documents travel as a path, not as text: main reads them, so even a 200-page PDF
                 // never crosses into the page or back
                 documents: (m.documents || []).map((d) => ({ name: d.name, path: d.path })),

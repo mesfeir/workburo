@@ -98,6 +98,62 @@ check(
   note.slice(0, 96).replace(/\s+/g, ' ') + '…',
 )
 
+/* ------------------------------------ 1b. the same conversation, as the renderer really sends it
+ *
+ * The renderer sends `images` as plain url strings, because that is what a provider request takes.
+ * Only the store's object shape was tested here, so the tool path — the one that has to resolve a
+ * reference — was covered by a shape it never receives. Every picture resolved to nothing: the note
+ * telling the model pictures exist came out empty, so it described the image instead of using it,
+ * and a reference was refused with "nothing has been attached or drawn here yet".
+ */
+const sent = [
+  { role: 'user', content: 'here is my logo', images: [DATA_URL] },
+  { role: 'assistant', content: 'Nice.', images: [] },
+  { role: 'user', content: 'make a poster of it' },
+  { role: 'assistant', content: '[made: an image (zen-1-1.png)]', images: [DATA_URL] },
+]
+
+check(
+  'url strings count as pictures, the way the renderer sends them',
+  pictures.picturesIn(sent).length === 2,
+  `${pictures.picturesIn(sent).length} found`,
+)
+const sentRefs = pictures.referencesFor(sent, readFile)
+check(
+  'the most recent picture resolves when it arrives as a url string',
+  sentRefs.last?.url === DATA_URL,
+  sentRefs.last ? `name ${sentRefs.last.name}` : 'null',
+)
+check(
+  'the picture in the latest user message resolves as "attached"',
+  sentRefs.attached?.url === DATA_URL,
+  sentRefs.attached ? `name ${sentRefs.attached.name}` : 'null',
+)
+check(
+  'a picture with no name of its own still gets one, so the model can name it back',
+  sentRefs.last?.name === 'picture 2',
+  String(sentRefs.last?.name),
+)
+const sentNote = pictures.pictureNote(sent)
+check(
+  'the model is told pictures exist, whichever shape they arrived in',
+  sentNote !== '' && /reference: "last"/.test(sentNote),
+  sentNote.slice(0, 88).replace(/\s+/g, ' ') + '…',
+)
+check(
+  'a conversation says it has the same pictures in either shape',
+  pictures.picturesIn(sent).length === pictures.picturesIn(conversation).length,
+  'objects and url strings agree on how many pictures there are',
+)
+check(
+  'a name sent beside the url is kept, so the model can point at the picture the user means',
+  pictures.picturesIn([
+    { role: 'user', images: [DATA_URL], imageNames: ['Screenshot 2025-10-16 105217.png'] },
+    { role: 'assistant', images: [DATA_URL] },
+  ])[0]?.name === 'Screenshot 2025-10-16 105217.png',
+  'the name the user knows it by survives the trip',
+)
+
 /* ------------------------------------------------------------------ 2. the tool path */
 
 const imageTool = tools.REGISTRY.generate_image.schema.function

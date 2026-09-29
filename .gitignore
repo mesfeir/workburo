@@ -33,3 +33,10 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# never commit scratch output that lands in the repo folder: the picture probe wrote a
+# 13 MB copy of a real conversation (with the screenshots in it) here once, and "git add -A"
+# took it. Anything a probe writes belongs in the Hermes scratch dir, not the repo.
+/sent-messages.json
+/picture-context-probe.cjs
+/*-probe.cjs

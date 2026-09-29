@@ -8,22 +8,48 @@
  */
 
 /**
- * Every picture in the conversation, oldest first. A drawn picture is kept on disk with its URL
- * stripped from the store, so it carries a `path` and no `url`; an attached one carries its data
- * URL directly.
+ * One picture, in either of the two shapes it really arrives in.
+ *
+ * The store keeps `{ name, path, url }`: a drawn picture is on disk with its URL stripped, so it
+ * carries a `path`. The renderer sends the same conversation to main as plain `url` strings,
+ * because that is what a provider request needs — a string goes straight into `image_url`.
+ *
+ * Reading only the object shape made every picture resolve to nothing on the tool path. The note
+ * that tells the model pictures exist was empty, so it never thought to reference one and answered
+ * by describing the image instead of using it; and a reference, when the model did try one, came
+ * back as "nothing has been attached or drawn here yet". The Image switch uses the store's shape
+ * and worked, which is why the same request sometimes worked and sometimes did not.
+ */
+function asPicture(img, role, name = '') {
+  if (typeof img === 'string') {
+    const url = img.trim()
+    if (!url) return null
+    return { url, path: '', name: String(name || ''), from: role === 'user' ? 'the user attached it' : 'you drew it' }
+  }
+  if (!img) return null
+  return {
+    url: String(img.url || ''),
+    path: String(img.path || ''),
+    name: String(img.name || name || ''),
+    from: role === 'user' ? 'the user attached it' : 'you drew it',
+  }
+}
+
+/**
+ * Every picture in the conversation, oldest first.
+ *
+ * `imageNames` travels beside the renderer's url strings, one name per picture in the same order, so
+ * a picture the user attached keeps the name they know it by.
  */
 function picturesIn(messages) {
   const out = []
   for (const m of messages || []) {
-    for (const img of m?.images || []) {
-      if (!img) continue
-      out.push({
-        url: String(img.url || ''),
-        path: String(img.path || ''),
-        name: String(img.name || 'image'),
-        from: m.role === 'user' ? 'the user attached it' : 'you drew it',
-      })
-    }
+    const names = Array.isArray(m?.imageNames) ? m.imageNames : []
+    const list = m?.images || []
+    list.forEach((img, i) => {
+      const pic = asPicture(img, m?.role, names[i])
+      if (pic) out.push(pic)
+    })
   }
   return out
 }
@@ -56,13 +82,18 @@ function referencesFor(messages, readFile) {
   const lastUser = [...(messages || [])]
     .reverse()
     .find((m) => m.role === 'user' && (m.images || []).length)
-  const resolve = (pic) => {
+  // A picture with no name of its own — everything the renderer sends is a bare data URL — is still
+  // a picture the model can name by position, so it gets one rather than an empty label.
+  const resolve = (pic, i) => {
     const url = pictureUrl(pic, readFile)
-    return url ? { url, name: pic.name } : null
+    return url ? { url, name: pic.name || `picture ${(i ?? 0) + 1}` } : null
   }
   return {
-    last: pics.length ? resolve(pics[pics.length - 1]) : null,
-    attached: lastUser ? resolve(picturesIn([lastUser])[0]) : null,
+    // How many pictures are in the conversation at all. A picture whose file cannot be read
+    // resolves to null, and the tool must not then claim nothing was ever attached.
+    present: pics.length,
+    last: pics.length ? resolve(pics[pics.length - 1], pics.length - 1) : null,
+    attached: lastUser ? resolve(picturesIn([lastUser])[0], pics.length - 1) : null,
     // The model is told about the pictures *by name* — pictureNote writes "2. shot.png — drawn (the
     // most recent)" — so it will naturally name one back. Only "last" and "attached" used to be
     // accepted, so every such request was refused with "no picture in this conversation", and the
@@ -70,11 +101,11 @@ function referencesFor(messages, readFile) {
     // irrelevant pictures were one bug seen twice.
     named: Object.fromEntries(
       pics
-        .map((p) => [String(p.name || '').trim().toLowerCase(), resolve(p)])
+        .map((p, i) => [String(p.name || '').trim().toLowerCase(), resolve(p, i)])
         .filter(([k, v]) => k && v),
     ),
     // and by position, for "the second one"
-    list: pics.map((p) => resolve(p)),
+    list: pics.map((p, i) => resolve(p, i)),
   }
 }
 
@@ -87,7 +118,10 @@ function pictureNote(messages) {
   const pics = picturesIn(messages)
   if (!pics.length) return ''
   const list = pics
-    .map((p, i) => `${i + 1}. ${p.name} — ${p.from}${i === pics.length - 1 ? ' (the most recent)' : ''}`)
+    .map(
+      (p, i) =>
+        `${i + 1}. ${p.name || `picture ${i + 1}`} — ${p.from}${i === pics.length - 1 ? ' (the most recent)' : ''}`,
+    )
     .join('; ')
   return (
     `Pictures already in this conversation, oldest first: ${list}. When the user asks for one of ` +
