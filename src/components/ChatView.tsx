@@ -29,7 +29,7 @@ function EmptyState({ onPick, imageMode }: { onPick: (t: string) => void; imageM
   const list = imageMode ? IMAGE_SUGGESTIONS : SUGGESTIONS
   return (
     <div className="flex h-full flex-col items-center justify-center pb-24">
-      <h1 className="mb-8 select-none text-[30px] font-normal tracking-[-0.02em] text-[#f2f2f2]">
+      <h1 className="mb-8 select-none text-[30px] font-normal tracking-[-0.02em] text-[#16130f]">
         {imageMode ? 'What should I draw?' : 'Ready when you are.'}
       </h1>
       <div className="grid w-full max-w-[560px] grid-cols-1 gap-2 sm:grid-cols-2">
@@ -37,7 +37,7 @@ function EmptyState({ onPick, imageMode }: { onPick: (t: string) => void; imageM
           <button
             key={s}
             onClick={() => onPick(s)}
-            className="flex items-start gap-2.5 rounded-xl border border-[#242424] bg-[#131313] px-3.5 py-3 text-left text-[13.5px] text-[#c3c3c3] transition hover:border-[#333] hover:bg-[#1a1a1a]"
+            className="flex items-start gap-2.5 rounded-none border border-hair bg-panel px-3.5 py-3 text-left text-[13.5px] text-[#2f2b25] transition hover:border-[#c9c5ba] hover:bg-[#E2DFD7]"
           >
             <Sparkles size={14} className="mt-0.5 shrink-0 text-faint" />
             <span>{s}</span>
@@ -227,7 +227,7 @@ export default function ChatView({
               >
                 <span
                   className={`block h-[3px] rounded-full transition-all duration-150 ${
-                    hover === m.id ? 'w-4 bg-[#8ab4f8]' : 'w-2.5 bg-[#4a4a4a] hover:bg-[#8ab4f8]'
+                    hover === m.id ? 'w-4 bg-[#f7e4e2]' : 'w-2.5 bg-[#ddd9d0] hover:bg-[#f7e4e2]'
                   }`}
                 />
               </button>
@@ -239,7 +239,7 @@ export default function ChatView({
                 return (
                   <div
                     style={{ top: `${m.ratio * 100}%` }}
-                    className="pointer-events-none absolute right-6 w-[220px] -translate-y-1/2 rounded-lg border border-[#333] bg-[#1c1c1c] px-2.5 py-1.5 text-[12px] leading-snug text-[#dcdcdc] shadow-xl"
+                    className="pointer-events-none absolute right-6 w-[220px] -translate-y-1/2 rounded-none border border-[#c9c5ba] bg-[#edebe5] px-2.5 py-1.5 text-[12px] leading-snug text-[#1e1b17] shadow-xl"
                   >
                     <span className="line-clamp-3">{m.label}</span>
                   </div>
@@ -256,7 +256,7 @@ export default function ChatView({
             if (el) el.scrollTop = el.scrollHeight
             setStuck(false)
           }}
-          className="absolute bottom-3 left-1/2 grid h-8 w-8 -translate-x-1/2 place-items-center rounded-full border border-[#333] bg-[#1c1c1c] text-muted shadow-lg transition hover:text-ink"
+          className="absolute bottom-3 left-1/2 grid h-8 w-8 -translate-x-1/2 place-items-center rounded-full border border-[#c9c5ba] bg-[#edebe5] text-muted shadow-lg transition hover:text-ink"
         >
           <ArrowDown size={15} />
         </button>

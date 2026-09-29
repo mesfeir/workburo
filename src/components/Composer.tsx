@@ -137,13 +137,13 @@ export default function Composer({
                 key={`${d.name}-${i}`}
                 data-doc-chip={d.docKind || 'file'}
                 title={d.error || d.preview || d.name}
-                className={`group relative flex max-w-[300px] items-center gap-2 rounded-xl border px-2.5 py-1.5 ${
-                  d.error ? 'border-red-400/40 bg-red-500/10' : 'border-white/15 bg-white/[0.04]'
+                className={`group relative flex max-w-[300px] items-center gap-2 rounded-none border px-2.5 py-1.5 ${
+                  d.error ? 'border-red-400/40 bg-red-500/10' : 'border-black/15 bg-white/[0.04]'
                 }`}
               >
                 <FileText size={15} className="shrink-0 text-faint" />
                 <span className="min-w-0">
-                  <span className="block truncate text-[12.5px] text-[#e8e8e8]">{d.name}</span>
+                  <span className="block truncate text-[12.5px] text-[#16130f]">{d.name}</span>
                   <span className="block truncate text-[11px] text-faint" data-doc-meta>
                     {d.error
                       ? d.error
@@ -155,7 +155,7 @@ export default function Composer({
                 <button
                   onClick={() => onRemoveDocument(i)}
                   title="Remove"
-                  className="ml-0.5 shrink-0 rounded-full p-0.5 text-faint transition hover:text-[#e8e8e8]"
+                  className="ml-0.5 shrink-0 rounded-full p-0.5 text-faint transition hover:text-[#16130f]"
                 >
                   <X size={13} />
                 </button>
@@ -171,11 +171,11 @@ export default function Composer({
                 <img
                   src={im.url}
                   alt={im.name}
-                  className="h-16 w-16 rounded-xl border border-white/15 object-cover"
+                  className="h-16 w-16 rounded-none border border-black/15 object-cover"
                 />
                 <button
                   onClick={() => onRemoveImage(i)}
-                  className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full border border-[#3a3a3a] bg-[#111] text-muted transition hover:text-ink"
+                  className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full border border-[#e4e1d9] bg-[#f4f4f0] text-muted transition hover:text-ink"
                 >
                   <X size={11} />
                 </button>
@@ -183,12 +183,12 @@ export default function Composer({
             ))}
 
             {/* what happens to the reference: fal edits it, or the model reads it */}
-            <div data-refmode className="flex items-center gap-0.5 rounded-full border border-white/15 p-0.5">
+            <div data-refmode className="flex items-center gap-0.5 rounded-full border border-black/15 p-0.5">
               <button
                 onClick={() => onSetRefEdit(true)}
                 title="Send this image and your words straight to fal.ai to be changed"
                 className={`rounded-full px-2.5 py-1 text-[12px] transition ${
-                  refEdit ? 'bg-[#20365a] text-[#dfeaff]' : 'text-faint hover:bg-white/10'
+                  refEdit ? 'bg-[#e61919] text-[#c41414]' : 'text-faint hover:bg-white/10'
                 }`}
               >
                 Edit image
@@ -217,7 +217,7 @@ export default function Composer({
             onClick={onPickFiles}
             title="Attach files — PDF, Word, Excel, CSV, text or images"
             data-attach
-            className="mb-[3px] grid h-8 w-8 shrink-0 place-items-center rounded-full border border-white/25 text-[#e8e8e8] transition hover:bg-white/10"
+            className="mb-[3px] grid h-8 w-8 shrink-0 place-items-center rounded-full border border-black/25 text-[#16130f] transition hover:bg-white/10"
           >
             <Plus size={17} />
           </button>
@@ -241,14 +241,14 @@ export default function Composer({
                   ? 'Describe the change you want'
                   : 'Ask anything'
             }
-            className="max-h-[208px] flex-1 resize-none bg-transparent px-1 py-[9px] text-[15.5px] leading-[1.5] placeholder:text-[#9a9a9a] disabled:opacity-60"
+            className="max-h-[208px] flex-1 resize-none bg-transparent px-1 py-[9px] text-[15.5px] leading-[1.5] placeholder:text-[#3a362f] disabled:opacity-60"
           />
 
           <div className="mb-[2px] flex shrink-0 items-center gap-1">
             <button
               title="Voice input — no speech-to-text provider configured"
               disabled
-              className="grid h-8 w-8 cursor-default place-items-center rounded-full text-[#6f6f6f]"
+              className="grid h-8 w-8 cursor-default place-items-center rounded-full text-[#5a564d]"
             >
               <Mic size={17} />
             </button>
@@ -257,7 +257,7 @@ export default function Composer({
               <button
                 onClick={onStop}
                 title="Stop generating"
-                className="grid h-8 w-8 place-items-center rounded-full bg-[#e8e8e8] text-black transition hover:bg-white"
+                className="grid h-8 w-8 place-items-center rounded-full bg-[#9a958a] text-black transition hover:bg-[#f4f4f0]"
               >
                 <Square size={13} fill="currentColor" />
               </button>
@@ -267,7 +267,7 @@ export default function Composer({
                 disabled={!canSend}
                 title="Send"
                 className={`grid h-8 w-8 place-items-center rounded-full transition ${
-                  canSend ? 'bg-accent text-white hover:bg-[#4180f0]' : 'bg-[#3a3a3a] text-[#8a8a8a]'
+                  canSend ? 'bg-accent text-[#111111] hover:bg-[#e61919]' : 'bg-[#e4e1d9] text-[#4a463d]'
                 }`}
               >
                 <ArrowUp size={17} strokeWidth={2.5} />
@@ -289,8 +289,8 @@ export default function Composer({
                 }
                 className={`flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-[13px] transition ${
                   imageMode
-                    ? 'border-[#3f6db5] bg-[#20365a] text-[#dfeaff]'
-                    : 'border-white/15 text-[#cfcfcf] hover:bg-white/10'
+                    ? 'border-[#e61919] bg-[#e61919] text-[#c41414]'
+                    : 'border-black/15 text-[#1e1b17] hover:bg-white/10'
                 }`}
               >
                 <ImageIcon size={14} />
@@ -310,8 +310,8 @@ export default function Composer({
               }
               className={`flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-[13px] transition ${
                 agentMode
-                  ? 'border-[#3f6db5] bg-[#20365a] text-[#dfeaff]'
-                  : 'border-white/15 text-[#cfcfcf] hover:bg-white/10'
+                  ? 'border-[#e61919] bg-[#e61919] text-[#c41414]'
+                  : 'border-black/15 text-[#1e1b17] hover:bg-white/10'
               } ${!agentAvailable ? 'cursor-default opacity-45 hover:bg-transparent' : ''}`}
             >
               <Terminal size={14} />
@@ -326,7 +326,7 @@ export default function Composer({
                     ? `Pi works in ${agentWorkspace} for this chat. Click to choose another folder.`
                     : 'Choose the folder Pi may work in for this chat'
                 }
-                className="flex h-8 max-w-[200px] items-center gap-1.5 rounded-full border border-white/15 px-2.5 text-[13px] text-[#cfcfcf] transition hover:bg-white/10"
+                className="flex h-8 max-w-[200px] items-center gap-1.5 rounded-full border border-black/15 px-2.5 text-[13px] text-[#1e1b17] transition hover:bg-white/10"
               >
                 <FolderOpen size={14} />
                 <span className="truncate">
@@ -339,7 +339,7 @@ export default function Composer({
               <button
                 onClick={() => onStopAgent(agentSession.requestId)}
                 title={`Pi is working (${agentSession.seconds}s). Click to stop this session.`}
-                className="flex h-8 items-center gap-1.5 rounded-full border border-[#3f8f5f] bg-[#1d3a28] px-2.5 text-[13px] text-[#b6f0c8] transition hover:bg-[#24492f]"
+                className="flex h-8 items-center gap-1.5 rounded-full border border-[#1b6b3a] bg-[#1b6b3a] px-2.5 text-[13px] text-[#1b6b3a] transition hover:bg-[#1b6b3a]"
               >
                 <Square size={11} className="fill-current" />
                 Stop
@@ -351,8 +351,8 @@ export default function Composer({
               title={thinking ? 'Thinking is on' : 'Thinking is off'}
               className={`flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-[13px] transition ${
                 thinking
-                  ? 'border-white/25 bg-white/10 text-[#f0f0f0]'
-                  : 'border-white/15 text-[#cfcfcf] hover:bg-white/10'
+                  ? 'border-black/25 bg-white/10 text-[#16130f]'
+                  : 'border-black/15 text-[#1e1b17] hover:bg-white/10'
               }`}
             >
               <Brain size={14} />

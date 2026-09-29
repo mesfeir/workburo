@@ -29,9 +29,9 @@ export function probeImage(): string {
   c.height = 130
   const d = c.getContext('2d')
   if (!d) return ''
-  d.fillStyle = '#0f0f0f'
+  d.fillStyle = '6e6a60'
   d.fillRect(0, 0, c.width, c.height)
-  d.fillStyle = '#00ff88'
+  d.fillStyle = '1b6b3a'
   d.font = 'bold 38px monospace'
   d.fillText('ZEN 4729', 42, 80)
   return c.toDataURL('image/png')

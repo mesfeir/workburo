@@ -1173,12 +1173,12 @@ export default function App() {
   const modelLabel = config.model || 'no model'
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-canvas">
+    <div className="flex h-full w-full overflow-hidden bg-canvas paper-grid">
       {sidebarOpen && (
         <>
           {compact && (
             <div
-              className="fixed inset-0 z-20 bg-black/55"
+              className="fixed inset-0 z-20 bg-[#edebe5]/82"
               onClick={() => setSidebarOpen(false)}
             />
           )}
@@ -1213,7 +1213,7 @@ export default function App() {
             <button
               onClick={() => setSidebarOpen(true)}
               title="Show sidebar"
-              className="no-drag grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-white/10 hover:text-ink"
+              className="no-drag grid h-8 w-8 place-items-center rounded-none text-muted transition hover:bg-white/10 hover:text-ink"
             >
               <PanelLeft size={16} />
             </button>
@@ -1245,7 +1245,7 @@ export default function App() {
             onClick={() => setSettingsOpen(true)}
             title="Settings (Ctrl+,)"
             data-settings-open
-            className="no-drag mr-1 grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-white/10 hover:text-ink"
+            className="no-drag mr-1 grid h-8 w-8 place-items-center rounded-none text-muted transition hover:bg-white/10 hover:text-ink"
           >
             <Settings2 size={16} />
           </button>
@@ -1254,7 +1254,7 @@ export default function App() {
         {hotkeyNotice && (
           <div
             data-hotkey-banner
-            className="flex items-start gap-2 border-b border-[#4a3a1a] bg-[#241c0d] px-3 py-2 text-[12px] leading-snug text-[#e8c98a]"
+            className="flex items-start gap-2 border-b border-[#7a5a00] bg-[#7a5a00] px-3 py-2 text-[12px] leading-snug text-[#7a5a00]"
           >
             <TriangleAlert size={14} className="mt-[1px] shrink-0" />
             <span className="flex-1">
@@ -1268,14 +1268,14 @@ export default function App() {
             </span>
             <button
               onClick={() => setSettingsOpen(true)}
-              className="shrink-0 rounded-md border border-[#5a4620] px-2 py-[3px] text-[11.5px] transition hover:bg-white/[.07]"
+              className="shrink-0 rounded-none border border-[#7a5a00] px-2 py-[3px] text-[11.5px] transition hover:bg-white/[.07]"
             >
               Change
             </button>
             <button
               onClick={() => setHotkeyNotice(null)}
               title="Dismiss"
-              className="shrink-0 rounded-md px-1 py-[3px] transition hover:bg-white/[.07]"
+              className="shrink-0 rounded-none px-1 py-[3px] transition hover:bg-white/[.07]"
             >
               <X size={13} />
             </button>
@@ -1364,15 +1364,15 @@ export default function App() {
       )}
 
       {dragging && (
-        <div className="pointer-events-none fixed inset-0 z-40 grid place-items-center bg-black/60">
-          <div className="rounded-2xl border border-dashed border-[#555] px-8 py-6 text-[14px] text-muted">
+        <div className="pointer-events-none fixed inset-0 z-40 grid place-items-center bg-[#edebe5]/85">
+          <div className="rounded-none border border-dashed border-[#c9c5ba] px-8 py-6 text-[14px] text-muted">
             Drop images to attach
           </div>
         </div>
       )}
 
       {toast && (
-        <div className="pointer-events-none fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-xl border border-[#333] bg-[#1c1c1c] px-4 py-2 text-[12.5px] text-[#dcdcdc] shadow-xl">
+        <div className="pointer-events-none fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-none border border-[#c9c5ba] bg-[#edebe5] px-4 py-2 text-[12.5px] text-[#1e1b17] shadow-xl">
           {toast}
         </div>
       )}

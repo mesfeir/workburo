@@ -124,10 +124,10 @@ export default function McpPane({
 
   const runningFor = (s: McpServer) => status.find((x) => x.key === (s.name || '').toLowerCase().replace(/[^a-z0-9_.-]+/g, '-'))
 
-  const field = 'w-full rounded-lg border border-[#2c2c2c] bg-[#141414] px-2.5 py-2 text-[12.5px] text-[#e8e8e8] outline-none focus:border-[#4f8cff]'
+  const field = 'w-full rounded-none border border-[#e9e7e0] bg-[#f4f4f0] px-2.5 py-2 text-[12.5px] text-[#16130f] outline-none focus:border-[#f7e4e2]'
 
   const editor = (index: number) => (
-    <div className="space-y-2.5 rounded-xl border border-[#2c2c2c] bg-[#191919] p-3.5" data-mcp-editor>
+    <div className="space-y-2.5 rounded-none border border-[#e9e7e0] bg-[#edebe5] p-3.5" data-mcp-editor>
       <div className="grid grid-cols-2 gap-2.5">
         <label className="block">
           <span className="mb-1 block text-[11.5px] uppercase tracking-wide text-faint">Name</span>
@@ -188,14 +188,14 @@ export default function McpPane({
       </label>
       <div className="flex items-center gap-2.5">
         <button
-          className="rounded-lg bg-[#4f8cff] px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-[#6a9dff]"
+          className="rounded-none bg-[#f7e4e2] px-3 py-1.5 text-[12.5px] font-medium text-[#111111] hover:bg-[#f7e4e2]"
           data-mcp-save
           onClick={() => save(index)}
         >
           Save server
         </button>
         <button
-          className="rounded-lg border border-[#333] px-3 py-1.5 text-[12.5px] text-[#ddd] hover:bg-[#232323]"
+          className="rounded-none border border-[#c9c5ba] px-3 py-1.5 text-[12.5px] text-[#1e1b17] hover:bg-[#edebe5]"
           onClick={() => {
             setEditing(null)
             setDraft(blank())
@@ -210,7 +210,7 @@ export default function McpPane({
   return (
     <div className="space-y-5" data-mcp-pane>
       <div>
-        <h3 className="text-[15px] font-medium text-[#ececec]">MCP servers</h3>
+        <h3 className="text-[15px] font-medium text-[#16130f]">MCP servers</h3>
         <p className="mt-1 text-[12.5px] leading-relaxed text-faint">
           Connect servers that speak the Model Context Protocol. Whatever tools a server offers become
           tools the assistant can use in a chat, alongside the ones built into this app. Off by
@@ -219,15 +219,15 @@ export default function McpPane({
         </p>
       </div>
 
-      <label className="flex items-center gap-3 rounded-xl border border-[#2c2c2c] bg-[#1a1a1a] px-3.5 py-3">
+      <label className="flex items-center gap-3 rounded-none border border-[#e9e7e0] bg-[#edebe5] px-3.5 py-3">
         <input
           type="checkbox"
           checked={!!saved.enabled}
           onChange={(e) => set({ enabled: e.target.checked })}
           data-mcp-enabled
-          className="h-4 w-4 accent-[#4f8cff]"
+          className="h-4 w-4 accent-[#c41414]"
         />
-        <span className="text-[13.5px] text-[#e4e4e4]">
+        <span className="text-[13.5px] text-[#16130f]">
           Use MCP servers
           <span className="mt-0.5 block text-[12px] text-faint">
             When this is on, enabled servers below start with the first chat that uses tools.
@@ -242,7 +242,7 @@ export default function McpPane({
           return (
             <div
               key={i}
-              className="rounded-xl border border-[#2c2c2c] bg-[#1a1a1a] px-3.5 py-3"
+              className="rounded-none border border-[#e9e7e0] bg-[#edebe5] px-3.5 py-3"
               data-mcp-server={s.name}
             >
               <div className="flex items-start gap-3">
@@ -250,7 +250,7 @@ export default function McpPane({
                   type="checkbox"
                   checked={s.enabled !== false}
                   data-mcp-server-toggle
-                  className="mt-0.5 h-4 w-4 accent-[#4f8cff]"
+                  className="mt-0.5 h-4 w-4 accent-[#c41414]"
                   onChange={(e) => {
                     const next = [...servers]
                     next[i] = { ...s, enabled: e.target.checked }
@@ -259,9 +259,9 @@ export default function McpPane({
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="truncate text-[13.5px] text-[#e4e4e4]">{s.name}</span>
+                    <span className="truncate text-[13.5px] text-[#16130f]">{s.name}</span>
                     {live?.running ? (
-                      <span className="rounded bg-[#17351f] px-1.5 py-0.5 text-[11px] text-[#5fd07f]">
+                      <span className="rounded bg-[#1b6b3a] px-1.5 py-0.5 text-[11px] text-[#1b6b3a]">
                         running
                       </span>
                     ) : null}
@@ -291,7 +291,7 @@ export default function McpPane({
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
                   <button
-                    className="flex items-center gap-1.5 rounded-lg border border-[#333] px-2.5 py-1.5 text-[12px] text-[#ddd] hover:bg-[#232323] disabled:opacity-50"
+                    className="flex items-center gap-1.5 rounded-none border border-[#c9c5ba] px-2.5 py-1.5 text-[12px] text-[#1e1b17] hover:bg-[#edebe5] disabled:opacity-50"
                     data-mcp-test={s.name}
                     disabled={busy === s.name}
                     onClick={() => void test(s)}
@@ -301,7 +301,7 @@ export default function McpPane({
                   </button>
                   {live?.running ? (
                     <button
-                      className="flex items-center gap-1.5 rounded-lg border border-[#333] px-2.5 py-1.5 text-[12px] text-[#ddd] hover:bg-[#232323] disabled:opacity-50"
+                      className="flex items-center gap-1.5 rounded-none border border-[#c9c5ba] px-2.5 py-1.5 text-[12px] text-[#1e1b17] hover:bg-[#edebe5] disabled:opacity-50"
                       data-mcp-stop={s.name}
                       disabled={busy === s.name}
                       onClick={() => void stop(s.name)}
@@ -311,7 +311,7 @@ export default function McpPane({
                     </button>
                   ) : null}
                   <button
-                    className="rounded-lg border border-[#333] p-1.5 text-[#bbb] hover:bg-[#232323]"
+                    className="rounded-none border border-[#c9c5ba] p-1.5 text-[#2f2b25] hover:bg-[#edebe5]"
                     title="Edit"
                     onClick={() => {
                       setEditing(i)
@@ -321,7 +321,7 @@ export default function McpPane({
                     <RefreshCw size={13} />
                   </button>
                   <button
-                    className="rounded-lg border border-[#333] p-1.5 text-[#c66] hover:bg-[#232323]"
+                    className="rounded-none border border-[#c9c5ba] p-1.5 text-[#a81313] hover:bg-[#edebe5]"
                     title="Remove"
                     data-mcp-remove={s.name}
                     onClick={() => commit(servers.filter((_, j) => j !== i))}
@@ -336,7 +336,7 @@ export default function McpPane({
 
         {editing === -1 ? editor(-1) : null}
         {!servers.length && editing !== -1 ? (
-          <p className="rounded-xl border border-dashed border-[#2c2c2c] px-3.5 py-4 text-center text-[12.5px] text-faint">
+          <p className="rounded-none border border-dashed border-[#e9e7e0] px-3.5 py-4 text-center text-[12.5px] text-faint">
             No servers yet. Anything that speaks MCP over stdio works here.
           </p>
         ) : null}
@@ -344,7 +344,7 @@ export default function McpPane({
 
       {editing === -1 ? null : (
         <button
-          className="flex items-center gap-1.5 rounded-lg border border-[#333] px-3 py-2 text-[12.5px] text-[#ddd] hover:bg-[#232323]"
+          className="flex items-center gap-1.5 rounded-none border border-[#c9c5ba] px-3 py-2 text-[12.5px] text-[#1e1b17] hover:bg-[#edebe5]"
           data-mcp-add
           onClick={() => {
             setDraft(blank())
@@ -358,10 +358,10 @@ export default function McpPane({
 
       {result ? (
         <div
-          className={`rounded-xl border px-3.5 py-3 text-[12.5px] ${
+          className={`rounded-none border px-3.5 py-3 text-[12.5px] ${
             result.kind === 'ok'
-              ? 'border-[#2c4a33] bg-[#152018] text-[#cfe8d5]'
-              : 'border-[#4a2c2c] bg-[#201515] text-[#e8cfcf]'
+              ? 'border-[#e4e1d9] bg-[#edebe5] text-[#1b6b3a]'
+              : 'border-[#e4e1d9] bg-[#edebe5] text-[#a81313]'
           }`}
           data-mcp-result
         >

@@ -30,11 +30,11 @@ function CodeBlock({ children }: { children?: any }) {
 
   return (
     <div className="group relative" ref={holder}>
-      <div className="flex items-center justify-between rounded-t-xl border border-b-0 border-hair bg-[#171717] px-3 py-1.5">
+      <div className="flex items-center justify-between rounded-none border border-b-0 border-hair bg-[#edebe5] px-3 py-1.5">
         <span className="font-mono text-[11px] uppercase tracking-wide text-faint">{lang || 'code'}</span>
         <button
           onClick={copy}
-          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-muted transition hover:bg-white/10 hover:text-ink"
+          className="flex items-center gap-1.5 rounded-none px-2 py-1 text-[11px] text-muted transition hover:bg-white/10 hover:text-ink"
         >
           {copied ? <Check size={12} /> : <Copy size={12} />}
           {copied ? 'Copied' : 'Copy'}

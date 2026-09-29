@@ -37,8 +37,8 @@ function NavRow({
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-[7px] text-left text-[14px] transition
-        ${disabled ? 'cursor-default text-faint/70' : 'text-[#d6d6d6] hover:bg-white/[.07]'}`}
+      className={`flex w-full items-center gap-2.5 rounded-none px-2 py-[7px] text-left text-[14px] transition
+        ${disabled ? 'cursor-default text-faint/70' : 'text-[#1e1b17] hover:bg-white/[.07]'}`}
     >
       <span className="grid h-[18px] w-[18px] place-items-center">{icon}</span>
       <span className="truncate">{label}</span>
@@ -103,7 +103,7 @@ export default function Sidebar({
   }, [config.baseUrl])
 
   return (
-    <aside className="flex h-full w-[264px] shrink-0 flex-col border-r border-[#1b1b1b] bg-sidebar">
+    <aside className="flex h-full w-[264px] shrink-0 flex-col border-r border-[#edebe5] bg-sidebar">
       {/* title bar */}
       <div className="drag-region flex h-11 items-center justify-between pl-4 pr-2">
         <span className="select-none text-[15px] font-semibold tracking-[-0.01em]">Zen Chat</span>
@@ -111,14 +111,14 @@ export default function Sidebar({
           <button
             title="Search chats"
             onClick={() => setSearching((s) => !s)}
-            className="grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-white/[.08] hover:text-ink"
+            className="grid h-8 w-8 place-items-center rounded-none text-muted transition hover:bg-white/[.08] hover:text-ink"
           >
             <Search size={16} />
           </button>
           <button
             title="Hide sidebar"
             onClick={onCollapse}
-            className="grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-white/[.08] hover:text-ink"
+            className="grid h-8 w-8 place-items-center rounded-none text-muted transition hover:bg-white/[.08] hover:text-ink"
           >
             <PanelLeft size={16} />
           </button>
@@ -127,7 +127,7 @@ export default function Sidebar({
 
       {searching && (
         <div className="px-2 pb-2">
-          <div className="flex items-center gap-2 rounded-lg bg-[#1c1c1c] px-2.5 py-1.5">
+          <div className="flex items-center gap-2 rounded-none bg-[#edebe5] px-2.5 py-1.5">
             <Search size={14} className="text-faint" />
             <input
               autoFocus
@@ -148,7 +148,7 @@ export default function Sidebar({
       <div className="px-2">
         <button
           onClick={onNew}
-          className="flex w-full items-center gap-2.5 rounded-lg bg-[#1f1f1f] px-2 py-[7px] text-left text-[14px] text-[#ededed] transition hover:bg-[#2b2b2b]"
+          className="flex w-full items-center gap-2.5 rounded-none bg-[#edebe5] px-2 py-[7px] text-left text-[14px] text-[#16130f] transition hover:bg-[#e9e7e0]"
         >
           <SquarePen size={17} className="-ml-px" />
           <span>New chat</span>
@@ -182,7 +182,7 @@ export default function Sidebar({
           {list.map((c) => (
             <div
               key={c.id}
-              className={`group relative flex items-center rounded-lg ${
+              className={`group relative flex items-center rounded-none ${
                 c.id === activeId ? 'bg-white/[.08]' : 'hover:bg-white/[.06]'
               }`}
             >
@@ -199,7 +199,7 @@ export default function Sidebar({
                       }
                       if (e.key === 'Escape') setEditingId(null)
                     }}
-                    className="w-full rounded bg-[#111] px-1.5 py-1 text-[13.5px]"
+                    className="w-full rounded bg-[#f4f4f0] px-1.5 py-1 text-[13.5px]"
                   />
                   <button
                     onClick={() => {
@@ -220,7 +220,7 @@ export default function Sidebar({
                     {c.pinned && <Pin size={12} className="shrink-0 text-faint" />}
                     <span
                       className={`truncate text-[13.5px] ${
-                        c.id === activeId ? 'text-ink' : 'text-[#c9c9c9]'
+                        c.id === activeId ? 'text-ink' : 'text-[#2f2b25]'
                       }`}
                     >
                       {c.title}
@@ -233,7 +233,7 @@ export default function Sidebar({
                       <button
                         onClick={() => onStopAgent(runner.requestId)}
                         title={`Pi is working in ${runner.workspace} (${runner.seconds}s). Click to stop this session.`}
-                        className="mr-0.5 grid h-6 w-6 shrink-0 place-items-center rounded text-[#7ee0a1] transition hover:bg-white/10"
+                        className="mr-0.5 grid h-6 w-6 shrink-0 place-items-center rounded text-[#1b6b3a] transition hover:bg-white/10"
                       >
                         <Square size={10} className="fill-current" />
                       </button>
@@ -250,7 +250,7 @@ export default function Sidebar({
                   {menuId === c.id && (
                     <>
                       <div className="fixed inset-0 z-20" onClick={() => setMenuId(null)} />
-                      <div className="absolute right-1 top-[30px] z-30 w-[168px] overflow-hidden rounded-xl border border-[#2c2c2c] bg-[#1e1e1e] py-1 shadow-2xl">
+                      <div className="absolute right-1 top-[30px] z-30 w-[168px] overflow-hidden rounded-none border border-[#e9e7e0] bg-[#edebe5] py-1 shadow-2xl">
                         <button
                           onClick={() => {
                             setEditingId(c.id)
@@ -275,7 +275,7 @@ export default function Sidebar({
                             onDelete(c.id)
                             setMenuId(null)
                           }}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-[#ff8b8b] hover:bg-white/[.08]"
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-[#a81313] hover:bg-white/[.08]"
                         >
                           <Trash2 size={13} /> Delete
                         </button>
@@ -290,13 +290,13 @@ export default function Sidebar({
       </div>
 
       {/* footer */}
-      <div className="border-t border-[#1b1b1b] p-2">
-        <div className="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
-          <div className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#7a5cff] to-[#2f6feb] text-[11px] font-semibold text-white">
+      <div className="border-t border-[#edebe5] p-2">
+        <div className="flex items-center gap-2.5 rounded-none px-2 py-1.5">
+          <div className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#f7e4e2] to-[#e61919] text-[11px] font-semibold text-[#111111]">
             {(host || 'Z').charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1 leading-tight">
-            <div className="truncate text-[13px] text-[#e6e6e6]" title={config.baseUrl}>
+            <div className="truncate text-[13px] text-[#16130f]" title={config.baseUrl}>
               {host || 'Not connected'}
             </div>
             <div className="truncate text-[11px] text-faint">{config.model || 'No model selected'}</div>
@@ -304,7 +304,7 @@ export default function Sidebar({
           <button
             title="Settings"
             onClick={onOpenSettings}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition hover:bg-white/[.08] hover:text-ink"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-none text-muted transition hover:bg-white/[.08] hover:text-ink"
           >
             <Settings size={16} />
           </button>

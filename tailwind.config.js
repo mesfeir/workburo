@@ -4,19 +4,22 @@ export default {
   theme: {
     extend: {
       colors: {
-        sidebar: '#0d0d0d',
-        canvas: '#000000',
-        panel: '#191919',
-        pill: '#2f2f2f',
-        bubble: '#2f2f2f',
-        hair: '#2a2a2a',
-        ink: '#ececec',
-        muted: '#a8a8a8',
-        faint: '#6e6e6e',
-        accent: '#2f6feb',
+        // Paper blueprint: unbleached paper, carbon ink, one hazard red.
+        sidebar: '#EAE8E1',
+        canvas: '#F4F4F0',
+        panel: '#EFEDE7',
+        pill: '#DDD9D0',
+        bubble: '#E4E1D9',
+        hair: '#C9C5BA',
+        ink: '#111111',
+        muted: '#4A463D',
+        faint: '#6E6A60',
+        accent: '#E61919',
       },
       fontFamily: {
-        sans: ['Segoe UI Variable Text', 'Segoe UI', 'system-ui', 'sans-serif'],
+        sans: ['Inter', 'Segoe UI', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'Cascadia Mono', 'Consolas', 'monospace'],
+        display: ['Archivo Black', 'Inter', 'system-ui', 'sans-serif'],
       },
       keyframes: {
         'fade-up': {

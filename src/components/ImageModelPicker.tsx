@@ -123,7 +123,7 @@ export default function ImageModelPicker({
         onClick={onConfigure}
         data-image-model-off
         title="Image generation is switched off — turn it on in Settings → Images"
-        className="flex cursor-default items-center gap-1.5 rounded-lg px-2 py-1.5 text-[15px] text-[#6f6f6f]"
+        className="flex cursor-default items-center gap-1.5 rounded-none px-2 py-1.5 text-[15px] text-[#5a564d]"
       >
         <ImageIcon size={15} />
         <span>No image model</span>
@@ -141,7 +141,7 @@ export default function ImageModelPicker({
             ? `Image model: ${current}${priceOf(current) ? ` · ${priceOf(current)}` : ''}`
             : 'Choose the model that draws pictures'
         }
-        className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[15px] text-[#d9d9d9] transition hover:bg-white/[.07]"
+        className="flex items-center gap-1.5 rounded-none px-2 py-1.5 text-[15px] text-[#1e1b17] transition hover:bg-white/[.07]"
       >
         <ImageIcon size={15} className="shrink-0 text-faint" />
         <span className="max-w-[210px] truncate">{current ? short(current) : 'Choose image model'}</span>
@@ -154,8 +154,8 @@ export default function ImageModelPicker({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-[38px] z-40 w-[460px] overflow-hidden rounded-2xl border border-[#2c2c2c] bg-[#1c1c1c] shadow-2xl">
-          <div className="flex items-center gap-2 border-b border-[#2a2a2a] px-3 py-2">
+        <div className="absolute left-0 top-[38px] z-40 w-[460px] overflow-hidden rounded-none border border-[#e9e7e0] bg-[#edebe5] shadow-2xl">
+          <div className="flex items-center gap-2 border-b border-[#e9e7e0] px-3 py-2">
             <Search size={14} className="text-faint" />
             <input
               autoFocus
@@ -169,7 +169,7 @@ export default function ImageModelPicker({
 
           <div className="max-h-[340px] overflow-y-auto py-1">
             {error ? (
-              <div className="px-3 py-3 text-[13px] text-[#ffb3b3]">{error}</div>
+              <div className="px-3 py-3 text-[13px] text-[#a81313]">{error}</div>
             ) : list.length === 0 ? (
               <div className="px-3 py-3 text-[13px] text-faint">
                 {loading ? 'Loading fal’s catalogue…' : 'No image models matched.'}
@@ -202,9 +202,9 @@ export default function ImageModelPicker({
             )}
           </div>
 
-          <div className="flex items-center justify-between gap-2 border-t border-[#2a2a2a] px-3 py-2 text-[11.5px] text-faint">
+          <div className="flex items-center justify-between gap-2 border-t border-[#e9e7e0] px-3 py-2 text-[11.5px] text-faint">
             <span>Prices are fal’s own rates for the size selected in Settings → Images.</span>
-            <button onClick={onConfigure} className="shrink-0 text-[#6ea8ff] hover:underline">
+            <button onClick={onConfigure} className="shrink-0 text-[#c41414] hover:underline">
               Image settings
             </button>
           </div>

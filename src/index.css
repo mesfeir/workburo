@@ -1,10 +1,35 @@
+/* Paper blueprint faces, bundled rather than linked: the app's CSP is default-src 'self', so a
+   webfont CDN is blocked in the real window. These are the variable faces, so every weight the
+   interface asks for is a real one rather than a synthesised bold. */
+@font-face {
+  font-family: 'Archivo Black';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./assets/fonts/ArchivoBlack.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('./assets/fonts/Inter.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('./assets/fonts/JetBrainsMono.woff2') format('woff2');
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    color-scheme: dark;
+    color-scheme: light;
   }
 
   html,
@@ -20,10 +45,10 @@
     font-size: 15px;
   }
 
-  /* thin dark scrollbars, ChatGPT-style */
+  /* thin ink scrollbars */
   * {
     scrollbar-width: thin;
-    scrollbar-color: #3a3a3a transparent;
+    scrollbar-color: #bfbbb0 transparent;
   }
   *::-webkit-scrollbar {
     width: 10px;
@@ -32,19 +57,25 @@
   *::-webkit-scrollbar-track {
     background: transparent;
   }
+  /* the theme owns the scrollbar: no native arrow buttons */
+  *::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
+  }
   *::-webkit-scrollbar-thumb {
-    background-color: #3a3a3a;
+    background-color: #bfbbb0;
     border-radius: 999px;
     border: 3px solid transparent;
     background-clip: content-box;
   }
   *::-webkit-scrollbar-thumb:hover {
-    background-color: #555;
+    background-color: #9a958a;
     background-clip: content-box;
   }
 
   ::selection {
-    background: #2f6feb66;
+    background: #e6191933;
   }
 
   textarea,
@@ -63,6 +94,17 @@
   .titlebar-space {
     /* keep clear of the native window buttons drawn by titleBarOverlay */
     padding-right: 148px;
+  }
+  /* graph paper: a faint 24px grid, the substrate the whole interface sits on */
+  .paper-grid {
+    background-image: linear-gradient(to right, rgba(17, 17, 17, 0.045) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(17, 17, 17, 0.045) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+  /* every uppercase micro-label is a drafted annotation, so it sets in mono */
+  .uppercase {
+    font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+    letter-spacing: 0.08em;
   }
 }
 
@@ -107,10 +149,10 @@
   @apply border-l-2 border-hair pl-4 my-4 text-muted;
 }
 .prose-zen a {
-  @apply text-[#6ea8ff] underline underline-offset-2 decoration-[#6ea8ff55] hover:decoration-[#6ea8ff];
+  @apply text-[#c41414] underline underline-offset-2 decoration-[#c4141455] hover:decoration-[#c41414];
 }
 .prose-zen strong {
-  @apply font-semibold text-white;
+  @apply font-semibold text-ink;
 }
 .prose-zen hr {
   @apply my-6 border-hair;
@@ -126,10 +168,10 @@
   @apply bg-panel font-semibold;
 }
 .prose-zen code:not(pre code) {
-  @apply rounded bg-[#ffffff14] px-1.5 py-0.5 text-[13.5px] font-mono text-[#e8e8e8];
+  @apply rounded-none border border-hair bg-[#e4e1d9] px-1.5 py-0.5 text-[13.5px] font-mono text-[#16130f];
 }
 .prose-zen pre {
-  @apply my-4 overflow-hidden rounded-xl border border-hair bg-[#0b0b0b];
+  @apply my-4 overflow-hidden rounded-none border border-hair bg-[#EFEDE7];
 }
 .prose-zen pre code {
   @apply block overflow-x-auto p-4 text-[13px] leading-[1.6] font-mono;
@@ -162,9 +204,9 @@
   width: 42px;
   flex: none;
   overflow: hidden;
-  border-radius: 11px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: linear-gradient(135deg, #1d1d24 0%, #2a2a34 50%, #1d1d24 100%);
+  border-radius: 0;
+  border: 1px solid rgba(17, 17, 17, 0.12);
+  background: linear-gradient(135deg, #EDEBE5 0%, #E2DFD7 50%, #EDEBE5 100%);
 }
 .drawing-tile::after {
   content: '';
@@ -173,8 +215,8 @@
   background: linear-gradient(
     100deg,
     transparent 20%,
-    rgba(255, 255, 255, 0.16) 45%,
-    rgba(255, 255, 255, 0.05) 55%,
+    rgba(17, 17, 17, 0.16) 45%,
+    rgba(17, 17, 17, 0.05) 55%,
     transparent 80%
   );
   transform: translateX(-100%);
@@ -188,12 +230,12 @@
 }
 .drawing-title {
   font-size: 13.5px;
-  color: #e8e8e8;
+  color: #16130f;
   animation: breathe 2.4s ease-in-out infinite;
 }
 .drawing-phase {
   font-size: 11.5px;
-  color: var(--muted-foreground, #8a8a8a);
+  color: var(--muted-foreground, #5c584f);
 }
 @keyframes sweep {
   to {
