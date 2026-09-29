@@ -74,6 +74,13 @@ check('the drawing tool can be pointed at a picture', () => {
   )
 })
 
+check('the drawing tool cannot choose its own endpoint either', () => {
+  const params = REGISTRY.generate_image.schema.function.parameters
+  // the picture is drawn with whatever the user picked in the bar; a model that could name its own
+  // would make the same request produce a different-looking picture depending on which door it came in
+  assert.ok(!params.properties.model, 'there should be no model argument')
+})
+
 check('toolsEnabled is the only master switch — an unset one means on', () => {
   assert.ok(names({ toolsEnabled: true }).length > 0)
   assert.strictEqual(names({ toolsEnabled: undefined }).length, ALL_TOOLS.length)
@@ -144,6 +151,16 @@ const drawOpts = (over = {}) => ({
   check('a reference that cannot be found says what is there, so the next try can name it', () => {
     assert.strictEqual(calls.length, 0, 'nothing should have been drawn')
     assert.match(String(miss.error), /shot\.png/, `should list what exists, said "${miss.error}"`)
+  })
+
+  calls.length = 0
+  await REGISTRY.generate_image.run({ prompt: 'a duck', model: 'fal-ai/something-else' }, drawOpts())
+  check('and the model cannot swap the endpoint out from under the user’s pick', () => {
+    assert.strictEqual(
+      calls[0].model,
+      'fal-ai/flux-2/klein/4b/base',
+      `the picked model should win, got "${calls[0].model}"`,
+    )
   })
 
   const noKey = await REGISTRY.generate_image.run(

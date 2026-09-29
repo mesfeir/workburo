@@ -316,9 +316,11 @@ async function generateImage(args, opts = {}) {
     }
   }
 
-  const model = String(
-    (reference ? cfg.editModel || args.model || cfg.model : args.model || cfg.model) || '',
-  ).trim()
+  // The picture is made with the model the user chose in the bar — the same one the Image switch
+  // uses — never one the model picks for itself. Letting the tool name its own model meant a picture
+  // asked for in words could come back from a different endpoint than the one on screen, which is
+  // not "the same tool" however much else matched. An edit uses the edit endpoint instead.
+  const model = String((reference ? cfg.editModel || cfg.model : cfg.model) || '').trim()
   if (!model) return { ok: false, error: 'No fal.ai model is selected. Pick one in Settings → Images.' }
 
   const count = Math.min(Math.max(Number(args.count) || 1, 1), 4)
@@ -510,12 +512,8 @@ const REGISTRY = {
               enum: falImages.SIZE_PRESETS.map((p) => p.id),
               description: 'Canvas shape. Defaults to what the user picked in Settings.',
             },
-            model: {
-              type: 'string',
-              description:
-                'Optional fal.ai model id to draw with, e.g. "fal-ai/flux/schnell". Defaults to the ' +
-                'model the user selected.',
-            },
+            // No `model` argument: the picture is drawn with whatever the user picked in the bar, so
+            // the two doors cannot disagree about which endpoint made it.
           },
           required: ['prompt'],
         },
