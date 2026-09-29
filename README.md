@@ -165,6 +165,10 @@ is not finished is disabled and labelled *coming soon*, never stubbed out to loo
   composer, so a brief burst of agentic work is two clicks away instead of a mode you commit to.
   Beside the input they crowded the textarea out at narrow widths until there was nowhere left to
   type.
+- **Several agent sessions at once.** Every chat runs its own Pi session, with its own folder and its
+  own provider config, so two of them can work at the same time without overwriting each other. A
+  chat with a session running shows a stop button in the sidebar, and the composer shows the folder
+  that chat works in, one click from changing it.
 - **The input rail.** Small ticks down the right edge, one per message you sent. Hover one to preview
   it, click it to jump back to that point in the conversation. It appears only when the transcript
   actually scrolls, and sits beside the scrollbar rather than over it.
@@ -367,8 +371,6 @@ ZEN_SELFTEST_KEY=sk-... npx electron . --capture
   hosted fal.ai was chosen for the first cut. The numbers and the design for a local sidecar are in
   [`docs/image-generation.md`](docs/image-generation.md). Local means a model download with its
   encoder and VAE, so it is deliberately not the first thing shipped.
-- **Concurrent agent sessions.** Agent mode runs one session at a time today. Running several at once,
-  each with its own workspace, is designed but not built.
 - **MCP servers.** The client is designed and the protocol revision is pinned, but nothing is wired in
   yet.
 - **Encrypted key storage** with Windows DPAPI.

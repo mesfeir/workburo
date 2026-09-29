@@ -15,8 +15,9 @@ import {
   Check,
   X,
   Pin,
+  Square,
 } from 'lucide-react'
-import type { Conversation, Config } from '../types'
+import type { Conversation, Config, RunningSession } from '../types'
 
 function NavRow({
   icon,
@@ -57,6 +58,8 @@ export default function Sidebar({
   onOpenSettings,
   onOpenImages,
   onCollapse,
+  agentSessions,
+  onStopAgent,
 }: {
   conversations: Conversation[]
   activeId: string | null
@@ -69,6 +72,9 @@ export default function Sidebar({
   onOpenSettings: () => void
   onOpenImages: () => void
   onCollapse: () => void
+  /** agent sessions running now — a chat with one gets a stop button in its row */
+  agentSessions: RunningSession[]
+  onStopAgent: (requestId: string) => void
 }) {
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
@@ -220,6 +226,19 @@ export default function Sidebar({
                       {c.title}
                     </span>
                   </button>
+                  {(() => {
+                    const runner = agentSessions.find((s) => s.conversationId === c.id)
+                    if (!runner) return null
+                    return (
+                      <button
+                        onClick={() => onStopAgent(runner.requestId)}
+                        title={`Pi is working in ${runner.workspace} (${runner.seconds}s). Click to stop this session.`}
+                        className="mr-0.5 grid h-6 w-6 shrink-0 place-items-center rounded text-[#7ee0a1] transition hover:bg-white/10"
+                      >
+                        <Square size={10} className="fill-current" />
+                      </button>
+                    )
+                  })()}
                   <button
                     onClick={() => setMenuId(menuId === c.id ? null : c.id)}
                     className={`mr-1 grid h-6 w-6 shrink-0 place-items-center rounded text-muted transition hover:bg-white/10 hover:text-ink ${

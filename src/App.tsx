@@ -19,6 +19,7 @@ import type {
   Source,
   StoreShape,
   ToolActivity,
+  RunningSession,
 } from './types'
 import type { Speed } from './types'
 import type { HotkeyStatus } from './global'
@@ -204,6 +205,25 @@ export default function App() {
   }, [settingsOpen, refreshAgent])
 
   const agentMode = Boolean(config.agent?.enabled) && agentReady
+
+  // Which agent sessions are running, so that several at once are visible and any one of them can
+  // be stopped. The main process tells this list rather than being asked, so a session started in
+  // another chat appears here too.
+  const [agentSessions, setAgentSessions] = useState<RunningSession[]>([])
+  useEffect(() => {
+    window.zen.pi.sessions().then(setAgentSessions).catch(() => {})
+    return window.zen.pi.onSessions(setAgentSessions)
+  }, [])
+
+  const activeSession = agentSessions.find((s) => s.conversationId === activeId) || null
+  const stopAgentSession = useCallback((requestId: string) => {
+    window.zen.pi.stop(requestId)
+  }, [])
+  const pickAgentWorkspace = useCallback(async () => {
+    const dir = await window.zen.pi.pickWorkspace()
+    if (!dir) return
+    setConversations((prev) => prev.map((c) => (c.id === activeId ? { ...c, agentWorkspace: dir } : c)))
+  }, [activeId])
 
   /* ---------------------------------------------------------------- load */
 
@@ -471,7 +491,7 @@ export default function App() {
               conversationId: convId,
               prompt: history[history.length - 1]?.content || '',
               model: cfg.model,
-              workspace: cfg.agent?.workspace,
+              workspace: active?.agentWorkspace || cfg.agent?.workspace,
             })
           : window.zen.chat.start({
               requestId,
@@ -1159,6 +1179,8 @@ export default function App() {
           )}
           <div className={compact ? 'fixed left-0 top-0 z-30 h-full shadow-2xl' : 'relative z-10 shrink-0'}>
             <Sidebar
+            agentSessions={agentSessions}
+            onStopAgent={stopAgentSession}
               conversations={conversations}
               activeId={activeId}
               config={config}
@@ -1267,6 +1289,9 @@ export default function App() {
         />
 
         <Composer
+        agentSession={activeSession}
+        onStopAgent={stopAgentSession}
+        onPickAgentWorkspace={pickAgentWorkspace}
           value={input}
           onChange={setInput}
           onSend={submit}
@@ -1295,7 +1320,7 @@ export default function App() {
             })
           }
           agentAvailable={agentReady}
-          agentWorkspace={config.agent?.workspace}
+          agentWorkspace={active?.agentWorkspace || config.agent?.workspace}
           modelLabel={modelLabel}
         />
       </main>

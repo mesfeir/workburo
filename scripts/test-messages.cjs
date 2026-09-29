@@ -186,16 +186,49 @@ async function live () {
   const inWords = await post(toChatMessages(messages, cfg.systemPrompt || '', 'no'))
   console.log(`        picture sent: HTTP ${withPicture.status} · picture described in words: HTTP ${inWords.status}`)
 
-  check('9. a conversation holding a picture answers when the picture is described, not sent', () => {
-    assert(inWords.status === 200, `HTTP ${inWords.status} — ${inWords.detail}`)
-    return true
-  })
+  // A rate limit upstream is not a failure of this code. Free models run on shared pools that say
+  // "temporarily rate-limited upstream" and mean it, so this reports that the check could not run
+  // instead of turning a busy pool into a red build. Without this, an outage and a real regression
+  // look identical.
+  // An upstream rate limit is not a failure of this code: free models run on shared pools that say
+  // "temporarily rate-limited upstream" and mean it. Keyed on the request this check asserts,
+  // because the picture request legitimately answers 400 when a model refuses images, and that is
+  // not an outage. Check 10 below is mapping, so it runs either way.
+  const upstreamBusy = (status) => status === 429 || status === 502 || status === 503
+  if (upstreamBusy(inWords.status)) {
+    console.log(
+      `  SKIP  9 — ${cfg.model} is rate-limited upstream right now (HTTP ${inWords.status}). ` +
+        'The mapping it covers is provider-independent and is tested above.'
+    )
+  } else {
+    check('9. a conversation holding a picture answers when the picture is described, not sent', () => {
+      assert(inWords.status === 200, `HTTP ${inWords.status} — ${inWords.detail}`)
+      return true
+    })
+  }
+
+  // This one is mapping, not provider behaviour, so it is built from a conversation of its own.
+  // Asserting on whatever the user's newest chat happens to hold made the check fail for a chat
+  // whose only picture is one the assistant drew, which by design is never sent to a model.
+  const ownConversation = [
+    { id: 'u1', role: 'user', content: 'what is this?', images: [{ url: 'data:image/png;base64,AAAA', name: 'shot.png', kind: 'image' }], createdAt: 1 },
+    { id: 'a1', role: 'assistant', content: 'A screenshot.', createdAt: 2 },
+  ]
 
   check('10. pictures only go to a model that reads them', () => {
-    if (withPicture.status === 200) return true // this model does read pictures, so sending it one is right
-    const words = toChatMessages(messages, '', 'no')
-    assert(!words.some((m) => hasImagePart(m)), 'a model that refused the picture must be sent none')
-    assert(hasImagePart(toChatMessages(messages, '', 'yes')[0]), 'the words path is the fallback, not the only path')
+    assert(
+      toChatMessages(ownConversation, '', 'yes').some((m) => hasImagePart(m)),
+      'with vision on, a model that reads pictures must be sent the picture itself'
+    )
+    assert(
+      !toChatMessages(ownConversation, '', 'no').some((m) => hasImagePart(m)),
+      'with vision off, a model that cannot read a picture must be sent none'
+    )
+    // and the words path still exists for the model that refused it
+    assert(
+      toChatMessages(ownConversation, '', 'no').some((m) => /shot\.png|what is this/.test(JSON.stringify(m))),
+      'the conversation itself must survive being described instead of illustrated'
+    )
     return true
   })
 }

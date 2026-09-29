@@ -349,7 +349,66 @@ async function live () {
     assert(!/TANGERINE/i.test(r3.text), 'memory leaked from one conversation into another')
     return true
   })
+
+  /* The point of running several sessions at once: two turns that overlap in time, each in its own
+     folder with its own provider config. Before this, both wrote one shared models.json, and the
+     second turn silently ran on the first turn's model. B starting before A finishes is the
+     evidence that they really did run at the same time rather than one after the other. */
+  const wsA = fs.mkdtempSync(path.join(os.tmpdir(), 'zen-two-a-'))
+  const wsB = fs.mkdtempSync(path.join(os.tmpdir(), 'zen-two-b-'))
+  const stamp = Date.now()
+  const idA = `two-a-${stamp}`
+  const idB = `two-b-${stamp}`
+  const dirA = pi.sessionAgentDirFor(root, idA)
+  const dirB = pi.sessionAgentDirFor(root, idB)
+  pi.writeConfig({ agentDir: dirA, baseUrl, models: pi.modelsFor([{ id: model, reasoning: true }]) })
+  pi.writeConfig({ agentDir: dirB, baseUrl, models: pi.modelsFor([{ id: model, reasoning: true }]) })
+
+  let endA = 0
+  let endB = 0
+  const startA = Date.now()
+  const hA = pi.runTurn({
+    piRoot: root, workspace: wsA, sessionDir: pi.sessionDirFor(root, idA), agentDir: dirA,
+    model, relayKey: apiKey, timeoutMs: 240000, onEvent: quiet,
+    prompt: 'Create a file called a.txt whose only line is A-DONE. Then reply with just DONE.'
+  })
+  const startB = Date.now()
+  const hB = pi.runTurn({
+    piRoot: root, workspace: wsB, sessionDir: pi.sessionDirFor(root, idB), agentDir: dirB,
+    model, relayKey: apiKey, timeoutMs: 240000, onEvent: quiet,
+    prompt: 'Create a file called b.txt whose only line is B-DONE. Then reply with just DONE.'
+  })
+  const [rrA, rrB] = await Promise.all([
+    hA.promise.then(r => { endA = Date.now(); return r }),
+    hB.promise.then(r => { endB = Date.now(); return r })
+  ])
+
+  check('17. two agent sessions run at the same time, not one after the other', () => {
+    assert(rrA.ok && rrB.ok, `a turn failed: ${(rrA.stderr || rrB.stderr || '').slice(-200)}`)
+    assert(startB < endA && startA < endB, 'the two turns did not overlap, so they did not run together')
+    console.log(`        A ${((endA - startA) / 1000).toFixed(1)}s · B ${((endB - startB) / 1000).toFixed(1)}s · overlapped by ${((Math.min(endA, endB) - Math.max(startA, startB)) / 1000).toFixed(1)}s`)
+    return true
+  })
+
+  check('18. each session works in its own folder and does not touch the other one', () => {
+    const a = fs.existsSync(path.join(wsA, 'a.txt')) ? fs.readFileSync(path.join(wsA, 'a.txt'), 'utf8').trim() : null
+    const b = fs.existsSync(path.join(wsB, 'b.txt')) ? fs.readFileSync(path.join(wsB, 'b.txt'), 'utf8').trim() : null
+    assert(a === 'A-DONE', `session A's file says ${JSON.stringify(a)}`)
+    assert(b === 'B-DONE', `session B's file says ${JSON.stringify(b)}`)
+    assert(!fs.existsSync(path.join(wsB, 'a.txt')), "session A's file appeared in session B's folder")
+    assert(!fs.existsSync(path.join(wsA, 'b.txt')), "session B's file appeared in session A's folder")
+    return true
+  })
+
+  check('19. each session kept its own provider config', () => {
+    const cfgA = fs.readFileSync(path.join(dirA, 'models.json'), 'utf8')
+    const cfgB = fs.readFileSync(path.join(dirB, 'models.json'), 'utf8')
+    assert(cfgA.includes(model) && cfgB.includes(model), 'a session lost the model it was told to use')
+    assert(dirA !== dirB, 'both sessions shared one agent dir')
+    return true
+  })
 }
+
 
 /* ---------------------------------- more than one agent session at a time */
 // Every session gets its own agent dir, because Pi writes its provider config into that directory.
@@ -404,6 +463,38 @@ check('two sessions keep two separate provider configs', () => {
   if (!/model-one/.test(readA)) throw new Error('the first session lost its own model')
   if (!/model-two/.test(readB)) throw new Error('the second session lost its own model')
   if (/model-two/.test(readA)) throw new Error('the second write reached into the first session')
+})
+
+
+/* ------------------------- which folder a session works in, and what the window shows */
+const { pickWorkspace, sessionSummary } = require('../electron/agent-session.cjs')
+
+check('a session works in the folder the request names', () => {
+  if (pickWorkspace({ request: 'C:/one', conversation: 'C:/two', global: 'C:/three' }) !== 'C:/one') {
+    throw new Error('the request did not win')
+  }
+})
+check('a chat with its own folder overrides the global default', () => {
+  if (pickWorkspace({ conversation: 'C:/two', global: 'C:/three' }) !== 'C:/two') throw new Error('the chat folder was ignored')
+  if (pickWorkspace({ global: 'C:/three' }) !== 'C:/three') throw new Error('the fallback failed')
+})
+check('a blank or missing folder is skipped rather than used', () => {
+  if (pickWorkspace({ request: '   ', conversation: '', global: 'C:/three' }) !== 'C:/three') {
+    throw new Error('a blank folder was accepted')
+  }
+  if (pickWorkspace({}) !== '') throw new Error('nothing should resolve to nothing')
+})
+check('two sessions in two chats resolve to two different folders', () => {
+  const a = pickWorkspace({ conversation: 'C:/work-a', global: 'C:/default' })
+  const b = pickWorkspace({ conversation: 'C:/work-b', global: 'C:/default' })
+  if (a === b) throw new Error('both sessions were given the same folder')
+})
+check('a session summary carries what the window draws, and for how long it has run', () => {
+  const s = sessionSummary({ requestId: 'r1', conversationId: 'c1', title: 'Deploy notes', workspace: 'C:/a', model: 'm', startedAt: 1000 }, 7000)
+  if (s.seconds !== 6) throw new Error(`seconds came out as ${s.seconds}`)
+  if (s.title !== 'Deploy notes' || s.workspace !== 'C:/a') throw new Error('a field was lost')
+  const blank = sessionSummary({})
+  if (blank.seconds !== 0 || blank.title !== 'New chat') throw new Error('a blank summary must still be drawable')
 })
 
 live().then(() => {

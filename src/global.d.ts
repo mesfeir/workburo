@@ -152,6 +152,15 @@ export interface ZenApi {
     install: () => Promise<{ installed?: boolean; version?: string | null; busy?: boolean; error?: string }>
     uninstall: () => Promise<{ installed: boolean }>
     pickWorkspace: () => Promise<string | null>
+    /** the agent sessions running right now, so several at once are visible */
+    sessions: () => Promise<
+      { requestId: string; conversationId: string; title: string; workspace: string; model: string; startedAt: number; seconds: number }[]
+    >
+    onSessions: (
+      handler: (
+        list: { requestId: string; conversationId: string; title: string; workspace: string; model: string; startedAt: number; seconds: number }[],
+      ) => void,
+    ) => () => void
     openWorkspace: () => Promise<{ ok: boolean; error: string | null }>
     turn: (req: {
       requestId: string

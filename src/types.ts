@@ -105,7 +105,20 @@ export interface Conversation {
   createdAt: number
   updatedAt: number
   pinned?: boolean
+  /** the folder this chat's agent session works in, when it differs from the global default */
+  agentWorkspace?: string
   messages: ChatMessage[]
+}
+
+/** One agent session running right now. Several can run at the same time, one per chat. */
+export interface RunningSession {
+  requestId: string
+  conversationId: string
+  title: string
+  workspace: string
+  model: string
+  startedAt: number
+  seconds: number
 }
 
 export interface ModelInfo {

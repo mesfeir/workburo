@@ -74,6 +74,12 @@ contextBridge.exposeInMainWorld('zen', {
     openWorkspace: () => ipcRenderer.invoke('pi:openWorkspace'),
     turn: (req) => ipcRenderer.invoke('pi:turn', req),
     stop: (requestId) => ipcRenderer.invoke('pi:stop', { requestId }),
+    sessions: () => ipcRenderer.invoke('agent:sessions'),
+    onSessions: (listener) => {
+      const wrapped = (_e, list) => listener(list)
+      ipcRenderer.on('agent:sessions', wrapped)
+      return () => ipcRenderer.removeListener('agent:sessions', wrapped)
+    },
     onProgress: (handler) => {
       const listener = (_e, payload) => handler(payload)
       ipcRenderer.on('pi:progress', listener)

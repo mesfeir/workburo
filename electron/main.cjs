@@ -417,6 +417,11 @@ function agentModels (cfg, store) {
 }
 
 const activeAgentTurns = new Map()
+// requestId -> what the window needs in order to show a running session. The handles above are
+// kept separate because a handle has a kill() and this does not.
+const agentSessions = new Map()
+const sessionList = () => [...agentSessions.values()].map(m => sessionSummary(m))
+const broadcastSessions = () => sendToRenderer('agent:sessions', sessionList())
 let agentInstalling = false
 
 /** Pi's events, in the words the chat already knows how to render. */
@@ -504,7 +509,15 @@ async function runAgentTurn (req) {
   if (!pi.status(PI_ROOT()).installed) {
     return agentFail(requestId, 'Agent mode needs Pi installed. Add it in Settings → Agent.')
   }
-  const workspace = req.workspace || agent.workspace
+  // Which folder this session works in. The request wins, then the chat's own folder, then the
+  // global default. A chat can therefore point at its own folder, which is what makes running two
+  // sessions at once useful rather than confusing.
+  const conversation = (store.conversations || []).find(c => c.id === req.conversationId)
+  const workspace = pickWorkspace({
+    request: req.workspace,
+    conversation: conversation && conversation.agentWorkspace,
+    global: agent.workspace
+  })
   if (!workspace) {
     return agentFail(requestId, 'Agent mode needs a workspace folder. Choose one in Settings → Agent.')
   }
@@ -542,11 +555,22 @@ async function runAgentTurn (req) {
     }
   })
   activeAgentTurns.set(requestId, handle)
+  agentSessions.set(requestId, {
+    requestId,
+    conversationId: req.conversationId || '',
+    title: (conversation && conversation.title) || 'New chat',
+    workspace,
+    model: req.model || cfg.model,
+    startedAt: Date.now()
+  })
+  broadcastSessions()
   let result
   try {
     result = await handle.promise
   } finally {
     activeAgentTurns.delete(requestId)
+    agentSessions.delete(requestId)
+    broadcastSessions()
   }
   sendToRenderer('chat:event', { requestId, type: 'done' })
   return {
@@ -939,6 +963,7 @@ const { chatToolDefs, responsesToolDefs, executeTool, ALL_TOOLS, REGISTRY } = re
 const { toChatMessages, toResponsesInput } = require('./messages.cjs')
 // a generic provider error is not an explanation — see errors.cjs
 const { upstreamDetail, embeddedError } = require('./errors.cjs')
+const { pickWorkspace, sessionSummary } = require('./agent-session.cjs')
 
 // Pictures are a tool, not a mode: the model reaches for it as soon as the user
 // asks to see something. Saying so up front is what turns "show me what that
@@ -1776,6 +1801,8 @@ ipcMain.handle('pi:openWorkspace', async () => {
 })
 
 ipcMain.handle('pi:turn', (_e, req) => runAgentTurn(req))
+// which agent sessions are running right now, so several at once are visible and stoppable
+ipcMain.handle('agent:sessions', () => sessionList())
 
 ipcMain.handle('pi:stop', (_e, { requestId }) => {
   const h = activeAgentTurns.get(requestId)

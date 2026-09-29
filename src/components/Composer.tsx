@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { ArrowUp, Brain, FileText, Image as ImageIcon, Mic, Plus, Square, Terminal, X } from 'lucide-react'
-import type { Attachment, Speed } from '../types'
+import { ArrowUp, Brain, FileText, Image as ImageIcon, Mic, Plus, Square, Terminal, X, FolderOpen } from 'lucide-react'
+import type { RunningSession, Attachment, Speed } from '../types'
 
 /** What a document chip calls the file: the reader's own kind, in words a person would use. */
 function docLabel(d: { docKind?: string }) {
@@ -36,6 +36,9 @@ export default function Composer({
   onToggleAgent,
   agentAvailable,
   agentWorkspace,
+  agentSession,
+  onStopAgent,
+  onPickAgentWorkspace,
   modelLabel,
   disabled,
   focusNonce,
@@ -76,6 +79,9 @@ export default function Composer({
   agentAvailable: boolean
   /** shown in the tooltip, so the folder it may change is never a mystery */
   agentWorkspace?: string
+  agentSession?: RunningSession | null
+  onStopAgent: (requestId: string) => void
+  onPickAgentWorkspace: () => void
   modelLabel: string
   disabled?: boolean
 }) {
@@ -311,6 +317,34 @@ export default function Composer({
               <Terminal size={14} />
               Agent
             </button>
+
+            {agentMode && (
+              <button
+                onClick={onPickAgentWorkspace}
+                title={
+                  agentWorkspace
+                    ? `Pi works in ${agentWorkspace} for this chat. Click to choose another folder.`
+                    : 'Choose the folder Pi may work in for this chat'
+                }
+                className="flex h-8 max-w-[200px] items-center gap-1.5 rounded-full border border-white/15 px-2.5 text-[13px] text-[#cfcfcf] transition hover:bg-white/10"
+              >
+                <FolderOpen size={14} />
+                <span className="truncate">
+                  {agentWorkspace ? agentWorkspace.split(/[\\/]/).filter(Boolean).pop() : 'Folder'}
+                </span>
+              </button>
+            )}
+
+            {agentSession && (
+              <button
+                onClick={() => onStopAgent(agentSession.requestId)}
+                title={`Pi is working (${agentSession.seconds}s). Click to stop this session.`}
+                className="flex h-8 items-center gap-1.5 rounded-full border border-[#3f8f5f] bg-[#1d3a28] px-2.5 text-[13px] text-[#b6f0c8] transition hover:bg-[#24492f]"
+              >
+                <Square size={11} className="fill-current" />
+                Stop
+              </button>
+            )}
 
             <button
               onClick={onToggleThinking}
