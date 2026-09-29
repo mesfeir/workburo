@@ -12,6 +12,9 @@ const assert = require('node:assert')
 
 const { chatToolDefs, responsesToolDefs, ALL_TOOLS, REGISTRY } = require('../electron/tools.cjs')
 
+/** The three that reach into someone's real accounts; hidden unless switched on. */
+const APP_TOOLS = new Set(['list_connected_apps', 'search_app_tools', 'run_app_tool'])
+
 let passed = 0
 let failed = 0
 function check(name, fn) {
@@ -27,9 +30,19 @@ function check(name, fn) {
 
 const names = (cfg) => chatToolDefs(cfg).map((t) => t.function && t.function.name)
 
-check('every tool is advertised by default', () => {
-  const got = names({})
-  assert.deepStrictEqual(got.sort(), [...ALL_TOOLS].sort(), `got ${got.join(', ')}`)
+check('connected-app tools stay hidden until the user turns them on', () => {
+  const off = names({})
+  for (const t of ['list_connected_apps', 'search_app_tools', 'run_app_tool']) {
+    assert.ok(!off.includes(t), `${t} was advertised with connected apps switched off`)
+  }
+  const on = names({ apps: { enabled: true } })
+  for (const t of ['list_connected_apps', 'search_app_tools', 'run_app_tool']) {
+    assert.ok(on.includes(t), `${t} was not advertised with connected apps switched on`)
+  }
+})
+
+check('and the master switch still beats them', () => {
+  assert.deepStrictEqual(names({ toolsEnabled: false, apps: { enabled: true } }), [])
 })
 
 check('turning tools off advertises nothing at all', () => {
@@ -83,7 +96,9 @@ check('the drawing tool cannot choose its own endpoint either', () => {
 
 check('toolsEnabled is the only master switch — an unset one means on', () => {
   assert.ok(names({ toolsEnabled: true }).length > 0)
-  assert.strictEqual(names({ toolsEnabled: undefined }).length, ALL_TOOLS.length)
+  // the connected-app tools are deliberately absent until switched on, so they are not part of
+  // what an unset master switch turns on
+  assert.strictEqual(names({ toolsEnabled: undefined }).length, ALL_TOOLS.length - APP_TOOLS.size)
 })
 
 // "Unified" has to be checkable, not just claimed. main hands the image tool the very runner the

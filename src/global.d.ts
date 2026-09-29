@@ -64,6 +64,33 @@ export interface ZenApi {
     /** a dropped file's path on disk — Electron 32 removed File.path */
     pathFor: (file: File) => string
   }
+  apps: {
+    /** the Composio app catalogue; the key stays in main and never comes back to the page */
+    list: (query?: string) => Promise<{
+      ok: boolean
+      apps?: { slug: string; name: string; description: string; logo: string; noAuth: boolean; tools: number }[]
+      error?: string
+      needsKey?: boolean
+    }>
+    connections: () => Promise<{
+      ok: boolean
+      connections?: { id: string; app: string; status: string; reason: string; active: boolean }[]
+      error?: string
+      needsKey?: boolean
+    }>
+    /** starts a connection; main opens the returned URL in the real browser */
+    connect: (app: string) => Promise<{
+      ok: boolean
+      url?: string
+      accountId?: string
+      expiresAt?: string
+      error?: string
+      needsKey?: boolean
+    }>
+    status: (id: string) => Promise<{ ok: boolean; id?: string; status?: string; reason?: string; error?: string }>
+  }
+  /** open a web address in the user's browser; main refuses anything that is not http(s) */
+  openExternal: (url: string) => Promise<{ ok: boolean; error?: string }>
   tools: {
     list: () => Promise<{ name: string; label: string; describe: string }[]>
     probe: (searchUrl: string) => Promise<{

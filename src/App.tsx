@@ -70,6 +70,13 @@ const DEFAULTS: Config = {
     workspace: '',
     enabled: false,
   },
+  // connected apps: off, and no key. The user turns this on and connects an app themselves; until
+  // then the model is not even told these tools exist.
+  apps: {
+    enabled: false,
+    apiKey: '',
+    userId: '',
+  },
   imageGen: {
     enabled: false,
     provider: 'fal',

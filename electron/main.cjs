@@ -13,6 +13,7 @@ const {
   nativeImage,
   screen,
   globalShortcut,
+  shell,
 } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
@@ -920,6 +921,7 @@ const IMAGE_TOOL_NOTE =
 const pictures = require('./pictures.cjs')
 const files = require('./files.cjs')
 const documents = require('./documents.cjs')
+const composio = require('./composio.cjs')
 
 /**
  * The pictures the image tool may be pointed at. The model only ever *names* one ("last"), and main
@@ -1573,6 +1575,15 @@ ipcMain.handle('chat:start', async (event, req) => {
               }),
             onProgress: (p) => send({ type: 'image', value: { id: tc.id, ...p } }),
           },
+          // Connected apps, off unless the user turned them on. The client is built here so the
+          // Composio key never leaves main and the tools cannot see it.
+          apps: {
+            enabled: !!(cfg.apps && cfg.apps.enabled),
+            client:
+              cfg.apps && cfg.apps.enabled && cfg.apps.apiKey
+                ? composio.makeClient({ apiKey: cfg.apps.apiKey, userId: cfg.apps.userId })
+                : null,
+          },
         })
         for (const s of r.sources || []) {
           if (!allSources.some((x) => x.url === s.url)) allSources.push(s)
@@ -2056,6 +2067,76 @@ async function runImageJob({ key, model, prompt, count, size, imageUrl, imagesDi
     imageJobs -= 1
   }
 }
+
+/**
+ * Connected apps, from the settings pane.
+ *
+ * Every call builds the client from what is saved right now, so a key pasted in Settings works
+ * immediately rather than after a restart. The key is read in main and never handed to the page.
+ */
+function appsClient() {
+  const cfg = readStore().config || {}
+  const a = cfg.apps || {}
+  if (!a.apiKey) return null
+  return composio.makeClient({ apiKey: a.apiKey, userId: a.userId })
+}
+
+const NO_APPS_KEY = {
+  ok: false,
+  needsKey: true,
+  error: 'Add a Composio API key first — a project key starts with ak_.',
+}
+
+/**
+ * Open a link in the user's real browser.
+ *
+ * Only http(s), decided here rather than in the page: a URL that arrived from anywhere — a model, an
+ * API response, a document — must not be able to launch something local.
+ */
+ipcMain.handle('open:external', async (_e, { url } = {}) => {
+  const u = String(url || '')
+  if (!/^https?:\/\//i.test(u)) return { ok: false, error: 'That is not a web address.' }
+  try {
+    await shell.openExternal(u)
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: (err && err.message) || 'Could not open that link.' }
+  }
+})
+
+ipcMain.handle('apps:list', async (_e, { query } = {}) => {
+  const c = appsClient()
+  if (!c) return NO_APPS_KEY
+  return c.listApps(String(query || '').trim())
+})
+
+ipcMain.handle('apps:connections', async () => {
+  const c = appsClient()
+  if (!c) return NO_APPS_KEY
+  return c.connections()
+})
+
+ipcMain.handle('apps:connect', async (_e, { app } = {}) => {
+  const c = appsClient()
+  if (!c) return NO_APPS_KEY
+  const r = await c.startConnection(String(app || '').trim().toLowerCase())
+  // The link is opened here, in main, so the page is never handed a URL to open on its own — and if
+  // opening fails the URL is still returned, so the user can copy it.
+  if (r.ok && r.url) {
+    try {
+      shell.openExternal(r.url)
+    } catch {
+      /* the link goes back to the renderer either way */
+    }
+  }
+  return r
+})
+
+ipcMain.handle('apps:status', async (_e, { id } = {}) => {
+  const c = appsClient()
+  if (!c) return NO_APPS_KEY
+  return c.accountStatus(String(id || ''))
+})
 
 /**
  * The ＋ button and drag-and-drop both land here.

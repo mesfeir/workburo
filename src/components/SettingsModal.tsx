@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import AppsPane from './AppsPane'
 import {
   Check,
   Eye,
@@ -26,7 +27,7 @@ const INSTRUCTION_PRESETS = [
   'Ask before assuming.',
 ]
 
-type Tab = 'general' | 'api' | 'chat' | 'models' | 'images' | 'tools' | 'agent' | 'about'
+type Tab = 'general' | 'api' | 'chat' | 'models' | 'images' | 'apps' | 'tools' | 'agent' | 'about'
 
 export type SettingsTab = Tab
 
@@ -36,6 +37,7 @@ const TAB_LABELS: Record<Tab, string> = {
   chat: 'Chat',
   models: 'Models',
   images: 'Images',
+  apps: 'Connected apps',
   tools: 'Tools',
   agent: 'Agent',
   about: 'About',
@@ -589,7 +591,7 @@ export default function SettingsModal({
 
         <div className="flex min-h-0 flex-1">
           <div className="w-[150px] shrink-0 border-r border-[#2a2a2a] p-2">
-            {(['general', 'api', 'chat', 'models', 'images', 'tools', 'agent', 'about'] as Tab[]).map((t) => (
+            {(['general', 'api', 'chat', 'models', 'images', 'apps', 'tools', 'agent', 'about'] as Tab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -1111,6 +1113,8 @@ export default function SettingsModal({
                 )}
               </div>
             )}
+
+            {tab === 'apps' && <AppsPane config={config} onConfig={onConfig} />}
 
             {tab === 'tools' && (
               <div className="space-y-5">

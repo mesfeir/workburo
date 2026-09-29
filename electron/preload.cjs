@@ -34,6 +34,16 @@ contextBridge.exposeInMainWorld('zen', {
       }
     },
   },
+  apps: {
+    /** the Composio app catalogue; the key lives in main and never comes back here */
+    list: (query) => ipcRenderer.invoke('apps:list', { query }),
+    connections: () => ipcRenderer.invoke('apps:connections'),
+    /** starts a connection and opens the URL Composio returned, in the real browser */
+    connect: (app) => ipcRenderer.invoke('apps:connect', { app }),
+    status: (id) => ipcRenderer.invoke('apps:status', { id }),
+  },
+  /** open a web address in the user's browser; main refuses anything that is not http(s) */
+  openExternal: (url) => ipcRenderer.invoke('open:external', { url }),
   tools: {
     list: () => ipcRenderer.invoke('tools:list'),
     probe: (searchUrl) => ipcRenderer.invoke('tools:probe', { searchUrl }),

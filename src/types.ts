@@ -143,6 +143,20 @@ export interface AgentConfig {
   enabled: boolean
 }
 
+/**
+ * Connected apps (Composio).
+ *
+ * `userId` is this app's own stable name for the person: Composio ties connections to it, so it has
+ * to survive restarts. Generated once, never shown.
+ */
+export interface AppsConfig {
+  /** the master switch for the app tools; off means the model never even sees them */
+  enabled: boolean
+  /** Composio project key (ak_…); stored locally, sent only to Composio */
+  apiKey: string
+  userId: string
+}
+
 export interface Config {
   baseUrl: string
   apiKey: string
@@ -175,6 +189,8 @@ export interface Config {
   searchUrl: string
   /** fal.ai image generation (hosted; local models are not wired in yet) */
   imageGen: ImageGenConfig
+  /** connected apps via Composio; off unless switched on */
+  apps?: AppsConfig
   /** agent mode: Pi runs in the backend with hands, in a folder the user picks */
   agent: AgentConfig
   profiles: Profile[]

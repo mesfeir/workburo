@@ -522,7 +522,176 @@ const REGISTRY = {
         },
       },
     },
-  },
+
+    },
+    /* ---------------------------------------------------- connected apps (Composio) */
+
+    list_connected_apps: {
+      label: 'Connected apps',
+      describe: "See which of the user's apps are connected and usable.",
+      run: connectedApps,
+      schema: {
+        type: 'function',
+        function: {
+          name: 'list_connected_apps',
+          description:
+            "List the apps the user has connected (Gmail, Slack, Notion, Drive, and so on) and whether " +
+            'each one is usable right now. Call this before assuming you can do something in one of ' +
+            "their accounts. If nothing is connected, tell them where to connect it — do not pretend.",
+          parameters: { type: 'object', properties: {} },
+        },
+      },
+    },
+
+    search_app_tools: {
+      label: 'Find app actions',
+      describe: 'Look up the actions a connected app offers, with the arguments each needs.',
+      run: searchAppTools,
+      schema: {
+        type: 'function',
+        function: {
+          name: 'search_app_tools',
+          description:
+            "Find the exact action to call in one of the user's connected apps. Give the app slug and " +
+            'what they want to do ("send", "create event", "read unread") and this returns the tool ' +
+            'slugs with the arguments each expects. Call this before run_app_tool so the tool slug and ' +
+            'its arguments are right.',
+          parameters: {
+            type: 'object',
+            properties: {
+              app: { type: 'string', description: 'The app slug, e.g. "gmail", "slack", "notion"' },
+              query: { type: 'string', description: 'What the user wants to do, in a word or two' },
+            },
+            required: ['app'],
+          },
+        },
+      },
+    },
+
+    run_app_tool: {
+      label: 'Run an app action',
+      describe: "Run an action in one of the user's connected accounts.",
+      run: runAppTool,
+      schema: {
+        type: 'function',
+        function: {
+          name: 'run_app_tool',
+          description:
+            "Run one action in the user's connected account — send the email, create the event, post " +
+            'the message. Get the exact tool slug and argument names from search_app_tools first. This ' +
+            'really acts in their account, so say plainly what you did and report exactly what the app ' +
+            'returned; never claim something was sent or posted unless the result says so.',
+          parameters: {
+            type: 'object',
+            properties: {
+              tool: { type: 'string', description: 'The exact tool slug, e.g. "GMAIL_SEND_EMAIL"' },
+              arguments: {
+                type: 'object',
+                description: 'The arguments for that action, named as search_app_tools showed them',
+              },
+            },
+            required: ['tool'],
+          },
+        },
+      },
+    },
+  }
+
+/* ------------------------------------------------- connected apps (Composio) */
+
+/**
+ * The tools that reach into a person's real accounts.
+ *
+ * Off unless the user switches them on. Everything else in this registry reads the world (a search,
+ * a headline, a drawing); these can send an email, post a message or create a file in someone's live
+ * account, so they are the one group that does not come along by default.
+ *
+ * The account id is filled in down in composio.cjs — the model names an app and a tool, never an
+ * account, so it cannot invent one.
+ */
+const APP_TOOLS = new Set(['list_connected_apps', 'search_app_tools', 'run_app_tool'])
+
+async function connectedApps(args, opts = {}) {
+  const client = opts.apps && opts.apps.client
+  if (!client) {
+    return {
+      ok: false,
+      error:
+        'Connected apps are not switched on. Turn them on in Settings → Connected apps, and add a Composio API key.',
+    }
+  }
+  const r = await client.connections()
+  if (!r.ok) return { ok: false, error: r.error }
+  if (!r.connections.length) {
+    return {
+      ok: true,
+      sources: [],
+      text:
+        'No apps are connected yet. The user has to connect them in Settings → Connected apps — ' +
+        'nothing can be done in their accounts until they do. Tell them that rather than guessing.',
+    }
+  }
+  const lines = r.connections.map(
+    (c) => `- ${c.app}: ${c.status}${c.active ? ' (usable)' : ' (not usable)'}${c.reason ? ` — ${c.reason}` : ''}`,
+  )
+  return {
+    ok: true,
+    sources: [],
+    text: `Apps connected right now:\n${lines.join('\n')}\nOnly ACTIVE ones can run actions.`,
+  }
+}
+
+async function searchAppTools(args, opts = {}) {
+  const client = opts.apps && opts.apps.client
+  if (!client) return { ok: false, error: 'Connected apps are not switched on (Settings → Connected apps).' }
+  const app = String(args.app || '').trim().toLowerCase()
+  if (!app) return { ok: false, error: 'Which app? Pass its slug, for example "gmail" or "slack".' }
+  const wanted = String(args.query || '').trim()
+  const r = await client.toolsFor(app, wanted)
+  if (!r.ok) return { ok: false, error: r.error }
+  if (!r.tools.length) {
+    return {
+      ok: true,
+      sources: [],
+      text: `No actions matched "${wanted}" in ${app}. Try a broader word, or list without a query.`,
+    }
+  }
+  const lines = r.tools.map((t) => {
+    const params = t.input && t.input.properties ? Object.keys(t.input.properties) : []
+    const required = (t.input && t.input.required) || []
+    const args = params
+      .map((p) => `${p}${required.includes(p) ? '' : '?'}`)
+      .join(', ')
+    return `- ${t.slug}${t.deprecated ? ' (deprecated)' : ''}: ${t.description.slice(0, 160)}${
+      args ? `\n    arguments: ${args}` : ''
+    }`
+  })
+  return {
+    ok: true,
+    sources: [],
+    text:
+      `Actions available in ${app}:\n${lines.join('\n')}\n\n` +
+      'Run one with run_app_tool, passing the exact tool slug and its arguments as an object.',
+  }
+}
+
+async function runAppTool(args, opts = {}) {
+  const client = opts.apps && opts.apps.client
+  if (!client) return { ok: false, error: 'Connected apps are not switched on (Settings → Connected apps).' }
+  const tool = String(args.tool || args.slug || '').trim()
+  if (!tool) return { ok: false, error: 'Which action? Pass the tool slug from search_app_tools.' }
+  const callArgs = args.arguments && typeof args.arguments === 'object' ? args.arguments : {}
+  const r = await client.runTool(tool, callArgs)
+  if (!r.ok) return { ok: false, error: r.error }
+
+  const payload = r.data === undefined ? null : r.data
+  const asText =
+    typeof payload === 'string' ? payload : JSON.stringify(payload, null, 1).slice(0, 4000)
+  return {
+    ok: true,
+    sources: [],
+    text: `${tool} ran in the user's account. Result:\n${asText || '(the app returned nothing)'}`,
+  }
 }
 
 const ALL_TOOLS = Object.keys(REGISTRY)
@@ -532,8 +701,14 @@ function chatToolDefs(cfg) {
   // The master switch means no tools at all. Settings greys the per-tool toggles out when it
   // is off, so advertising tools anyway would contradict what the app says it is doing.
   if (cfg && cfg.toolsEnabled === false) return []
-  const on = (cfg.toolToggles || {})
-  return ALL_TOOLS.filter((n) => on[n] !== false).map((n) => REGISTRY[n].schema)
+  const on = cfg.toolToggles || {}
+  return ALL_TOOLS.filter((n) => {
+    if (on[n] === false) return false
+    // The connected-app tools act in someone's real accounts, so they stay hidden until the user
+    // switches them on — and hidden for good without a key, rather than advertised and then refusing.
+    if (APP_TOOLS.has(n) && !(cfg && cfg.apps && cfg.apps.enabled)) return false
+    return true
+  }).map((n) => REGISTRY[n].schema)
 }
 
 /** Same definitions flattened, which is what the Responses API expects. */
