@@ -127,6 +127,21 @@ function sessionDirFor (piRoot, conversationId) {
   return path.join(layout(piRoot).sessionsDir, safe)
 }
 
+/** One agent dir per session. Pi writes its provider config into this directory, so a single
+ *  shared one meant two turns running at the same time could overwrite each other's model and key.
+ *  The name comes from the session id, stripped of anything a filesystem would object to. */
+function sessionAgentDirFor (piRoot, sessionId) {
+  const safe =
+    String(sessionId || '')
+      .replace(/[^A-Za-z0-9._-]/g, '-')
+      // A segment of exactly '..' would resolve to the parent directory, so a leading run of dots is
+      // stripped rather than trusted. Everything else that is not a safe character became a dash,
+      // which also removes every path separator.
+      .replace(/^\.+/, '')
+      .slice(0, 64) || 'default'
+  return path.join(layout(piRoot).sessionsDir, 'agents', safe)
+}
+
 /** Has Pi written a session here yet? If it has, there is context to continue from. */
 function hasSession (sessionDir) {
   try {
@@ -380,7 +395,7 @@ function runTurn (opts) {
     stdio: ['ignore', 'pipe', 'pipe'],
     env: {
       ...process.env,
-      PI_CODING_AGENT_DIR: L.agentDir,
+      PI_CODING_AGENT_DIR: opts.agentDir || L.agentDir,
       [KEY_ENV]: opts.relayKey || ''
     }
   })
@@ -471,6 +486,7 @@ module.exports = {
   layout,
   status,
   sessionDirFor,
+  sessionAgentDirFor,
   hasSession,
   install,
   writeConfig,

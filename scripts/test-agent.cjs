@@ -351,6 +351,61 @@ async function live () {
   })
 }
 
+/* ---------------------------------- more than one agent session at a time */
+// Every session gets its own agent dir, because Pi writes its provider config into that directory.
+// A single shared one meant two turns running at once overwrote each other's models.json: the
+// second turn silently ran on the first turn's model. These checks are the reason the isolation is
+// safe rather than merely possible.
+const sessionsRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'zen-pi-sessions-'))
+
+check('two agent sessions get two different agent dirs', () => {
+  const a = pi.sessionAgentDirFor(sessionsRoot, 'conv-a')
+  const b = pi.sessionAgentDirFor(sessionsRoot, 'conv-b')
+  if (a === b) throw new Error('two sessions share one agent dir')
+  if (!/[\\/]agents[\\/]/.test(a)) throw new Error(`not under an agents folder: ${a}`)
+})
+
+check('the same session always resolves to the same dir, so a follow-up turn keeps its context', () => {
+  const once = pi.sessionAgentDirFor(sessionsRoot, 'conv-a')
+  const twice = pi.sessionAgentDirFor(sessionsRoot, 'conv-a')
+  if (once !== twice) throw new Error('one session id resolved to two directories')
+})
+
+check('a session id with path characters cannot climb out of the sessions folder', () => {
+  // derive the folder from the helper rather than hardcoding the layout, so this checks the
+  // invariant (resolves inside the agents folder) and not my idea of where that folder is
+  const agentsRoot = path.dirname(pi.sessionAgentDirFor(sessionsRoot, 'sample'))
+  // containment, not substring matching. A single segment may legitimately be called
+  // '-..-..-etc-passwd' (that is one harmless folder name); what matters is whether the resolved
+  // path stays under the agents folder, which is exactly what path.relative answers.
+  const inside = (p) => {
+    const rel = path.relative(agentsRoot, path.resolve(p))
+    return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel)
+  }
+
+  const nasty = pi.sessionAgentDirFor(sessionsRoot, '../../../etc/passwd')
+  if (!inside(nasty)) throw new Error(`escaped to: ${nasty}`)
+
+  // '..' on its own is the case that really would resolve to the parent directory
+  const dotdot = pi.sessionAgentDirFor(sessionsRoot, '..')
+  if (path.resolve(dotdot) !== path.resolve(path.join(agentsRoot, 'default'))) {
+    throw new Error(`a session id of '..' was not neutralised: ${dotdot}`)
+  }
+  if (!inside(dotdot)) throw new Error(`'..' escaped to: ${dotdot}`)
+})
+
+check('two sessions keep two separate provider configs', () => {
+  const a = pi.sessionAgentDirFor(sessionsRoot, 'one')
+  const b = pi.sessionAgentDirFor(sessionsRoot, 'two')
+  pi.writeConfig({ agentDir: a, baseUrl: 'https://one.example/v1', models: [{ id: 'model-one', name: 'model-one' }] })
+  pi.writeConfig({ agentDir: b, baseUrl: 'https://two.example/v1', models: [{ id: 'model-two', name: 'model-two' }] })
+  const readA = fs.readFileSync(path.join(a, 'models.json'), 'utf8')
+  const readB = fs.readFileSync(path.join(b, 'models.json'), 'utf8')
+  if (!/model-one/.test(readA)) throw new Error('the first session lost its own model')
+  if (!/model-two/.test(readB)) throw new Error('the second session lost its own model')
+  if (/model-two/.test(readA)) throw new Error('the second write reached into the first session')
+})
+
 live().then(() => {
   console.log(`\n${passed} passed, ${failed} failed\n`)
   if (failed) {

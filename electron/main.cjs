@@ -512,7 +512,12 @@ async function runAgentTurn (req) {
     return agentFail(requestId, `The agent workspace no longer exists: ${workspace}`)
   }
 
-  pi.writeConfig({ agentDir: pi.layout(PI_ROOT()).agentDir, baseUrl: cfg.baseUrl, models: agentModels(cfg, store) })
+  // Every session gets its own agent dir. Pi writes its provider config (models.json) into that
+  // directory, so two turns running at the same time with different models, or a different key,
+  // used to overwrite each other's config. One directory per session is what makes more than one
+  // agent turn at a time safe rather than merely possible.
+  const agentDir = pi.sessionAgentDirFor(PI_ROOT(), req.conversationId)
+  pi.writeConfig({ agentDir, baseUrl: cfg.baseUrl, models: agentModels(cfg, store) })
 
   // Pi keeps this conversation's own session, so a follow-up turn remembers the last one —
   // including what its tools did. Only the very first turn needs the chat's own history,
@@ -526,6 +531,7 @@ async function runAgentTurn (req) {
     piRoot: PI_ROOT(),
     workspace,
     sessionDir,
+    agentDir,
     model: req.model || cfg.model,
     relayKey: cfg.apiKey,
     prompt,
