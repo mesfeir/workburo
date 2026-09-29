@@ -981,6 +981,35 @@ async function run({
   const beforeDraw = await inPage(win, pageAssistantTurns)
   await inPage(win, pageType, ['Create an image of an elephant.'])
   await inPage(win, pageSend)
+  // Watched from the moment the request goes out, because the row only exists *while* the draw is in
+  // flight: the model has to call the tool and fal has to queue, so one sample after the answer lands
+  // would always see nothing — which is exactly how this went unnoticed. This is the check that a
+  // picture asked for in words shows the same row the Image switch shows.
+  const drawingSeen = (async () => {
+    const seen = { row: false, kind: '', text: '', bare: false }
+    const until = Date.now() + 150000
+    while (Date.now() < until) {
+      const s = await inPage(win, function () {
+        const el = document.querySelector('[data-drawing]')
+        if (!el) return null
+        const phase = el.querySelector('[data-drawing-phase]')
+        return {
+          kind: el.getAttribute('data-drawing') || '',
+          text: (phase ? phase.textContent || '' : '').replace(/\s+/g, ' ').trim(),
+        }
+      })
+      if (s) {
+        seen.row = true
+        if (s.kind) seen.kind = s.kind
+        if (s.text) seen.text = s.text
+        // a bare queue number is not progress the user can read
+        if (/^-?[0-9]+$/.test(s.text)) seen.bare = true
+        if (/creating|changing|generating|queue|saving|sending/i.test(seen.text)) break
+      }
+      await sleep(200)
+    }
+    return seen
+  })()
   await waitFor(
     win,
     new Function(`return function(){ return document.querySelectorAll('.prose-zen').length > ${beforeDraw} }`)(),
@@ -1019,6 +1048,15 @@ async function run({
   } else {
     console.log('SKIP  drawing for real (no ZEN_FAL_KEY in the environment)')
   }
+  // the unification, in the only terms that matter: one door or the other, the row the user watches
+  // while a picture is being made is the same row, and it says something they can read
+  const drawingSeenState = await drawingSeen
+  record(
+    'a picture asked for in words shows the same drawing row as the Image switch',
+    drawingSeenState.row && !drawingSeenState.bare,
+    `row=${drawingSeenState.row} kind=${drawingSeenState.kind} bare=${drawingSeenState.bare} text="${drawingSeenState.text.slice(0, 60)}"`,
+  )
+  await shot(win, '15a-image-tool-drawing')
   await shot(win, '15-image-tool')
 
   // ---------- 14c. a reference image is edited at fal — no model in the loop

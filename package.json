@@ -60,7 +60,8 @@
       "dist/**/*",
       "electron/**/*",
       "package.json",
-      "node_modules/**/*"
+      "node_modules/**/*",
+      "!**/node_modules/@napi-rs/**"
     ],
     "asarUnpack": [
       "**/node_modules/pdfjs-dist/**"

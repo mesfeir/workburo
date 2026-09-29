@@ -288,20 +288,28 @@ export default function Message({
    * this row previously sat empty apart from whatever the last progress event happened to say,
    * and a bare queue number told the user nothing was happening.
    */
+  /**
+   * A picture being drawn, from either door.
+   *
+   * The Image switch starts a message of its own: not streaming, with a note — which is exactly what
+   * this used to require. The model's generate_image tool draws *inside* a streaming answer, so that
+   * test could never be true for it, and progress arriving was not enough: the row stayed hidden.
+   * `msg.drawing` is the explicit signal both doors now set.
+   */
   const drawing =
     !msg.finished &&
-    !msg.streaming &&
-    !msg.content &&
     !(msg.images || []).length &&
     !msg.error &&
-    /^fal\b/i.test(String(msg.note || ''))
+    (!!msg.drawing || (!msg.streaming && !msg.content && /^fal\b/i.test(String(msg.note || ''))))
   const drawingPhase =
     String(msg.note || '')
       .replace(/^fal\s*(·\s*)?/i, '')
       .trim()
       // never show a bare number, whatever the endpoint reports
       .replace(/^-?[0-9]+$/, '') || 'starting'
-  const drawingEdit = /\/edit$|-edit$/.test(String(msg.model || ''))
+  // Which wording: a change to a picture that already exists, or a fresh draw. The tool path knows
+  // from the reference it was handed; the switch path has to read it off the endpoint's name.
+  const drawingEdit = !!msg.drawingEdit || /\/edit$|-edit$/.test(String(msg.model || ''))
 
   return (
     <div

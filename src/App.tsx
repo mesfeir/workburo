@@ -98,6 +98,10 @@ interface StreamState {
   usage: any
   protocol?: string
   note?: string
+  /** a picture is being drawn right now — set by both doors, the Image switch and the tool */
+  drawing?: boolean
+  /** and that picture is a change to one that exists, rather than a fresh draw */
+  drawingEdit?: boolean
   finish?: string
   error?: string
   startedAt: number
@@ -246,6 +250,13 @@ export default function App() {
                         tools: [...s.tools],
                         sources: [...s.sources],
                         images: s.genImages.length ? [...s.genImages] : m.images,
+                        // the animated drawing row. Both doors set these, so a picture the model
+                        // asks for in words shows exactly what the Image switch shows, mid-answer
+                        // included — which is the whole point of the flag: the old row was gated
+                        // on a message that was not streaming, and a tool call always is.
+                        drawing: !!s.drawing,
+                        drawingEdit: !!s.drawingEdit,
+                        ...(s.note ? { note: s.note } : {}),
                         ...(s.speed ? { speed: s.speed } : {}),
                       },
                 ),
@@ -312,17 +323,22 @@ export default function App() {
           for (const img of v.images || []) {
             if (img?.path && !s.genImages.some((x) => x.path === img.path)) s.genImages.push(img)
           }
+          // the picture has landed — the drawing row gives way to it
+          if ((v.images || []).length) s.drawing = false
           flush(s)
           break
         }
         case 'image': {
-          // fal reports progress while the picture is being drawn
+          // fal reporting progress, from either door. It goes to the tool row *and* sets the
+          // drawing row's note, so the picture being drawn looks the same whether the user pressed
+          // the Image switch or asked for it in words and the model called the tool.
           const v = ev.value || {}
+          s.drawing = true
+          s.drawingEdit = !!v.editing
+          s.note = `fal · ${falProgressText(v)}`
           const at = s.tools.findIndex((t) => t.id === v.id)
-          if (at >= 0) {
-            s.tools[at] = { ...s.tools[at], preview: `fal · ${falProgressText(v)}` }
-            flush(s)
-          }
+          if (at >= 0) s.tools[at] = { ...s.tools[at], preview: `fal · ${falProgressText(v)}` }
+          flush(s)
           break
         }
         case 'sources': {
@@ -359,6 +375,8 @@ export default function App() {
             usage: s.usage || null,
             protocol: s.protocol,
             note: s.finish === 'length' ? 'hit the token limit' : s.note,
+            drawing: !!s.drawing,
+            drawingEdit: !!s.drawingEdit,
             elapsedMs: Date.now() - s.startedAt,
             tools: [...s.tools],
             sources: [...s.sources],

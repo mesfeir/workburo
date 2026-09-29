@@ -51,6 +51,10 @@ export interface ChatMessage {
   error?: string | null
   protocol?: string
   note?: string
+  /** a picture is being drawn right now — set by both doors, the Image switch and the tool */
+  drawing?: boolean
+  /** and it is a change to a picture that exists, rather than a fresh draw */
+  drawingEdit?: boolean
   createdAt: number
   startedAt?: number
   elapsedMs?: number

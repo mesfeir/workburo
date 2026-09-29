@@ -1528,8 +1528,7 @@ ipcMain.handle('chat:start', async (event, req) => {
         const r = await executeTool(tc.name, tc.arguments, {
           searchUrl: cfg.searchUrl,
           signal: ac.signal,
-          // a picture is drawn here, in main: the key stays out of the renderer,
-          // and progress streams to the tool row while fal works
+          // a picture is drawn here, in main: the key stays out of the renderer
           images: {
             key: cfg.imageGen?.falKey || '',
             model: cfg.imageGen?.model || '',
@@ -1540,6 +1539,23 @@ ipcMain.handle('chat:start', async (event, req) => {
             // cannot see ("last") and still get exactly that picture changed
             references: referencesFor(messages),
             imagesDir: imagesDir(),
+            // The Image switch's own runner, so a picture the model asks for behaves identically:
+            // the reference is validated and shrunk, the window stays awake for the run, and the
+            // phases arrive the same way. Without this the tool drew through a second, weaker path.
+            generate: (a) =>
+              runImageJob({
+                key: cfg.imageGen?.falKey || '',
+                model: a.model,
+                prompt: a.prompt,
+                count: a.count,
+                size: a.size,
+                imageUrl: a.imageUrl,
+                imagesDir: imagesDir(),
+                // same progress, same place: the renderer shows the animated row for both doors.
+                // `editing` tells it which wording — a change to a picture that exists, or a fresh draw.
+                onProgress: (p) =>
+                  send({ type: 'image', value: { id: tc.id, editing: !!a.imageUrl, ...p } }),
+              }),
             onProgress: (p) => send({ type: 'image', value: { id: tc.id, ...p } }),
           },
         })
@@ -1984,10 +2000,19 @@ ipcMain.handle('images:dataUrl', (_e, { path: file }) => {
   }
 })
 
-ipcMain.handle('images:generate', async (_e, req) => {
-  const { key, model, prompt, count, size, requestId, imageUrl } = req || {}
-  // A reference that cannot be decoded must fail loudly. Falling back to a plain
-  // text-to-image draw here would silently ignore the picture the user attached.
+/**
+ * One way to make a picture, whichever door it came through.
+ *
+ * This used to be two implementations. The Image switch validated and shrank the reference, held
+ * the window awake for the run, and streamed phases into the animated row; the model's
+ * generate_image tool did none of those three — so an edit asked for in words could be sent at full
+ * size or with an unreadable reference, the window could tuck itself away mid-draw, and progress
+ * only ever appeared inside the tool row. Both doors now come through here.
+ */
+async function runImageJob({ key, model, prompt, count, size, imageUrl, imagesDir: dir, onProgress }) {
+  // A reference that cannot be decoded must fail loudly. Falling back to a plain text-to-image
+  // draw here would silently ignore the picture the user asked to change — which is how an edit
+  // came back as an unrelated new picture.
   const reference = prepareReference(imageUrl)
   if (imageUrl && !reference) {
     return {
@@ -1996,8 +2021,7 @@ ipcMain.handle('images:generate', async (_e, req) => {
         'That reference image could not be read, so there was nothing to edit. Attach it again as a PNG or JPEG.',
     }
   }
-  // from here on a picture is being drawn: the count is held until the job ends, so the window
-  // does not tuck itself away mid-run. Every exit from here is inside the try/finally below.
+  // a picture being drawn counts as work: the window does not tuck itself away mid-run
   imageJobs += 1
   try {
     return await falImages.generate({
@@ -2006,17 +2030,30 @@ ipcMain.handle('images:generate', async (_e, req) => {
       prompt: String(prompt || ''),
       count: Number(count) || 1,
       size: String(size || ''),
-      // absent for text-to-image, present when the message carried a reference
+      // absent for text-to-image, present when there was a reference to follow
       imageUrl: reference,
-      imagesDir: imagesDir(),
-      onProgress: (p) => sendToRenderer('images:progress', { requestId, ...p }),
+      imagesDir: dir,
+      onProgress,
     })
   } catch (err) {
-    return { ok: false, error: err?.message || 'Image generation failed.' }
+    return { ok: false, error: (err && err.message) || 'Image generation failed.' }
   } finally {
-    // a picture being drawn counts as work: the window does not tuck itself away mid-run
     imageJobs -= 1
   }
+}
+
+ipcMain.handle('images:generate', async (_e, req) => {
+  const { key, model, prompt, count, size, requestId, imageUrl } = req || {}
+  return runImageJob({
+    key,
+    model,
+    prompt,
+    count,
+    size,
+    imageUrl,
+    imagesDir: imagesDir(),
+    onProgress: (p) => sendToRenderer('images:progress', { requestId, ...p }),
+  })
 })
 
 ipcMain.handle('images:saveAs', async (_e, { file }) => {
