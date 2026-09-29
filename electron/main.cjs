@@ -1,4 +1,4 @@
-// Zen Chat — Electron main process
+// WorkBuro — Electron main process
 // Owns: window, on-disk store, and the streaming network layer for any
 // OpenAI-compatible endpoint (Chat Completions + Responses protocols).
 
@@ -48,6 +48,21 @@ const argAfter = (flag) => {
 
 const DEFAULT_WINDOW = { width: 480, height: 660 }
 const MIN_WINDOW = { width: 380, height: 420 }
+
+// The product was renamed from Zen Chat to WorkBuro. Its data folder is pinned explicitly rather
+// than left to be derived from the app name: a derived path would follow the rename to a new
+// folder and quietly leave the store, the API keys and every saved picture behind in one that
+// nothing reads any more. Existing installs are carried across once, and if the move cannot happen
+// (a running copy still holding the folder) the old path is kept rather than starting empty.
+const APP_DATA_DIR = app.getPath('appData')
+const DATA_OLD = path.join(APP_DATA_DIR, 'zen-chat')
+const DATA_NEW = path.join(APP_DATA_DIR, 'WorkBuro')
+try {
+  if (fs.existsSync(DATA_OLD) && !fs.existsSync(DATA_NEW)) fs.renameSync(DATA_OLD, DATA_NEW)
+} catch {
+  // fall through: keep using the old folder this run
+}
+app.setPath('userData', fs.existsSync(DATA_NEW) ? DATA_NEW : DATA_OLD)
 
 if (SELFTEST || CAPTURE) {
   // isolate the test/capture run from the real profile
@@ -639,7 +654,7 @@ function applyStoredHotkey() {
         requested,
         active: candidate,
         fallback: true,
-        error: `${requested} is held by another app, so Zen Chat is using ${candidate} for now.`,
+        error: `${requested} is held by another app, so WorkBuro is using ${candidate} for now.`,
       }
       console.log(`[hotkey] ${hotkeyStatus.error}`)
       notifyHotkeyStatus()
@@ -932,7 +947,7 @@ function headersFor(cfg, accept) {
   const h = {
     'Content-Type': 'application/json',
     // the opencode WAF 403s requests without a real User-Agent
-    'User-Agent': 'ZenChat/1.0 (Windows; Electron)',
+    'User-Agent': 'WorkBuro/1.0 (Windows; Electron)',
     Accept: accept || 'application/json',
   }
   if (cfg.apiKey) h.Authorization = `Bearer ${cfg.apiKey}`
@@ -2337,7 +2352,14 @@ ipcMain.handle('apps:status', async (_e, { id } = {}) => {
  * answer, and so everything the model can write is in one place it cannot escape.
  */
 function documentsDir() {
-  return path.join(app.getPath('documents'), 'Zen Chat')
+  const docs = app.getPath('documents')
+  const from = path.join(docs, 'Zen Chat')
+  const to = path.join(docs, 'WorkBuro')
+  // carried across once, the same way the data folder was
+  try {
+    if (fs.existsSync(from) && !fs.existsSync(to)) fs.renameSync(from, to)
+  } catch {}
+  return fs.existsSync(to) || !fs.existsSync(from) ? to : from
 }
 
 /** Only a file this app put in its own folder may be opened or revealed. */
@@ -2348,7 +2370,7 @@ function inDocumentsDir(p) {
 }
 
 ipcMain.handle('files:open', async (_e, { path: p } = {}) => {
-  if (!inDocumentsDir(p)) return { ok: false, error: 'That file is not in the Zen Chat folder.' }
+  if (!inDocumentsDir(p)) return { ok: false, error: 'That file is not in the WorkBuro folder.' }
   try {
     const err = await shell.openPath(path.resolve(p))
     return err ? { ok: false, error: err } : { ok: true }
@@ -2358,7 +2380,7 @@ ipcMain.handle('files:open', async (_e, { path: p } = {}) => {
 })
 
 ipcMain.handle('files:reveal', async (_e, { path: p } = {}) => {
-  if (!inDocumentsDir(p)) return { ok: false, error: 'That file is not in the Zen Chat folder.' }
+  if (!inDocumentsDir(p)) return { ok: false, error: 'That file is not in the WorkBuro folder.' }
   try {
     shell.showItemInFolder(path.resolve(p))
     return { ok: true }

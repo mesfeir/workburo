@@ -16,7 +16,9 @@ import {
   X,
   Pin,
   Square,
+  Brain,
 } from 'lucide-react'
+import ThemeToggle from './ThemeToggle'
 import type { Conversation, Config, RunningSession } from '../types'
 
 function NavRow({
@@ -38,7 +40,7 @@ function NavRow({
       disabled={disabled}
       title={title}
       className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-[7px] text-left text-[14px] transition
-        ${disabled ? 'cursor-default text-faint' : 'text-[var(--text-mid)] hover:bg-white/[.07]'}`}
+        ${disabled ? 'cursor-default text-faint' : 'text-[var(--text-mid)] hover:bg-[var(--raised-2)]'}`}
     >
       <span className="grid h-[18px] w-[18px] place-items-center">{icon}</span>
       <span className="truncate">{label}</span>
@@ -50,6 +52,7 @@ export default function Sidebar({
   conversations,
   activeId,
   config,
+  onConfig,
   onSelect,
   onNew,
   onDelete,
@@ -64,6 +67,7 @@ export default function Sidebar({
   conversations: Conversation[]
   activeId: string | null
   config: Config
+  onConfig: (patch: Partial<Config>) => void
   onSelect: (id: string) => void
   onNew: () => void
   onDelete: (id: string) => void
@@ -106,19 +110,22 @@ export default function Sidebar({
     <aside className="flex h-full w-[264px] shrink-0 flex-col border-r border-[var(--rule)] bg-sidebar">
       {/* title bar */}
       <div className="drag-region flex h-11 items-center justify-between pl-4 pr-2">
-        <span className="select-none text-[15px] font-semibold tracking-[-0.01em]">Zen Chat</span>
+        <span className="flex select-none items-center gap-2 pl-0.5 font-mono text-[13px] font-bold uppercase tracking-[0.18em] text-[var(--text-solid)]">
+          <Brain size={16} strokeWidth={1.75} aria-hidden className="shrink-0" />
+          WorkBuro
+        </span>
         <div className="no-drag flex items-center gap-0.5">
           <button
             title="Search chats"
             onClick={() => setSearching((s) => !s)}
-            className="grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-white/[.08] hover:text-ink"
+            className="grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-[var(--raised-2)] hover:text-ink"
           >
             <Search size={16} />
           </button>
           <button
             title="Hide sidebar"
             onClick={onCollapse}
-            className="grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-white/[.08] hover:text-ink"
+            className="grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-[var(--raised-2)] hover:text-ink"
           >
             <PanelLeft size={16} />
           </button>
@@ -183,7 +190,7 @@ export default function Sidebar({
             <div
               key={c.id}
               className={`group relative flex items-center rounded-lg ${
-                c.id === activeId ? 'bg-white/[.08]' : 'hover:bg-white/[.06]'
+                c.id === activeId ? 'bg-[var(--raised-2)]' : 'hover:bg-[var(--raised)]'
               }`}
             >
               {editingId === c.id ? (
@@ -233,7 +240,7 @@ export default function Sidebar({
                       <button
                         onClick={() => onStopAgent(runner.requestId)}
                         title={`Pi is working in ${runner.workspace} (${runner.seconds}s). Click to stop this session.`}
-                        className="mr-0.5 grid h-6 w-6 shrink-0 place-items-center rounded text-[var(--ok)] transition hover:bg-white/10"
+                        className="mr-0.5 grid h-6 w-6 shrink-0 place-items-center rounded text-[var(--ok)] transition hover:bg-[var(--raised-2)]"
                       >
                         <Square size={10} className="fill-current" />
                       </button>
@@ -241,7 +248,7 @@ export default function Sidebar({
                   })()}
                   <button
                     onClick={() => setMenuId(menuId === c.id ? null : c.id)}
-                    className={`mr-1 grid h-6 w-6 shrink-0 place-items-center rounded text-muted transition hover:bg-white/10 hover:text-ink ${
+                    className={`mr-1 grid h-6 w-6 shrink-0 place-items-center rounded text-muted transition hover:bg-[var(--raised-2)] hover:text-ink ${
                       menuId === c.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
                     }`}
                   >
@@ -257,7 +264,7 @@ export default function Sidebar({
                             setDraft(c.title)
                             setMenuId(null)
                           }}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] hover:bg-white/[.08]"
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] hover:bg-[var(--raised-2)]"
                         >
                           <Pencil size={13} /> Rename
                         </button>
@@ -266,7 +273,7 @@ export default function Sidebar({
                             onPin(c.id)
                             setMenuId(null)
                           }}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] hover:bg-white/[.08]"
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] hover:bg-[var(--raised-2)]"
                         >
                           <Pin size={13} /> {c.pinned ? 'Unpin' : 'Pin'}
                         </button>
@@ -275,7 +282,7 @@ export default function Sidebar({
                             onDelete(c.id)
                             setMenuId(null)
                           }}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-[var(--err)] hover:bg-white/[.08]"
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-[var(--err)] hover:bg-[var(--raised-2)]"
                         >
                           <Trash2 size={13} /> Delete
                         </button>
@@ -301,10 +308,14 @@ export default function Sidebar({
             </div>
             <div className="truncate text-[11px] text-faint">{config.model || 'No model selected'}</div>
           </div>
+          <ThemeToggle
+            theme={config.theme}
+            onTheme={(t) => onConfig({ theme: t })}
+          />
           <button
             title="Settings"
             onClick={onOpenSettings}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition hover:bg-white/[.08] hover:text-ink"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition hover:bg-[var(--raised-2)] hover:text-ink"
           >
             <Settings size={16} />
           </button>

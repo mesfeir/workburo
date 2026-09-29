@@ -85,7 +85,7 @@ function ImageGrid({
             <div key={i} className="group/img relative">
               <button
                 onClick={() => setZoom(im)}
-                className="block overflow-hidden rounded-xl border border-white/10"
+                className="block overflow-hidden rounded-xl border border-[var(--rule-soft)]"
               >
                 <img
                   src={im.url}
@@ -103,7 +103,7 @@ function ImageGrid({
                 <button
                   onClick={() => window.zen.images.saveAs(im.path as string)}
                   title="Save a copy"
-                  className="absolute top-1.5 right-1.5 grid h-7 w-7 place-items-center rounded-lg border border-white/20 bg-black/60 text-[var(--text-solid)] opacity-0 transition group-hover/img:opacity-100"
+                  className="absolute top-1.5 right-1.5 grid h-7 w-7 place-items-center rounded-lg border border-[var(--rule)] bg-[var(--scrim)] text-[var(--text-solid)] opacity-0 transition group-hover/img:opacity-100"
                 >
                   <Download size={13} />
                 </button>
@@ -113,7 +113,7 @@ function ImageGrid({
                   onClick={() => onUseImage(im)}
                   data-use-image
                   title="Change this picture — it goes into the composer as the reference, then you say what to change"
-                  className={`absolute bottom-1.5 left-1.5 flex h-7 items-center gap-1.5 rounded-lg border border-white/20 bg-black/70 px-2 text-[11.5px] text-[var(--text-solid)] transition hover:bg-black/90 ${
+                  className={`absolute bottom-1.5 left-1.5 flex h-7 items-center gap-1.5 rounded-lg border border-[var(--rule)] bg-[var(--scrim)] px-2 text-[11.5px] text-[var(--text-solid)] transition hover:bg-[var(--scrim)] ${
                     // a picture the assistant drew has no other way back into the conversation, so
                     // its button is always there; a picture you attached is already yours to edit
                     large ? 'opacity-100' : 'opacity-0 group-hover/img:opacity-100'
@@ -129,7 +129,7 @@ function ImageGrid({
       </div>
       {zoom && (
         <div
-          className="fixed inset-0 z-50 grid place-items-center bg-black/85 p-8"
+          className="fixed inset-0 z-50 grid place-items-center bg-[var(--scrim)] p-8"
           onClick={() => setZoom(null)}
         >
           <img src={zoom.url} alt="" className="max-h-full max-w-full rounded-lg object-contain" />
@@ -292,7 +292,7 @@ export default function Message({
                   key={`${d.name}-${i}`}
                   title={d.preview || d.name}
                   className={`flex max-w-[300px] items-center gap-2 rounded-lg border px-2 py-1 ${
-                    d.error ? 'border-red-400/40 bg-red-500/10' : 'border-white/12 bg-white/[0.03]'
+                    d.error ? 'border-red-400/40 bg-red-500/10' : 'border-[var(--rule-soft)] bg-[var(--raised)]'
                   }`}
                 >
                   <FileText size={14} className="shrink-0 text-faint" />
@@ -369,7 +369,7 @@ export default function Message({
       {drawing && (
         <div
           data-drawing={drawingEdit ? 'edit' : 'create'}
-          className="mt-0.5 flex w-fit items-center gap-3 rounded-2xl border border-white/10 bg-white/[.03] py-2.5 pr-5 pl-2.5"
+          className="mt-0.5 flex w-fit items-center gap-3 rounded-2xl border border-[var(--rule-soft)] bg-[var(--raised)] py-2.5 pr-5 pl-2.5"
         >
           <span className="drawing-tile" aria-hidden />
           <span className="drawing-body">
@@ -385,7 +385,7 @@ export default function Message({
 
       {msg.content && (
         <div className="relative">
-          <Markdown text={msg.content} />
+          <Markdown text={msg.content} streaming={msg.streaming} />
           {msg.streaming && (
             <span className="ml-0.5 inline-block h-[15px] w-[8px] translate-y-[2px] animate-blink rounded-[1px] bg-[var(--text-mid)]" />
           )}
@@ -397,7 +397,7 @@ export default function Message({
           {(msg.files || []).map((f, i) => (
             <div
               key={`${f.path}-${i}`}
-              className="flex items-center gap-2 rounded-xl border border-white/12 bg-white/[0.03] py-2 pl-2.5 pr-2"
+              className="flex items-center gap-2 rounded-xl border border-[var(--rule-soft)] bg-[var(--raised)] py-2 pl-2.5 pr-2"
               title={f.path}
             >
               {f.kind === 'xlsx' || f.kind === 'csv' ? (
@@ -415,7 +415,7 @@ export default function Message({
                 onClick={() => void window.zen.files.open(f.path)}
                 data-open-file={f.name}
                 title="Open it"
-                className="ml-1 flex items-center gap-1 rounded-lg border border-white/12 px-2 py-1 text-[11.5px] text-[var(--text-mid)] transition hover:bg-white/10"
+                className="ml-1 flex items-center gap-1 rounded-lg border border-[var(--rule-soft)] px-2 py-1 text-[11.5px] text-[var(--text-mid)] transition hover:bg-[var(--raised-2)]"
               >
                 <ExternalLink size={12} /> Open
               </button>
@@ -423,7 +423,7 @@ export default function Message({
                 onClick={() => void window.zen.files.reveal(f.path)}
                 data-reveal-file={f.name}
                 title="Show it in the folder"
-                className="rounded-lg border border-white/12 px-2 py-1 text-[var(--text-mid)] transition hover:bg-white/10"
+                className="rounded-lg border border-[var(--rule-soft)] px-2 py-1 text-[var(--text-mid)] transition hover:bg-[var(--raised-2)]"
               >
                 <FolderOpen size={12} />
               </button>
@@ -464,7 +464,7 @@ export default function Message({
           <button
             onClick={copy}
             title="Copy"
-            className="grid h-7 w-7 place-items-center rounded-md text-muted transition hover:bg-white/[.08] hover:text-ink"
+            className="grid h-7 w-7 place-items-center rounded-md text-muted transition hover:bg-[var(--raised-2)] hover:text-ink"
           >
             {copied ? <Check size={14} /> : <Copy size={14} />}
           </button>
@@ -472,7 +472,7 @@ export default function Message({
             <button
               onClick={onRetry}
               title="Regenerate"
-              className="grid h-7 w-7 place-items-center rounded-md text-muted transition hover:bg-white/[.08] hover:text-ink"
+              className="grid h-7 w-7 place-items-center rounded-md text-muted transition hover:bg-[var(--raised-2)] hover:text-ink"
             >
               <RefreshCw size={14} />
             </button>
@@ -480,7 +480,7 @@ export default function Message({
           <button
             onClick={() => setVote(vote === 1 ? null : 1)}
             title="Good response"
-            className={`grid h-7 w-7 place-items-center rounded-md transition hover:bg-white/[.08] hover:text-ink ${
+            className={`grid h-7 w-7 place-items-center rounded-md transition hover:bg-[var(--raised-2)] hover:text-ink ${
               vote === 1 ? 'text-ink' : 'text-muted'
             }`}
           >
@@ -489,7 +489,7 @@ export default function Message({
           <button
             onClick={() => setVote(vote === -1 ? null : -1)}
             title="Bad response"
-            className={`grid h-7 w-7 place-items-center rounded-md transition hover:bg-white/[.08] hover:text-ink ${
+            className={`grid h-7 w-7 place-items-center rounded-md transition hover:bg-[var(--raised-2)] hover:text-ink ${
               vote === -1 ? 'text-ink' : 'text-muted'
             }`}
           >

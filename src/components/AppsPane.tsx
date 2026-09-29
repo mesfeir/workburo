@@ -206,7 +206,7 @@ export default function AppsPane({
               refresh()
             }}
             disabled={!key.trim() || busy === 'list'}
-            className="rounded-lg border border-[var(--rule)] px-3 py-2 text-[13px] text-[var(--text-mid)] transition hover:bg-white/5 disabled:opacity-40"
+            className="rounded-lg border border-[var(--rule)] px-3 py-2 text-[13px] text-[var(--text-mid)] transition hover:bg-[var(--raised)] disabled:opacity-40"
           >
             {busy === 'list' ? <Loader2 size={15} className="animate-spin" /> : 'Save'}
           </button>
@@ -251,14 +251,14 @@ export default function AppsPane({
               <button
                 onClick={() => load(query)}
                 title="Search"
-                className="rounded-lg border border-[var(--rule)] p-2 text-[var(--text-mid)] transition hover:bg-white/5"
+                className="rounded-lg border border-[var(--rule)] p-2 text-[var(--text-mid)] transition hover:bg-[var(--raised)]"
               >
                 <Search size={15} />
               </button>
               <button
                 onClick={refresh}
                 title="Check connection status again"
-                className="rounded-lg border border-[var(--rule)] p-2 text-[var(--text-mid)] transition hover:bg-white/5"
+                className="rounded-lg border border-[var(--rule)] p-2 text-[var(--text-mid)] transition hover:bg-[var(--raised)]"
               >
                 <RefreshCw size={15} />
               </button>
@@ -302,7 +302,7 @@ export default function AppsPane({
                               ? 'Finish the sign-in in your browser'
                               : `Connect ${a.name}`
                         }
-                        className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--rule)] px-2.5 py-1.5 text-[12.5px] text-[var(--text-mid)] transition hover:bg-white/5 disabled:opacity-40"
+                        className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--rule)] px-2.5 py-1.5 text-[12.5px] text-[var(--text-mid)] transition hover:bg-[var(--raised)] disabled:opacity-40"
                       >
                         {busy === a.slug || st === 'pending' ? (
                           <Loader2 size={13} className="animate-spin" />

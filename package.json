@@ -1,8 +1,8 @@
 {
-  "name": "zen-chat",
+  "name": "workburo",
   "private": true,
   "version": "1.0.0",
-  "description": "A ChatGPT-style desktop client for any OpenAI-compatible API (OpenCode Zen / Go, OpenAI, local LLMs)",
+  "description": "WorkBuro, a desktop client for any OpenAI-compatible API (OpenCode Zen / Go, OpenAI, local LLMs)",
   "type": "module",
   "main": "electron/main.cjs",
   "author": "Mel",
@@ -59,8 +59,8 @@
     "wait-on": "^8.0.0"
   },
   "build": {
-    "appId": "uk.clearestlab.zenchat",
-    "productName": "Zen Chat",
+    "appId": "uk.clearestlab.workburo",
+    "productName": "WorkBuro",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -100,11 +100,11 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Zen Chat",
-      "artifactName": "Zen-Chat-Setup-${version}.${ext}"
+      "shortcutName": "WorkBuro",
+      "artifactName": "WorkBuro-Setup-${version}.${ext}"
     },
     "portable": {
-      "artifactName": "Zen-Chat-${version}-portable.${ext}"
+      "artifactName": "WorkBuro-${version}-portable.${ext}"
     }
   }
 }

@@ -1188,7 +1188,7 @@ export default function App() {
         <>
           {compact && (
             <div
-              className="fixed inset-0 z-20 bg-black/55"
+              className="fixed inset-0 z-20 bg-[var(--scrim)]"
               onClick={() => setSidebarOpen(false)}
             />
           )}
@@ -1199,6 +1199,7 @@ export default function App() {
               conversations={conversations}
               activeId={activeId}
               config={config}
+              onConfig={patchConfig}
               onSelect={(id) => {
                 setActiveId(id)
                 setImages([])
@@ -1226,7 +1227,7 @@ export default function App() {
             <button
               onClick={() => setSidebarOpen(true)}
               title="Show sidebar"
-              className="no-drag grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-white/10 hover:text-ink"
+              className="no-drag grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-[var(--raised-2)] hover:text-ink"
             >
               <PanelLeft size={16} />
             </button>
@@ -1258,7 +1259,7 @@ export default function App() {
             onClick={() => setSettingsOpen(true)}
             title="Settings (Ctrl+,)"
             data-settings-open
-            className="no-drag mr-1 grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-white/10 hover:text-ink"
+            className="no-drag mr-1 grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-[var(--raised-2)] hover:text-ink"
           >
             <Settings2 size={16} />
           </button>
@@ -1275,20 +1276,20 @@ export default function App() {
               {hotkeyNotice.active && (
                 <>
                   {' '}
-                  Press <b className="font-mono text-ink">{hotkeyNotice.active}</b> to summon Zen Chat.
+                  Press <b className="font-mono text-ink">{hotkeyNotice.active}</b> to summon WorkBuro.
                 </>
               )}
             </span>
             <button
               onClick={() => setSettingsOpen(true)}
-              className="shrink-0 rounded-md border border-[var(--warn)] px-2 py-[3px] text-[11.5px] transition hover:bg-white/[.07]"
+              className="shrink-0 rounded-md border border-[var(--warn)] px-2 py-[3px] text-[11.5px] transition hover:bg-[var(--raised-2)]"
             >
               Change
             </button>
             <button
               onClick={() => setHotkeyNotice(null)}
               title="Dismiss"
-              className="shrink-0 rounded-md px-1 py-[3px] transition hover:bg-white/[.07]"
+              className="shrink-0 rounded-md px-1 py-[3px] transition hover:bg-[var(--raised-2)]"
             >
               <X size={13} />
             </button>
@@ -1377,7 +1378,7 @@ export default function App() {
       )}
 
       {dragging && (
-        <div className="pointer-events-none fixed inset-0 z-40 grid place-items-center bg-black/60">
+        <div className="pointer-events-none fixed inset-0 z-40 grid place-items-center bg-[var(--scrim)]">
           <div className="rounded-2xl border border-dashed border-[var(--rule)] px-8 py-6 text-[14px] text-muted">
             Drop images to attach
           </div>

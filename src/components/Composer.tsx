@@ -1,5 +1,64 @@
 import { useEffect, useRef } from 'react'
+import type { ReactNode } from 'react'
 import { ArrowUp, Brain, FileText, Image as ImageIcon, Mic, Plus, Square, Terminal, X, FolderOpen } from 'lucide-react'
+
+/** The rule between two mode switches. */
+function ModeDivider() {
+  return <span aria-hidden className="mx-0.5 h-5 w-px shrink-0 bg-[var(--rule)]" />
+}
+
+/** A mode switch: the glyph spins a full turn as it comes on and its label slides open beside it.
+ *
+ *  Collapsed, it is only the glyph, which is what lets three of these share a line in a narrow
+ *  window; the label reveals itself on the same curve as the icon turns, so the two read as one
+ *  movement. The reveal uses grid-template-columns 0fr -> 1fr rather than an animated width, so the
+ *  label is measured rather than guessed and nothing has to know how wide the word is.
+ */
+function ModeChip({
+  icon,
+  label,
+  on,
+  onClick,
+  disabled,
+  title,
+}: {
+  icon: ReactNode
+  label: string
+  on: boolean
+  onClick: () => void
+  disabled?: boolean
+  title: string
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-pressed={on}
+      data-mode={label.toLowerCase()}
+      className={`group flex h-8 shrink-0 items-center rounded-full border text-[13px] transition-colors ${
+        on
+          ? 'border-[var(--accent-rule)] bg-[var(--accent-bg)] px-2.5 text-[var(--accent-soft)]'
+          : 'border-[var(--rule)] px-2 text-[var(--text-mid)] hover:bg-[var(--raised)]'
+      } ${disabled ? 'cursor-default opacity-45 hover:bg-transparent' : ''}`}
+    >
+      <span
+        className={`grid place-items-center transition-transform duration-300 ${
+          on ? 'rotate-[360deg] scale-110' : 'group-hover:rotate-[15deg] group-hover:scale-110'
+        }`}
+      >
+        {icon}
+      </span>
+      <span
+        className={`grid overflow-hidden transition-[grid-template-columns] duration-200 ${
+          on ? 'grid-cols-[1fr]' : 'grid-cols-[0fr]'
+        }`}
+      >
+        <span className="overflow-hidden whitespace-nowrap pl-1.5">{label}</span>
+      </span>
+    </button>
+  )
+}
 import type { RunningSession, Attachment, Speed } from '../types'
 
 /** What a document chip calls the file: the reader's own kind, in words a person would use. */
@@ -138,7 +197,7 @@ export default function Composer({
                 data-doc-chip={d.docKind || 'file'}
                 title={d.error || d.preview || d.name}
                 className={`group relative flex max-w-[300px] items-center gap-2 rounded-xl border px-2.5 py-1.5 ${
-                  d.error ? 'border-red-400/40 bg-red-500/10' : 'border-white/15 bg-white/[0.04]'
+                  d.error ? 'border-red-400/40 bg-red-500/10' : 'border-[var(--rule)] bg-[var(--raised)]'
                 }`}
               >
                 <FileText size={15} className="shrink-0 text-faint" />
@@ -171,7 +230,7 @@ export default function Composer({
                 <img
                   src={im.url}
                   alt={im.name}
-                  className="h-16 w-16 rounded-xl border border-white/15 object-cover"
+                  className="h-16 w-16 rounded-xl border border-[var(--rule)] object-cover"
                 />
                 <button
                   onClick={() => onRemoveImage(i)}
@@ -183,12 +242,12 @@ export default function Composer({
             ))}
 
             {/* what happens to the reference: fal edits it, or the model reads it */}
-            <div data-refmode className="flex items-center gap-0.5 rounded-full border border-white/15 p-0.5">
+            <div data-refmode className="flex items-center gap-0.5 rounded-full border border-[var(--rule)] p-0.5">
               <button
                 onClick={() => onSetRefEdit(true)}
                 title="Send this image and your words straight to fal.ai to be changed"
                 className={`rounded-full px-2.5 py-1 text-[12px] transition ${
-                  refEdit ? 'bg-[var(--accent-bg)] text-[var(--accent-soft)]' : 'text-faint hover:bg-white/10'
+                  refEdit ? 'bg-[var(--accent-bg)] text-[var(--accent-soft)]' : 'text-faint hover:bg-[var(--raised-2)]'
                 }`}
               >
                 Edit image
@@ -197,7 +256,7 @@ export default function Composer({
                 onClick={() => onSetRefEdit(false)}
                 title="Let the chat model look at the image instead of editing it"
                 className={`rounded-full px-2.5 py-1 text-[12px] transition ${
-                  !refEdit ? 'bg-white/10 text-ink' : 'text-faint hover:bg-white/10'
+                  !refEdit ? 'bg-[var(--raised-2)] text-ink' : 'text-faint hover:bg-[var(--raised-2)]'
                 }`}
               >
                 Ask about it
@@ -217,7 +276,7 @@ export default function Composer({
             onClick={onPickFiles}
             title="Attach files — PDF, Word, Excel, CSV, text or images"
             data-attach
-            className="mb-[3px] grid h-8 w-8 shrink-0 place-items-center rounded-full border border-white/25 text-[var(--text-mid)] transition hover:bg-white/10"
+            className="mb-[3px] grid h-8 w-8 shrink-0 place-items-center rounded-full border border-[var(--rule)] text-[var(--text-mid)] transition hover:bg-[var(--raised-2)]"
           >
             <Plus size={17} />
           </button>
@@ -280,25 +339,34 @@ export default function Composer({
               the textarea */}
           <div data-modes className="mt-1.5 flex flex-wrap items-center gap-1 px-0.5">
             {imageModeAvailable && (
-              <button
+              <ModeChip
+                icon={<ImageIcon size={14} />}
+                label="Image"
+                on={imageMode}
                 onClick={onToggleImageMode}
                 title={
                   imageMode
                     ? 'Image mode is on — Enter generates a picture'
                     : 'Generate an image instead of a chat reply'
                 }
-                className={`flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-[13px] transition ${
-                  imageMode
-                    ? 'border-[var(--accent-rule)] bg-[var(--accent-bg)] text-[var(--accent-soft)]'
-                    : 'border-white/15 text-[var(--text-mid)] hover:bg-white/10'
-                }`}
-              >
-                <ImageIcon size={14} />
-                Image
-              </button>
+              />
             )}
+            {imageModeAvailable && <ModeDivider />}
 
-            <button
+            <ModeChip
+              icon={<Brain size={14} />}
+              label="Think"
+              on={thinking}
+              onClick={onToggleThinking}
+              title={thinking ? 'Thinking is on' : 'Thinking is off'}
+            />
+
+            <ModeDivider />
+
+            <ModeChip
+              icon={<Terminal size={14} />}
+              label="Agent"
+              on={agentMode}
               onClick={onToggleAgent}
               disabled={!agentAvailable}
               title={
@@ -308,15 +376,7 @@ export default function Composer({
                     ? `Agent mode is on — Pi works in ${agentWorkspace || 'the workspace folder'}`
                     : 'Hand this turn to Pi, which can read, write and run things in your workspace folder'
               }
-              className={`flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-[13px] transition ${
-                agentMode
-                  ? 'border-[var(--accent-rule)] bg-[var(--accent-bg)] text-[var(--accent-soft)]'
-                  : 'border-white/15 text-[var(--text-mid)] hover:bg-white/10'
-              } ${!agentAvailable ? 'cursor-default opacity-45 hover:bg-transparent' : ''}`}
-            >
-              <Terminal size={14} />
-              Agent
-            </button>
+            />
 
             {agentMode && (
               <button
@@ -326,7 +386,7 @@ export default function Composer({
                     ? `Pi works in ${agentWorkspace} for this chat. Click to choose another folder.`
                     : 'Choose the folder Pi may work in for this chat'
                 }
-                className="flex h-8 max-w-[200px] items-center gap-1.5 rounded-full border border-white/15 px-2.5 text-[13px] text-[var(--text-mid)] transition hover:bg-white/10"
+                className="flex h-8 max-w-[200px] items-center gap-1.5 rounded-full border border-[var(--rule)] px-2.5 text-[13px] text-[var(--text-mid)] transition hover:bg-[var(--raised-2)]"
               >
                 <FolderOpen size={14} />
                 <span className="truncate">
@@ -345,19 +405,6 @@ export default function Composer({
                 Stop
               </button>
             )}
-
-            <button
-              onClick={onToggleThinking}
-              title={thinking ? 'Thinking is on' : 'Thinking is off'}
-              className={`flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-[13px] transition ${
-                thinking
-                  ? 'border-white/25 bg-white/10 text-[var(--text)]'
-                  : 'border-white/15 text-[var(--text-mid)] hover:bg-white/10'
-              }`}
-            >
-              <Brain size={14} />
-              Think
-            </button>
           </div>
         </div>
 
@@ -368,7 +415,7 @@ export default function Composer({
           <span className="text-center">
             {imageMode
               ? 'Image mode · your prompt is sent to fal.ai to be drawn'
-              : `${modelLabel} · Zen Chat can make mistakes. Check important info.`}
+              : `${modelLabel} · WorkBuro can make mistakes. Check important info.`}
           </span>
           {speed && Number.isFinite(speed.tps) && speed.tps > 0 ? (
             <span

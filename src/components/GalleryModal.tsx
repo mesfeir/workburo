@@ -61,7 +61,7 @@ export default function GalleryModal({
   const attached = shots.length - drawn
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--scrim)] p-6" onMouseDown={onClose}>
       <div
         data-gallery
         className="flex h-[660px] max-h-[86vh] w-[740px] flex-col overflow-hidden rounded-2xl border border-[var(--rule)] bg-[var(--app)] shadow-2xl"
@@ -77,7 +77,7 @@ export default function GalleryModal({
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <div data-gallery-filter className="flex items-center gap-0.5 rounded-full border border-white/15 p-0.5">
+            <div data-gallery-filter className="flex items-center gap-0.5 rounded-full border border-[var(--rule)] p-0.5">
               {(
                 [
                   ['all', 'All'],
@@ -89,7 +89,7 @@ export default function GalleryModal({
                   key={id}
                   onClick={() => setKind(id)}
                   className={`rounded-full px-2.5 py-1 text-[12px] transition ${
-                    kind === id ? 'bg-[var(--accent-bg)] text-[var(--accent-soft)]' : 'text-faint hover:bg-white/10'
+                    kind === id ? 'bg-[var(--accent-bg)] text-[var(--accent-soft)]' : 'text-faint hover:bg-[var(--raised-2)]'
                   }`}
                 >
                   {label}
@@ -99,14 +99,14 @@ export default function GalleryModal({
             <button
               onClick={onOpenSettings}
               title="Image settings — provider, key, models, cost"
-              className="grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-white/10 hover:text-ink"
+              className="grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-[var(--raised-2)] hover:text-ink"
             >
               <SettingsIcon size={15} />
             </button>
             <button
               onClick={onClose}
               title="Close"
-              className="grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-white/10 hover:text-ink"
+              className="grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-[var(--raised-2)] hover:text-ink"
             >
               <X size={16} />
             </button>
@@ -129,13 +129,13 @@ export default function GalleryModal({
                   title={`${s.kind === 'drawn' ? 'Drawn' : 'Attached'} · ${s.convTitle}${
                     s.prompt ? `\n${s.prompt.slice(0, 200)}` : ''
                   }`}
-                  className="group relative overflow-hidden rounded-xl border border-white/10 bg-black/30 transition hover:border-[var(--accent-rule)]"
+                  className="group relative overflow-hidden rounded-xl border border-[var(--rule-soft)] bg-[var(--raised)] transition hover:border-[var(--accent-rule)]"
                 >
                   <img src={s.url} alt={s.name} className="aspect-square w-full object-cover" />
-                  <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-gradient-to-t from-black/85 to-transparent px-2 pb-1.5 pt-5 text-left">
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-gradient-to-t from-[var(--scrim)] to-transparent px-2 pb-1.5 pt-5 text-left">
                     <span
                       className={`shrink-0 rounded-full px-1.5 py-px text-[10.5px] ${
-                        s.kind === 'drawn' ? 'bg-[var(--accent-bg)] text-[var(--accent-soft)]' : 'bg-white/15 text-[var(--text-mid)]'
+                        s.kind === 'drawn' ? 'bg-[var(--accent-bg)] text-[var(--accent-soft)]' : 'bg-[var(--raised-3)] text-[var(--text-mid)]'
                       }`}
                     >
                       {s.kind === 'drawn' ? 'drawn' : 'attached'}

@@ -247,6 +247,15 @@ async function run({
 }) {
   const results = []
 
+  // The window tucks itself away 30 seconds after losing focus. That is correct for a summonable
+  // launcher, but a run of checks never holds focus, so on any check that takes longer than the
+  // delay — a live image generation, a poll for a drawing row — the window hides underneath the
+  // harness. Downstream that shows up as alwaysOnTop=false, as "minimised while busy", and finally
+  // as an inPage call against a window that is no longer there. The check that deliberately tests
+  // the tuck-away arms it explicitly with its own short delay, so clearing it here only removes the
+  // race, it does not stop that behaviour from being tested.
+  armAutoMinimize({ autoMinimizeSec: 0 })
+
   // surface renderer-side errors so a silent failure can't hide
   win.webContents.on('console-message', (_e, level, message) => {
     if (level >= 2) console.log(`   [renderer ${level === 3 ? 'ERROR' : 'WARN'}] ${message}`)
@@ -256,7 +265,7 @@ async function run({
     console.log(`${pass ? 'PASS' : 'FAIL'}  ${name} — ${detail}`)
   }
 
-  console.log('\n=== Zen Chat self-test ===')
+  console.log('\n=== WorkBuro self-test ===')
   console.log('waiting for app to settle…')
   await sleep(2500)
 
@@ -586,7 +595,7 @@ async function run({
     const t = document.body.innerText || ''
     return {
       shortcut: t.includes('Summon shortcut'),
-      startup: t.includes('Start Zen Chat when Windows starts'),
+      startup: t.includes('Start WorkBuro when Windows starts'),
       presets: t.includes('Ctrl+Alt+Space') && t.includes('Alt+Shift+Space') && t.includes('Ctrl+Alt+K'),
       recorder: !!document.querySelector('[data-hotkey-recorder]'),
     }
@@ -716,7 +725,15 @@ async function run({
       inputWidth: t ? Math.round(t.width) : 0,
       inputBottom: t ? Math.round(t.bottom) : 0,
       modesTop: m ? Math.round(m.top) : 0,
-      modesLabels: modes ? String(modes.innerText || '').replace(/\s+/g, ' ').trim() : '',
+      modesLabels: modes
+        ? Array.from(modes.querySelectorAll('[data-mode]'))
+            .map(
+              (b) =>
+                (b.getAttribute('data-mode') || '') +
+                (b.getAttribute('aria-pressed') === 'true' ? '*' : ''),
+            )
+            .join(' ')
+        : '',
       overlapping:
         !!(t && m && m.top < t.bottom - 2 && m.left < t.right && m.right > t.left && m.left < t.right),
     }
@@ -989,15 +1006,22 @@ async function run({
     const seen = { row: false, kind: '', text: '', bare: false }
     const until = Date.now() + 150000
     while (Date.now() < until) {
-      const s = await inPage(win, function () {
-        const el = document.querySelector('[data-drawing]')
-        if (!el) return null
-        const phase = el.querySelector('[data-drawing-phase]')
-        return {
-          kind: el.getAttribute('data-drawing') || '',
-          text: (phase ? phase.textContent || '' : '').replace(/\s+/g, ' ').trim(),
-        }
-      })
+      let s = null
+      try {
+        s = await inPage(win, function () {
+          const el = document.querySelector('[data-drawing]')
+          if (!el) return null
+          const phase = el.querySelector('[data-drawing-phase]')
+          return {
+            kind: el.getAttribute('data-drawing') || '',
+            text: (phase ? phase.textContent || '' : '').replace(/\s+/g, ' ').trim(),
+          }
+        })
+      } catch {
+        // the window went away mid-poll: stop watching rather than throwing past the run, so the
+        // check reports what it saw instead of aborting every check after it
+        break
+      }
       if (s) {
         seen.row = true
         if (s.kind) seen.kind = s.kind
@@ -1225,9 +1249,9 @@ async function run({
   // "add a hat to it" could only ever draw something new. The button on the picture hands it to
   // the composer as the reference, and the composer switches to "describe the change".
   await inPage(win, function () {
-    const pill = Array.from(document.querySelectorAll('[data-modes] button')).find(
-      (b) => (b.textContent || '').trim() === 'Image',
-    )
+    // found by attribute, not by text: a mode chip hides its label until it is on, so a text lookup
+    // matches nothing and the check would pass without having clicked anything at all
+    const pill = document.querySelector('[data-modes] [data-mode="image"]')
     if (pill) pill.click()
     const ta = document.querySelector('textarea')
     if (ta) {
@@ -1800,7 +1824,7 @@ async function run({
 
   // and it is really on disk, in the folder the app uses — not just described in prose
   const docsFolder = require('electron').app.getPath('documents')
-  const madeDir = path.join(docsFolder, 'Zen Chat')
+  const madeDir = path.join(docsFolder, 'WorkBuro')
   let madeFiles = []
   try {
     madeFiles = fs.readdirSync(madeDir)
@@ -1809,7 +1833,7 @@ async function run({
   }
   const csvFile = madeFiles.find((f) => /\.csv$/i.test(f))
   record(
-    'and the file genuinely exists in the Zen Chat folder in Documents',
+    'and the file genuinely exists in the WorkBuro folder in Documents',
     !!csvFile,
     `folder=${madeDir} found=${madeFiles.slice(0, 6).join(', ') || '(nothing)'}`,
   )
@@ -1822,6 +1846,65 @@ async function run({
     )
   }
   await shot(win, '19-created-document')
+
+  // ---------- 20. the word-by-word reveal while an answer streams
+  // Each word of a streaming answer is its own span so it can fade in as it arrives. Two things
+  // need proving and neither is visible in a screenshot: that the spans exist while the words are
+  // arriving (a still frame cannot show a 240ms animation), and that they are gone once the answer
+  // settles, because the wrapping exists for the animation and leaving it in place is a permanent
+  // cost for no reason.
+  await inPage(win, function () {
+    const b = Array.from(document.querySelectorAll('button')).find(
+      (x) => (x.textContent || '').trim() === 'New chat',
+    )
+    if (b) b.click()
+  })
+  await sleep(600)
+  // Watch the DOM instead of sampling it. The window where an answer is markdown-rendered *and*
+  // still streaming can be a single React commit — the relay can deliver a whole answer in one
+  // chunk — and polling every 120ms will miss that, which is what made this check flaky. An
+  // observer sees every state the DOM passes through, so the peak is the real peak.
+  await inPage(win, function () {
+    window.__reveal = { peak: 0, streamingSeen: 0, proseSeen: 0 }
+    const look = () => {
+      const n = document.querySelectorAll('.word-in').length
+      if (n > window.__reveal.peak) window.__reveal.peak = n
+      if (document.querySelectorAll('[data-streaming]').length) window.__reveal.streamingSeen += 1
+      const prose = document.querySelector('[data-streaming] .prose-zen')
+      if (prose && (prose.textContent || '').trim()) window.__reveal.proseSeen += 1
+    }
+    new MutationObserver(look).observe(document.body, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+    })
+    look()
+  })
+  await inPage(win, pageType, ['Count from one to forty, one number per word, on a single line.'])
+  await inPage(win, pageSend)
+  await waitFor(win, pageIdle, 180000, 300, 'the counting answer to settle')
+  await sleep(700)
+  const reveal = await inPage(win, function () {
+    return {
+      ...window.__reveal,
+      settled: document.querySelectorAll('.word-in').length,
+      streamedProse: (function () {
+        const p = document.querySelector('.prose-zen')
+        return p ? (p.textContent || '').trim().slice(0, 60) : ''
+      })(),
+    }
+  })
+  record(
+    'the words of a streaming answer are wrapped one by one, so each can animate in as it arrives',
+    reveal.peak > 0,
+    `peak ${reveal.peak} wrapped words; the answer was live for ${reveal.streamingSeen} DOM states with prose in ${reveal.proseSeen} of them; rendered as "${reveal.streamedProse}"`,
+  )
+  record(
+    'and that wrapping is gone once the answer settles, so nothing pays for it afterwards',
+    reveal.settled === 0,
+    `${reveal.settled} word spans left after settling`,
+  )
+  await shot(win, '20-streaming-reveal')
 
   console.log('\n=== summary ===')
   const failed = results.filter((r) => !r.pass)

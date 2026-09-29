@@ -141,7 +141,7 @@ export default function ImageModelPicker({
             ? `Image model: ${current}${priceOf(current) ? ` · ${priceOf(current)}` : ''}`
             : 'Choose the model that draws pictures'
         }
-        className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[15px] text-[var(--text-mid)] transition hover:bg-white/[.07]"
+        className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[15px] text-[var(--text-mid)] transition hover:bg-[var(--raised-2)]"
       >
         <ImageIcon size={15} className="shrink-0 text-faint" />
         <span className="max-w-[210px] truncate">{current ? short(current) : 'Choose image model'}</span>
@@ -182,7 +182,7 @@ export default function ImageModelPicker({
                     onChange(m.id)
                     setOpen(false)
                   }}
-                  className="flex w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-white/[.06]"
+                  className="flex w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-[var(--raised)]"
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[13.5px] text-ink">{short(m.id)}</span>

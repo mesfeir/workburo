@@ -10,7 +10,7 @@
  *     files.cjs rewrites the path to app.asar.unpacked, which asarUnpack has to have created.
  *
  * Run:  npm run check:packaged
- * Or point it at an install:  node scripts/check-packaged-files.cjs "C:/…/Programs/Zen Chat/Zen Chat.exe"
+ * Or point it at an install:  node scripts/check-packaged-files.cjs "C:/…/Programs/WorkBuro/WorkBuro.exe"exe"
  *
  * It launches the packaged binary as plain Node (ELECTRON_RUN_AS_NODE), so no window appears. It
  * writes four small documents into a temp folder to prove the writing half works in the built app,
@@ -19,7 +19,7 @@
 const path = require('path')
 const { spawnSync } = require('child_process')
 
-const DEFAULT_EXE = path.join(__dirname, '..', 'release', 'win-unpacked', 'Zen Chat.exe')
+const DEFAULT_EXE = path.join(__dirname, '..', 'release', 'win-unpacked', 'WorkBuro.exe')
 const FIX = path.join(__dirname, 'fixtures')
 
 /** The half that runs inside the packaged app. */

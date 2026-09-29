@@ -39,17 +39,17 @@
   --font-mono: 'Cascadia Mono', Consolas, ui-monospace, monospace;
 
   --app: #121212;
-  --raised: #181818;
-  --raised-2: #1f1f1f;
-  --raised-3: #262626;
-  --raised-4: #2e2e2e;
-  --rule: #2e2e2e;
-  --rule-soft: #242424;
-  --text: #ececec;
-  --text-mid: #a8a8a8;
-  --text-dim: #7a7a7a;
-  --text-faint: #6e6e6e;
-  --text-solid: #ffffff;
+  --raised: #191816;
+  --raised-2: #201e1b;
+  --raised-3: #272420;
+  --raised-4: #2f2c27;
+  --rule: #2f2c27;
+  --rule-soft: #252220;
+  --text: #edebe6;
+  --text-mid: #a9a59d;
+  --text-dim: #7c786f;
+  --text-faint: #706d65;
+  --text-solid: #f6f4ef;
   --accent: #2f6feb;
   --accent-bright: #4f8cff;
   --accent-bg: #20365a;
@@ -188,6 +188,30 @@
 }
 
 /* ---------------------------------------------------------- markdown prose */
+/* A word arriving from the model fades in from the left, so a streaming answer reads as if it is
+   being written rather than appearing in chunks. Only opacity and transform animate, so this stays
+   on the compositor. Words are inline-block only because a transform does nothing on a plain
+   inline box; line breaking is unaffected because the spaces between them stay plain text. */
+@keyframes word-in {
+  from {
+    opacity: 0;
+    transform: translateX(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.word-in {
+  display: inline-block;
+  animation: word-in 240ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .word-in {
+    animation: none;
+  }
+}
+
 .prose-zen {
   @apply text-[15.5px] leading-[1.7];
 }

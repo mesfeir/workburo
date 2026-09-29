@@ -18,7 +18,17 @@ const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 
 const projectRoot = path.join(__dirname, '..')
-const exe = path.join(projectRoot, 'release', 'win-unpacked', 'Zen Chat.exe')
+// Derived, not hardcoded. This was still pointing at "Zen Chat.exe" after the app was renamed,
+// which made the whole script a silent no-op — it found no exe, printed "nothing to do", and the
+// icon and version info were never stamped onto the build at all.
+const unpackedDir = path.join(projectRoot, 'release', 'win-unpacked')
+const packagedExe = fs.existsSync(unpackedDir)
+  ? fs.readdirSync(unpackedDir).find((f) => f.endsWith('.exe') && !/^uninstall/i.test(f))
+  : null
+// Takes an optional path so an already-installed exe can be restamped without a full rebuild:
+//   node scripts/apply-icon.cjs "C:/Users/Mel/AppData/Local/Programs/WorkBuro/WorkBuro.exe"
+const exeArgument = process.argv[2]
+const exe = exeArgument || (packagedExe ? path.join(unpackedDir, packagedExe) : '')
 const icon = path.join(projectRoot, 'build', 'icon.ico')
 
 function findRcedit() {
@@ -62,16 +72,26 @@ function main() {
     return
   }
 
+  // Read from package.json rather than hardcoding. These strings were literal "Zen Chat" text, so
+  // the rename left the icon correct but the file properties still naming the old product — visible
+  // in Task Manager, the file's Details tab and anywhere that lists a description.
+  const pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'))
+  // productName lives in the build block for electron-builder, not at the top level, so reading it
+  // only from the top level silently fell back to "name" and stamped the lowercase package name.
+  const productName = (pkg.build && pkg.build.productName) || pkg.productName || pkg.name || 'WorkBuro'
+  const description = pkg.description || productName
+  const version = pkg.version || '1.0.0'
+
   const before = fs.statSync(exe)
   const args = [
     exe,
     '--set-icon', icon,
-    '--set-version-string', 'ProductName', 'Zen Chat',
-    '--set-version-string', 'FileDescription', 'Zen Chat — bring-your-own-API AI chat client',
+    '--set-version-string', 'ProductName', productName,
+    '--set-version-string', 'FileDescription', description,
     '--set-version-string', 'CompanyName', 'Clearest Lab',
     '--set-version-string', 'LegalCopyright', 'Clearest Lab',
-    '--set-file-version', '1.0.0',
-    '--set-product-version', '1.0.0',
+    '--set-file-version', version,
+    '--set-product-version', version,
   ]
 
   try {

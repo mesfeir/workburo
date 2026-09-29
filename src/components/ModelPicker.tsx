@@ -42,7 +42,7 @@ export default function ModelPicker({
     <div className="relative no-drag" ref={box}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[15px] font-medium text-[var(--text-mid)] transition hover:bg-white/[.07]"
+        className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[15px] font-medium text-[var(--text-mid)] transition hover:bg-[var(--raised-2)]"
       >
         <span className="max-w-[280px] truncate">{current || 'Select a model'}</span>
         <ChevronDown size={15} className="text-faint" />
@@ -62,7 +62,7 @@ export default function ModelPicker({
             <button
               onClick={onRefresh}
               title="Refresh model list from the API"
-              className="grid h-7 w-7 place-items-center rounded-md text-muted transition hover:bg-white/10 hover:text-ink"
+              className="grid h-7 w-7 place-items-center rounded-md text-muted transition hover:bg-[var(--raised-2)] hover:text-ink"
             >
               <RefreshCw size={13} />
             </button>
@@ -88,7 +88,7 @@ export default function ModelPicker({
                 <div
                   key={m.id}
                   className={`group flex items-center gap-1 px-2 ${
-                    m.id === current ? 'bg-white/[.09]' : 'hover:bg-white/[.06]'
+                    m.id === current ? 'bg-[var(--raised-2)]' : 'hover:bg-[var(--raised)]'
                   }`}
                 >
                   <button
@@ -117,7 +117,7 @@ export default function ModelPicker({
                     {pref.protocol === 'responses' && (
                       <span
                         title="Uses the Responses protocol"
-                        className="rounded bg-white/10 px-1 text-[9.5px] uppercase tracking-wide text-[var(--text-mid)]"
+                        className="rounded bg-[var(--raised-2)] px-1 text-[9.5px] uppercase tracking-wide text-[var(--text-mid)]"
                       >
                         resp
                       </span>
@@ -127,7 +127,7 @@ export default function ModelPicker({
                   <button
                     onClick={() => onProbe(m.id)}
                     title="Test this model (capabilities + a live call)"
-                    className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted opacity-0 transition hover:bg-white/10 hover:text-ink group-hover:opacity-100"
+                    className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted opacity-0 transition hover:bg-[var(--raised-2)] hover:text-ink group-hover:opacity-100"
                   >
                     <Zap size={13} className={probingId === m.id ? 'animate-pulse text-[var(--warn)]' : ''} />
                   </button>
@@ -141,7 +141,7 @@ export default function ModelPicker({
               setOpen(false)
               onConfigure()
             }}
-            className="flex w-full items-center gap-2 border-t border-[var(--rule)] px-3 py-2 text-left text-[13px] text-muted transition hover:bg-white/[.06] hover:text-ink"
+            className="flex w-full items-center gap-2 border-t border-[var(--rule)] px-3 py-2 text-left text-[13px] text-muted transition hover:bg-[var(--raised)] hover:text-ink"
           >
             <Zap size={13} /> API &amp; model settings
           </button>

@@ -483,7 +483,7 @@ export default function SettingsModal({
     setRecording(false)
     await window.zen.app.setHotkey('')
     onConfig({ hotkey: '' })
-    setHotkeyMsg({ ok: true, msg: 'Shortcut cleared — open Zen Chat from the tray instead.' })
+    setHotkeyMsg({ ok: true, msg: 'Shortcut cleared — open WorkBuro from the tray instead.' })
   }
 
   const toggleStartup = async (enabled: boolean) => {
@@ -495,8 +495,8 @@ export default function SettingsModal({
       msg:
         state.openAtLogin === enabled
           ? enabled
-            ? 'Zen Chat will start with Windows, quietly in the tray.'
-            : 'Zen Chat will no longer start with Windows.'
+            ? 'WorkBuro will start with Windows, quietly in the tray.'
+            : 'WorkBuro will no longer start with Windows.'
           : 'Windows did not accept that change.',
     })
   }
@@ -579,14 +579,14 @@ export default function SettingsModal({
   })()
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--scrim)] p-6" onMouseDown={onClose}>
       <div
         className="flex h-[660px] max-h-[86vh] w-[740px] flex-col overflow-hidden rounded-2xl border border-[var(--rule)] bg-[var(--app)] shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[var(--rule)] px-5 py-3.5">
           <h2 className="text-[16px] font-semibold">Settings</h2>
-          <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-white/10 hover:text-ink">
+          <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-[var(--raised-2)] hover:text-ink">
             <X size={16} />
           </button>
         </div>
@@ -599,7 +599,7 @@ export default function SettingsModal({
                 data-settings-tab={t}
                 onClick={() => setTab(t)}
                 className={`mb-0.5 w-full rounded-lg px-3 py-2 text-left text-[13.5px] transition ${
-                  tab === t ? 'bg-white/[.09] text-ink' : 'text-muted hover:bg-white/[.05]'
+                  tab === t ? 'bg-[var(--raised-2)] text-ink' : 'text-muted hover:bg-[var(--raised)]'
                 }`}
               >
                 {TAB_LABELS[t]}
@@ -636,7 +636,7 @@ export default function SettingsModal({
                 </Field>
                 <Field
                   label="Window behaviour"
-                  hint="Zen Chat sits above other windows so the summon shortcut always finds it, and tucks itself away once you have gone elsewhere. Nothing is minimised while an answer or a picture is still on its way."
+                  hint="WorkBuro sits above other windows so the summon shortcut always finds it, and tucks itself away once you have gone elsewhere. Nothing is minimised while an answer or a picture is still on its way."
                 >
                   <label className="flex items-center gap-2.5">
                     <input
@@ -674,7 +674,7 @@ export default function SettingsModal({
 
                 <Field
                   label="Summon shortcut"
-                  hint="Click the box, then press your combination. It works from anywhere in Windows and toggles Zen Chat open or closed."
+                  hint="Click the box, then press your combination. It works from anywhere in Windows and toggles WorkBuro open or closed."
                 >
                   <div className="space-y-2.5">
                     <HotkeyRecorder
@@ -692,7 +692,7 @@ export default function SettingsModal({
                           className={`rounded-md border px-2 py-1 font-mono text-[11.5px] transition ${
                             config.hotkey === p
                               ? 'border-[var(--accent-rule)] bg-[var(--raised)] text-ink'
-                              : 'border-[var(--rule)] text-muted hover:bg-white/[.06] hover:text-ink'
+                              : 'border-[var(--rule)] text-muted hover:bg-[var(--raised)] hover:text-ink'
                           }`}
                         >
                           {p}
@@ -700,7 +700,7 @@ export default function SettingsModal({
                       ))}
                       <button
                         onClick={clearHotkey}
-                        className="rounded-md border border-[var(--rule)] px-2 py-1 text-[11.5px] text-muted transition hover:bg-white/[.06] hover:text-ink"
+                        className="rounded-md border border-[var(--rule)] px-2 py-1 text-[11.5px] text-muted transition hover:bg-[var(--raised)] hover:text-ink"
                       >
                         Clear
                       </button>
@@ -730,7 +730,7 @@ export default function SettingsModal({
                         ) : liveHotkey.active ? (
                           <>
                             Live now: press <b className="font-mono text-ink">{liveHotkey.active}</b> anywhere to
-                            summon Zen Chat.
+                            summon WorkBuro.
                           </>
                         ) : liveHotkey.requested ? (
                           <>
@@ -754,7 +754,7 @@ export default function SettingsModal({
                       className="mt-0.5 accent-[var(--accent)]"
                     />
                     <span>
-                      <span className="block text-[13px] text-[var(--text-mid)]">Start Zen Chat when Windows starts</span>
+                      <span className="block text-[13px] text-[var(--text-mid)]">Start WorkBuro when Windows starts</span>
                       <span className="mt-0.5 block text-[11.5px] leading-snug text-faint">
                         Starts quietly in the notification area — nothing steals focus at login. Press your summon
                         shortcut, or click the tray icon, to bring it up.
@@ -765,7 +765,7 @@ export default function SettingsModal({
 
                 <Field
                   label="Window"
-                  hint="Zen Chat opens small so it can sit over other work. Size and position are remembered between launches."
+                  hint="WorkBuro opens small so it can sit over other work. Size and position are remembered between launches."
                 >
                   <div className="flex flex-wrap gap-2">
                     <button
@@ -773,13 +773,13 @@ export default function SettingsModal({
                         const b = await window.zen.app.resetBounds()
                         if (b) setHotkeyMsg({ ok: true, msg: `Window reset to ${b.width}×${b.height}.` })
                       }}
-                      className="flex items-center gap-1.5 rounded-lg border border-[var(--rule)] px-3 py-2 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink"
+                      className="flex items-center gap-1.5 rounded-lg border border-[var(--rule)] px-3 py-2 text-[12.5px] text-muted transition hover:bg-[var(--raised)] hover:text-ink"
                     >
                       <Minimize2 size={13} /> Reset to the default small size
                     </button>
                     <button
                       onClick={() => window.zen.app.hideWindow()}
-                      className="flex items-center gap-1.5 rounded-lg border border-[var(--rule)] px-3 py-2 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink"
+                      className="flex items-center gap-1.5 rounded-lg border border-[var(--rule)] px-3 py-2 text-[12.5px] text-muted transition hover:bg-[var(--raised)] hover:text-ink"
                     >
                       <EyeOff size={13} /> Hide to tray
                     </button>
@@ -800,7 +800,7 @@ export default function SettingsModal({
                         className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12.5px] transition ${
                           config.baseUrl === p.baseUrl
                             ? 'border-[var(--accent-rule)] bg-[var(--raised)] text-ink'
-                            : 'border-[var(--rule)] text-muted hover:bg-white/[.06] hover:text-ink'
+                            : 'border-[var(--rule)] text-muted hover:bg-[var(--raised)] hover:text-ink'
                         }`}
                       >
                         <Globe size={12} /> {p.name}
@@ -934,7 +934,7 @@ export default function SettingsModal({
                           if (cur.toLowerCase().includes(p.toLowerCase())) return
                           onConfig({ systemPrompt: cur.trim() ? `${cur.replace(/\s+$/, '')}\n${p}` : p })
                         }}
-                        className="rounded-full border border-[var(--rule)] px-2 py-1 text-[11.5px] text-muted transition hover:bg-white/[.06] hover:text-ink"
+                        className="rounded-full border border-[var(--rule)] px-2 py-1 text-[11.5px] text-muted transition hover:bg-[var(--raised)] hover:text-ink"
                       >
                         + {p}
                       </button>
@@ -1054,7 +1054,7 @@ export default function SettingsModal({
                         <button
                           onClick={uninstallPi}
                           disabled={piBusy}
-                          className="flex h-[34px] shrink-0 items-center rounded-lg border border-[var(--rule)] px-3 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink disabled:opacity-50"
+                          className="flex h-[34px] shrink-0 items-center rounded-lg border border-[var(--rule)] px-3 text-[12.5px] text-muted transition hover:bg-[var(--raised)] hover:text-ink disabled:opacity-50"
                         >
                           Remove
                         </button>
@@ -1095,14 +1095,14 @@ export default function SettingsModal({
                     <input className={inputCls} value={agent.workspace || ''} readOnly placeholder="No folder chosen yet" />
                     <button
                       onClick={chooseWorkspace}
-                      className="flex h-[38px] shrink-0 items-center rounded-lg border border-[var(--rule)] px-3 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink"
+                      className="flex h-[38px] shrink-0 items-center rounded-lg border border-[var(--rule)] px-3 text-[12.5px] text-muted transition hover:bg-[var(--raised)] hover:text-ink"
                     >
                       Choose…
                     </button>
                     <button
                       onClick={() => void window.zen.pi.openWorkspace()}
                       disabled={!agent.workspace}
-                      className="flex h-[38px] shrink-0 items-center rounded-lg border border-[var(--rule)] px-3 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink disabled:opacity-50"
+                      className="flex h-[38px] shrink-0 items-center rounded-lg border border-[var(--rule)] px-3 text-[12.5px] text-muted transition hover:bg-[var(--raised)] hover:text-ink disabled:opacity-50"
                     >
                       Open
                     </button>
@@ -1158,7 +1158,7 @@ export default function SettingsModal({
                       <span className="block text-[13px] text-[var(--text-mid)]">Let the model use tools</span>
                       <span className="mt-0.5 block text-[11.5px] leading-snug text-faint">
                         Without this, a model can only answer from its training data — no live web, no real-time
-                        anything. With it, the model can ask Zen Chat for information and then answer using it.
+                        anything. With it, the model can ask WorkBuro for information and then answer using it.
                       </span>
                     </span>
                   </label>
@@ -1217,7 +1217,7 @@ export default function SettingsModal({
                           msg: r.ok ? `Search works — ${r.preview.slice(0, 150)}` : r.error || 'Search failed.',
                         })
                       }}
-                      className="flex items-center gap-1.5 rounded-lg border border-[var(--rule)] px-3 py-2 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink disabled:opacity-50"
+                      className="flex items-center gap-1.5 rounded-lg border border-[var(--rule)] px-3 py-2 text-[12.5px] text-muted transition hover:bg-[var(--raised)] hover:text-ink disabled:opacity-50"
                     >
                       {testing ? <RefreshCw size={13} className="animate-spin" /> : <Globe size={13} />} Test search
                     </button>
@@ -1280,7 +1280,7 @@ export default function SettingsModal({
                   />
                   <button
                     onClick={test}
-                    className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--rule)] px-3 py-2 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink"
+                    className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--rule)] px-3 py-2 text-[12.5px] text-muted transition hover:bg-[var(--raised)] hover:text-ink"
                   >
                     <RefreshCw size={13} /> Reload
                   </button>
@@ -1298,17 +1298,17 @@ export default function SettingsModal({
                   {filtered.map((m) => {
                     const p = config.modelPrefs?.[m.id] || {}
                     return (
-                      <div key={m.id} className="flex items-center gap-2 px-3 py-1.5 hover:bg-white/[.03]">
+                      <div key={m.id} className="flex items-center gap-2 px-3 py-1.5 hover:bg-[var(--raised)]">
                         <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-[var(--text-mid)]">{m.id}</span>
                         {p.protocol && (
-                          <span className="rounded bg-white/10 px-1.5 text-[9.5px] uppercase tracking-wide text-[var(--text-mid)]">
+                          <span className="rounded bg-[var(--raised-2)] px-1.5 text-[9.5px] uppercase tracking-wide text-[var(--text-mid)]">
                             {p.protocol}
                           </span>
                         )}
                         <button
                           onClick={() => cycleVision(m.id)}
                           title={`Vision: ${p.vision || 'unknown'} (click to change)`}
-                          className="grid h-6 w-6 place-items-center rounded text-muted hover:bg-white/10 hover:text-ink"
+                          className="grid h-6 w-6 place-items-center rounded text-muted hover:bg-[var(--raised-2)] hover:text-ink"
                         >
                           {p.vision === 'yes' ? (
                             <Eye size={13} className="text-[var(--ok)]" />
@@ -1321,7 +1321,7 @@ export default function SettingsModal({
                         <button
                           onClick={() => onProbe(m.id)}
                           disabled={probing === m.id}
-                          className="grid h-6 w-6 place-items-center rounded text-muted hover:bg-white/10 hover:text-ink disabled:opacity-50"
+                          className="grid h-6 w-6 place-items-center rounded text-muted hover:bg-[var(--raised-2)] hover:text-ink disabled:opacity-50"
                         >
                           <Zap size={13} className={probing === m.id ? 'animate-pulse text-[var(--warn)]' : ''} />
                         </button>
@@ -1380,14 +1380,14 @@ export default function SettingsModal({
                     <button
                       onClick={() => setShowFalKey((s) => !s)}
                       title={showFalKey ? 'Hide key' : 'Show key'}
-                      className="grid h-[38px] w-10 shrink-0 place-items-center rounded-lg border border-[var(--rule)] text-muted transition hover:bg-white/[.06] hover:text-ink"
+                      className="grid h-[38px] w-10 shrink-0 place-items-center rounded-lg border border-[var(--rule)] text-muted transition hover:bg-[var(--raised)] hover:text-ink"
                     >
                       {showFalKey ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
                     <button
                       onClick={loadFalModels}
                       disabled={falBusy || !imageGen.falKey}
-                      className="flex h-[38px] shrink-0 items-center gap-1.5 rounded-lg border border-[var(--rule)] px-3 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink disabled:opacity-50"
+                      className="flex h-[38px] shrink-0 items-center gap-1.5 rounded-lg border border-[var(--rule)] px-3 text-[12.5px] text-muted transition hover:bg-[var(--raised)] hover:text-ink disabled:opacity-50"
                     >
                       <RefreshCw size={13} className={falBusy ? 'animate-spin' : ''} />
                       Test key &amp; load models
@@ -1459,7 +1459,7 @@ export default function SettingsModal({
                             className={`px-2 py-1 text-[11.5px] transition ${
                               falSort === k
                                 ? 'bg-[var(--accent-bg)] text-[var(--accent-soft)]'
-                                : 'text-muted hover:bg-white/[.05]'
+                                : 'text-muted hover:bg-[var(--raised)]'
                             }`}
                           >
                             {label}
@@ -1489,7 +1489,7 @@ export default function SettingsModal({
                             data-selected={on ? 'yes' : undefined}
                             onClick={() => setImageGen({ model: m.id })}
                             className={`flex w-full items-center gap-2 px-3 py-2 text-left transition ${
-                              on ? 'bg-[var(--accent-bg)]' : 'hover:bg-white/[.03]'
+                              on ? 'bg-[var(--accent-bg)]' : 'hover:bg-[var(--raised)]'
                             }`}
                           >
                             <span className="min-w-0 flex-1">
@@ -1510,7 +1510,7 @@ export default function SettingsModal({
                                 <span className="mt-0.5 block truncate text-[10.5px] text-[var(--text-dim)]">{m.pricing}</span>
                               )}
                             </span>
-                            <span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[9.5px] tracking-wide text-[var(--text-mid)] uppercase">
+                            <span className="shrink-0 rounded bg-[var(--raised-2)] px-1.5 py-0.5 text-[9.5px] tracking-wide text-[var(--text-mid)] uppercase">
                               {m.category === 'text-to-image' ? 't2i' : 'i2i'}
                             </span>
                             {on && <Check size={13} className="shrink-0 text-[var(--accent-bright)]" />}
@@ -1638,7 +1638,7 @@ export default function SettingsModal({
                   <button
                     onClick={runTestGeneration}
                     disabled={falBusy || !imageGen.falKey || !imageGen.model}
-                    className="flex items-center gap-1.5 rounded-lg border border-[var(--rule)] px-3 py-1.5 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink disabled:opacity-50"
+                    className="flex items-center gap-1.5 rounded-lg border border-[var(--rule)] px-3 py-1.5 text-[12.5px] text-muted transition hover:bg-[var(--raised)] hover:text-ink disabled:opacity-50"
                   >
                     <Sparkles size={13} /> Generate one test image
                   </button>
@@ -1655,7 +1655,7 @@ export default function SettingsModal({
                         <img
                           src={genTest.url}
                           alt="fal.ai test generation"
-                          className="h-16 w-16 shrink-0 rounded-lg border border-white/10 object-cover"
+                          className="h-16 w-16 shrink-0 rounded-lg border border-[var(--rule-soft)] object-cover"
                         />
                       ) : (
                         <TriangleAlert size={13} className="mt-[1px] shrink-0" />
@@ -1671,7 +1671,7 @@ export default function SettingsModal({
                   </div>
                   <button
                     onClick={() => window.zen.images.openFolder()}
-                    className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--rule)] px-2.5 py-1.5 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink"
+                    className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--rule)] px-2.5 py-1.5 text-[12.5px] text-muted transition hover:bg-[var(--raised)] hover:text-ink"
                   >
                     <FolderOpen size={13} /> Open folder
                   </button>
@@ -1682,7 +1682,7 @@ export default function SettingsModal({
             {tab === 'about' && (
               <div className="space-y-3 text-[13px] text-[var(--text-mid)]">
                 <div>
-                  <strong className="font-medium">Zen Chat</strong> {info?.version} — a ChatGPT-style Windows client
+                  <strong className="font-medium">WorkBuro</strong> {info?.version} — a ChatGPT-style Windows client
                   that talks to any OpenAI-compatible endpoint you point it at.
                 </div>
                 <div className="rounded-xl border border-[var(--rule)] bg-[var(--app)] p-3">
@@ -1711,7 +1711,7 @@ export default function SettingsModal({
                   <div className="break-all font-mono text-[11.5px] text-faint">{info?.storePath}</div>
                   <button
                     onClick={() => window.zen.app.openStore()}
-                    className="mt-2 flex items-center gap-1.5 rounded-lg border border-[var(--rule)] px-2.5 py-1.5 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink"
+                    className="mt-2 flex items-center gap-1.5 rounded-lg border border-[var(--rule)] px-2.5 py-1.5 text-[12.5px] text-muted transition hover:bg-[var(--raised)] hover:text-ink"
                   >
                     <FolderOpen size={13} /> Open folder
                   </button>
