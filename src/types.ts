@@ -196,7 +196,12 @@ export interface McpConfig {
   servers: McpServer[]
 }
 
+/** Which palette the window wears. Dark is the default; paper is the same interface on unbleached
+ *  stock. Both live in index.css as variables, so this value is the entire switch. */
+export type ThemeName = 'dark' | 'paper'
+
 export interface Config {
+  theme?: ThemeName
   baseUrl: string
   apiKey: string
   model: string

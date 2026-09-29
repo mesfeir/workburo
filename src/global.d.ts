@@ -40,6 +40,10 @@ export interface ImageGenResult {
 }
 
 export interface ZenApi {
+  theme: {
+    apply: (name: string) => Promise<boolean>
+  },
+
   store: {
     get: () => Promise<StoreShape>
     save: (data: StoreShape) => Promise<boolean>

@@ -2,6 +2,10 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron')
 
 // One narrow, explicit surface for the renderer. No node, no fs, no keys in the page.
 contextBridge.exposeInMainWorld('zen', {
+  theme: {
+    apply: (name) => ipcRenderer.invoke('theme:apply', name),
+  },
+
   store: {
     get: () => ipcRenderer.invoke('store:get'),
     save: (data) => ipcRenderer.invoke('store:save', data),

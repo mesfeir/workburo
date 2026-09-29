@@ -4,22 +4,21 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Paper blueprint: unbleached paper, carbon ink, one hazard red.
-        sidebar: '#EAE8E1',
-        canvas: '#F4F4F0',
-        panel: '#EFEDE7',
-        pill: '#DDD9D0',
-        bubble: '#E4E1D9',
-        hair: '#C9C5BA',
-        ink: '#111111',
-        muted: '#4A463D',
-        faint: '#6E6A60',
-        accent: '#E61919',
+        sidebar: 'var(--app)',
+        canvas: 'var(--app)',
+        panel: 'var(--raised)',
+        pill: 'var(--raised-3)',
+        bubble: 'var(--raised-3)',
+        hair: 'var(--rule)',
+        ink: 'var(--text)',
+        muted: 'var(--text-mid)',
+        faint: 'var(--text-dim)',
+        accent: 'var(--accent)',
       },
       fontFamily: {
-        sans: ['Inter', 'Segoe UI', 'system-ui', 'sans-serif'],
-        mono: ['JetBrains Mono', 'Cascadia Mono', 'Consolas', 'monospace'],
-        display: ['Archivo Black', 'Inter', 'system-ui', 'sans-serif'],
+        sans: 'var(--font-sans)',
+        mono: 'var(--font-mono)',
+        display: "'Archivo Black', 'Inter', system-ui, sans-serif",
       },
       keyframes: {
         'fade-up': {

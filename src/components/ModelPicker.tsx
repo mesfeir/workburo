@@ -42,15 +42,15 @@ export default function ModelPicker({
     <div className="relative no-drag" ref={box}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 rounded-none px-2 py-1.5 text-[15px] font-medium text-[#1e1b17] transition hover:bg-white/[.07]"
+        className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[15px] font-medium text-[var(--text-mid)] transition hover:bg-white/[.07]"
       >
         <span className="max-w-[280px] truncate">{current || 'Select a model'}</span>
         <ChevronDown size={15} className="text-faint" />
       </button>
 
       {open && (
-        <div className="absolute left-0 top-[38px] z-40 w-[350px] overflow-hidden rounded-none border border-[#e9e7e0] bg-[#edebe5] shadow-2xl">
-          <div className="flex items-center gap-2 border-b border-[#e9e7e0] px-3 py-2">
+        <div className="absolute left-0 top-[38px] z-40 w-[350px] overflow-hidden rounded-2xl border border-[var(--rule)] bg-[var(--raised)] shadow-2xl">
+          <div className="flex items-center gap-2 border-b border-[var(--rule)] px-3 py-2">
             <Search size={14} className="text-faint" />
             <input
               autoFocus
@@ -62,7 +62,7 @@ export default function ModelPicker({
             <button
               onClick={onRefresh}
               title="Refresh model list from the API"
-              className="grid h-7 w-7 place-items-center rounded-none text-muted transition hover:bg-white/10 hover:text-ink"
+              className="grid h-7 w-7 place-items-center rounded-md text-muted transition hover:bg-white/10 hover:text-ink"
             >
               <RefreshCw size={13} />
             </button>
@@ -72,7 +72,7 @@ export default function ModelPicker({
             {list.length === 0 && (
               <div className="px-3 py-3 text-[13px] text-faint">
                 {models.length === 0 ? (
-                  <button onClick={onConfigure} className="text-[#c41414] hover:underline">
+                  <button onClick={onConfigure} className="text-[var(--accent-bright)] hover:underline">
                     No models loaded — open Settings to test your API
                   </button>
                 ) : (
@@ -98,38 +98,38 @@ export default function ModelPicker({
                     }}
                     className="flex min-w-0 flex-1 items-center gap-2 px-1 py-2 text-left"
                   >
-                    <span className="min-w-0 flex-1 truncate text-[13.5px] text-[#16130f]">{m.id}</span>
+                    <span className="min-w-0 flex-1 truncate text-[13.5px] text-[var(--text-mid)]">{m.id}</span>
                     {vision && (
                       <span title="Takes image input">
-                        <Eye size={13} className="text-[#1b6b3a]" />
+                        <Eye size={13} className="text-[var(--ok)]" />
                       </span>
                     )}
                     {novision && (
                       <span title="Text only — will reject images">
-                        <EyeOff size={13} className="text-[#5a564d]" />
+                        <EyeOff size={13} className="text-[var(--text-faint)]" />
                       </span>
                     )}
                     {pref.thinking && (
                       <span title="Reasoning model">
-                        <Brain size={13} className="text-[#c41414]" />
+                        <Brain size={13} className="text-[var(--accent-bright)]" />
                       </span>
                     )}
                     {pref.protocol === 'responses' && (
                       <span
                         title="Uses the Responses protocol"
-                        className="rounded bg-white/10 px-1 text-[9.5px] uppercase tracking-wide text-[#2f2b25]"
+                        className="rounded bg-white/10 px-1 text-[9.5px] uppercase tracking-wide text-[var(--text-mid)]"
                       >
                         resp
                       </span>
                     )}
-                    {m.id === current && <Check size={14} className="text-[#4a463d]" />}
+                    {m.id === current && <Check size={14} className="text-[var(--text-dim)]" />}
                   </button>
                   <button
                     onClick={() => onProbe(m.id)}
                     title="Test this model (capabilities + a live call)"
-                    className="grid h-7 w-7 shrink-0 place-items-center rounded-none text-muted opacity-0 transition hover:bg-white/10 hover:text-ink group-hover:opacity-100"
+                    className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted opacity-0 transition hover:bg-white/10 hover:text-ink group-hover:opacity-100"
                   >
-                    <Zap size={13} className={probingId === m.id ? 'animate-pulse text-[#7a5a00]' : ''} />
+                    <Zap size={13} className={probingId === m.id ? 'animate-pulse text-[var(--warn)]' : ''} />
                   </button>
                 </div>
               )
@@ -141,7 +141,7 @@ export default function ModelPicker({
               setOpen(false)
               onConfigure()
             }}
-            className="flex w-full items-center gap-2 border-t border-[#e9e7e0] px-3 py-2 text-left text-[13px] text-muted transition hover:bg-white/[.06] hover:text-ink"
+            className="flex w-full items-center gap-2 border-t border-[var(--rule)] px-3 py-2 text-left text-[13px] text-muted transition hover:bg-white/[.06] hover:text-ink"
           >
             <Zap size={13} /> API &amp; model settings
           </button>

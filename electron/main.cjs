@@ -672,11 +672,11 @@ function createTray() {
   let image = nativeImage.createFromPath(iconPath)
   if (image.isEmpty()) image = nativeImage.createFromPath(path.join(__dirname, 'assets', 'tray@1x.png'))
   tray = new Tray(image)
-  tray.setToolTip('Zen Chat')
+  tray.setToolTip('WorkBuro')
 
   const cfg = readStore().config
   const menu = Menu.buildFromTemplate([
-    { label: 'Show / hide Zen Chat', click: () => toggleWindow() },
+    { label: 'Show / hide WorkBuro', click: () => toggleWindow() },
     {
       label: 'New chat',
       click: () => {
@@ -694,7 +694,7 @@ function createTray() {
     { type: 'separator' },
     { label: cfg.hotkey ? `Summon shortcut: ${cfg.hotkey}` : 'No summon shortcut set', enabled: false },
     { type: 'separator' },
-    { label: 'Quit Zen Chat', click: () => app.quit() },
+    { label: 'Quit WorkBuro', click: () => app.quit() },
   ])
   tray.setContextMenu(menu)
   tray.on('click', () => toggleWindow())
@@ -1496,6 +1496,22 @@ async function runRound({ protocol, base, cfg, messages, systemPrompt, send, ac,
 }
 
 /* --------------------------------------------------------------- IPC: chat */
+
+// The title bar overlay is painted by the OS above our own top bar, so it cannot inherit a CSS
+// variable. It has to be told, or the paper theme wears a black band across its top edge.
+ipcMain.handle('theme:apply', (_e, name) => {
+  const paper = name === 'paper'
+  try {
+    win.setTitleBarOverlay({
+      color: paper ? '#f4f4f0' : '#121212',
+      symbolColor: paper ? '#111111' : '#a8a8a8',
+      height: 44,
+    })
+  } catch {
+    // an older Electron or a window that is gone: the overlay simply keeps the default
+  }
+  return true
+})
 
 ipcMain.handle('chat:start', async (event, req) => {
   const { requestId, cfg, messages } = req

@@ -39,14 +39,14 @@ function Reasoning({ text, streaming, ms }: { text: string; streaming?: boolean;
     <div className="mb-2">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="group flex items-center gap-1.5 rounded-none py-1 text-[13px] text-muted transition hover:text-ink"
+        className="group flex items-center gap-1.5 rounded-md py-1 text-[13px] text-muted transition hover:text-ink"
       >
         <Brain size={13} className="text-faint" />
         <span>{secs ? `Thought for ${secs}s` : streaming ? 'Thinking' : 'Thoughts'}</span>
         <ChevronRight size={13} className={`transition ${open ? 'rotate-90' : ''}`} />
       </button>
       {open && text.trim() && (
-        <div className="mt-1 border-l-2 border-[#e9e7e0] pl-3 text-[13.5px] leading-[1.65] whitespace-pre-wrap text-[#4a463d]">
+        <div className="mt-1 border-l-2 border-[var(--rule)] pl-3 text-[13.5px] leading-[1.65] whitespace-pre-wrap text-[var(--text-dim)]">
           {text}
         </div>
       )}
@@ -75,7 +75,7 @@ function ImageGrid({
             <div
               key={i}
               data-image-missing
-              className="flex h-24 w-44 flex-col items-center justify-center gap-1 rounded-none border border-dashed border-[#e4e1d9] px-3 text-center text-[11.5px] text-faint"
+              className="flex h-24 w-44 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-[var(--rule)] px-3 text-center text-[11.5px] text-faint"
             >
               <ImageOff size={15} />
               <span>Image file missing</span>
@@ -85,7 +85,7 @@ function ImageGrid({
             <div key={i} className="group/img relative">
               <button
                 onClick={() => setZoom(im)}
-                className="block overflow-hidden rounded-none border border-black/10"
+                className="block overflow-hidden rounded-xl border border-white/10"
               >
                 <img
                   src={im.url}
@@ -103,7 +103,7 @@ function ImageGrid({
                 <button
                   onClick={() => window.zen.images.saveAs(im.path as string)}
                   title="Save a copy"
-                  className="absolute top-1.5 right-1.5 grid h-7 w-7 place-items-center rounded-none border border-black/20 bg-[#edebe5]/85 text-[#111111] opacity-0 transition group-hover/img:opacity-100"
+                  className="absolute top-1.5 right-1.5 grid h-7 w-7 place-items-center rounded-lg border border-white/20 bg-black/60 text-[var(--text-solid)] opacity-0 transition group-hover/img:opacity-100"
                 >
                   <Download size={13} />
                 </button>
@@ -113,7 +113,7 @@ function ImageGrid({
                   onClick={() => onUseImage(im)}
                   data-use-image
                   title="Change this picture — it goes into the composer as the reference, then you say what to change"
-                  className={`absolute bottom-1.5 left-1.5 flex h-7 items-center gap-1.5 rounded-none border border-black/20 bg-[#edebe5]/88 px-2 text-[11.5px] text-[#111111] transition hover:bg-[#edebe5]/95 ${
+                  className={`absolute bottom-1.5 left-1.5 flex h-7 items-center gap-1.5 rounded-lg border border-white/20 bg-black/70 px-2 text-[11.5px] text-[var(--text-solid)] transition hover:bg-black/90 ${
                     // a picture the assistant drew has no other way back into the conversation, so
                     // its button is always there; a picture you attached is already yours to edit
                     large ? 'opacity-100' : 'opacity-0 group-hover/img:opacity-100'
@@ -129,10 +129,10 @@ function ImageGrid({
       </div>
       {zoom && (
         <div
-          className="fixed inset-0 z-50 grid place-items-center bg-[#edebe5]/92 p-8"
+          className="fixed inset-0 z-50 grid place-items-center bg-black/85 p-8"
           onClick={() => setZoom(null)}
         >
-          <img src={zoom.url} alt="" className="max-h-full max-w-full rounded-none object-contain" />
+          <img src={zoom.url} alt="" className="max-h-full max-w-full rounded-lg object-contain" />
         </div>
       )}
     </>
@@ -172,8 +172,8 @@ function ToolRun({ tools }: { tools: ToolActivity[] }) {
           <div key={t.id}>
             <button
               onClick={() => canExpand && setOpen(open === t.id ? null : t.id)}
-              className={`flex w-full items-center gap-1.5 rounded-none py-1 text-left text-[13px] transition ${
-                failed ? 'text-[#a81313]' : 'text-muted hover:text-ink'
+              className={`flex w-full items-center gap-1.5 rounded-md py-1 text-left text-[13px] transition ${
+                failed ? 'text-[var(--err)]' : 'text-muted hover:text-ink'
               }`}
               title={failed ? t.error || '' : detail}
             >
@@ -193,9 +193,9 @@ function ToolRun({ tools }: { tools: ToolActivity[] }) {
               )}
             </button>
             {open === t.id && (
-              <div className="mt-1 mb-1 border-l-2 border-[#e9e7e0] pl-3 text-[12.5px] leading-[1.6] text-[#4a463d]">
+              <div className="mt-1 mb-1 border-l-2 border-[var(--rule)] pl-3 text-[12.5px] leading-[1.6] text-[var(--text-dim)]">
                 {t.error ? (
-                  <span className="text-[#a81313]">{t.error}</span>
+                  <span className="text-[var(--err)]">{t.error}</span>
                 ) : (
                   <span className="whitespace-pre-wrap">{t.preview}</span>
                 )}
@@ -215,7 +215,7 @@ function Sources({ sources }: { sources: Source[] }) {
     <div className="mt-2" data-sources>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 rounded-none py-1 text-[12.5px] text-muted transition hover:text-ink"
+        className="flex items-center gap-1.5 rounded-md py-1 text-[12.5px] text-muted transition hover:text-ink"
       >
         <Link2 size={12} className="text-faint" />
         <span>
@@ -224,14 +224,14 @@ function Sources({ sources }: { sources: Source[] }) {
         <ChevronRight size={12} className={`text-faint transition ${open ? 'rotate-90' : ''}`} />
       </button>
       {open && (
-        <div className="mt-1 space-y-1 border-l-2 border-[#e9e7e0] pl-3">
+        <div className="mt-1 space-y-1 border-l-2 border-[var(--rule)] pl-3">
           {sources.map((s, i) => (
             <a
               key={i}
               href={s.url}
               target="_blank"
               rel="noreferrer"
-              className="block truncate text-[12.5px] text-[#c41414] hover:underline"
+              className="block truncate text-[12.5px] text-[var(--accent-bright)] hover:underline"
               title={s.url}
             >
               {i + 1}. {s.title || s.url}
@@ -291,12 +291,12 @@ export default function Message({
                 <div
                   key={`${d.name}-${i}`}
                   title={d.preview || d.name}
-                  className={`flex max-w-[300px] items-center gap-2 rounded-none border px-2 py-1 ${
-                    d.error ? 'border-red-400/40 bg-red-500/10' : 'border-black/12 bg-white/[0.03]'
+                  className={`flex max-w-[300px] items-center gap-2 rounded-lg border px-2 py-1 ${
+                    d.error ? 'border-red-400/40 bg-red-500/10' : 'border-white/12 bg-white/[0.03]'
                   }`}
                 >
                   <FileText size={14} className="shrink-0 text-faint" />
-                  <span className="min-w-0 truncate text-[12px] text-[#1e1b17]">{d.name}</span>
+                  <span className="min-w-0 truncate text-[12px] text-[var(--text-mid)]">{d.name}</span>
                   <span className="shrink-0 text-[11px] text-faint">
                     {d.error ? 'could not be read' : d.chars ? `${d.chars.toLocaleString()} chars` : ''}
                   </span>
@@ -360,16 +360,16 @@ export default function Message({
 
       {waiting && (
         <div className="thinking-dots flex items-center gap-1 py-1.5">
-          <span className="h-1.5 w-1.5 rounded-full bg-[#c9c5ba]" />
-          <span className="h-1.5 w-1.5 rounded-full bg-[#c9c5ba]" />
-          <span className="h-1.5 w-1.5 rounded-full bg-[#c9c5ba]" />
+          <span className="h-1.5 w-1.5 rounded-full bg-[var(--text-dim)]" />
+          <span className="h-1.5 w-1.5 rounded-full bg-[var(--text-dim)]" />
+          <span className="h-1.5 w-1.5 rounded-full bg-[var(--text-dim)]" />
         </div>
       )}
 
       {drawing && (
         <div
           data-drawing={drawingEdit ? 'edit' : 'create'}
-          className="mt-0.5 flex w-fit items-center gap-3 rounded-none border border-black/10 bg-white/[.03] py-2.5 pr-5 pl-2.5"
+          className="mt-0.5 flex w-fit items-center gap-3 rounded-2xl border border-white/10 bg-white/[.03] py-2.5 pr-5 pl-2.5"
         >
           <span className="drawing-tile" aria-hidden />
           <span className="drawing-body">
@@ -387,7 +387,7 @@ export default function Message({
         <div className="relative">
           <Markdown text={msg.content} />
           {msg.streaming && (
-            <span className="ml-0.5 inline-block h-[15px] w-[8px] translate-y-[2px] animate-blink rounded-[1px] bg-[#9a958a]" />
+            <span className="ml-0.5 inline-block h-[15px] w-[8px] translate-y-[2px] animate-blink rounded-[1px] bg-[var(--text-mid)]" />
           )}
         </div>
       )}
@@ -397,16 +397,16 @@ export default function Message({
           {(msg.files || []).map((f, i) => (
             <div
               key={`${f.path}-${i}`}
-              className="flex items-center gap-2 rounded-none border border-black/12 bg-white/[0.03] py-2 pl-2.5 pr-2"
+              className="flex items-center gap-2 rounded-xl border border-white/12 bg-white/[0.03] py-2 pl-2.5 pr-2"
               title={f.path}
             >
               {f.kind === 'xlsx' || f.kind === 'csv' ? (
-                <FileSpreadsheet size={16} className="shrink-0 text-[#1b6b3a]" />
+                <FileSpreadsheet size={16} className="shrink-0 text-[var(--ok)]" />
               ) : (
-                <FileText size={16} className="shrink-0 text-[#c41414]" />
+                <FileText size={16} className="shrink-0 text-[var(--accent-bright)]" />
               )}
               <div className="min-w-0">
-                <div className="truncate text-[12.5px] text-[#16130f]">{f.name}</div>
+                <div className="truncate text-[12.5px] text-[var(--text-mid)]">{f.name}</div>
                 <div className="text-[11px] text-faint">
                   {f.kind.toUpperCase()} · {fileSize(f.bytes)}
                 </div>
@@ -415,7 +415,7 @@ export default function Message({
                 onClick={() => void window.zen.files.open(f.path)}
                 data-open-file={f.name}
                 title="Open it"
-                className="ml-1 flex items-center gap-1 rounded-none border border-black/12 px-2 py-1 text-[11.5px] text-[#16130f] transition hover:bg-white/10"
+                className="ml-1 flex items-center gap-1 rounded-lg border border-white/12 px-2 py-1 text-[11.5px] text-[var(--text-mid)] transition hover:bg-white/10"
               >
                 <ExternalLink size={12} /> Open
               </button>
@@ -423,7 +423,7 @@ export default function Message({
                 onClick={() => void window.zen.files.reveal(f.path)}
                 data-reveal-file={f.name}
                 title="Show it in the folder"
-                className="rounded-none border border-black/12 px-2 py-1 text-[#16130f] transition hover:bg-white/10"
+                className="rounded-lg border border-white/12 px-2 py-1 text-[var(--text-mid)] transition hover:bg-white/10"
               >
                 <FolderOpen size={12} />
               </button>
@@ -436,17 +436,17 @@ export default function Message({
 
       {msg.error && (
         <div
-          className="mt-2 flex items-start gap-2.5 rounded-none border border-[#a81313] bg-[#a81313] px-3.5 py-3 text-[13.5px] text-[#a81313]"
+          className="mt-2 flex items-start gap-2.5 rounded-xl border border-[var(--err-rule)] bg-[var(--err-bg)] px-3.5 py-3 text-[13.5px] text-[var(--err)]"
           data-msg-error
         >
           <TriangleAlert size={15} className="mt-[1px] shrink-0" />
           <div className="min-w-0 flex-1">
             <div className="font-medium">Request failed{msg.note ? ` · ${msg.note}` : ''}</div>
-            <div className="mt-0.5 break-words text-[#a81313]">{msg.error}</div>
+            <div className="mt-0.5 break-words text-[var(--err)]">{msg.error}</div>
             {onRetry && (
               <button
                 onClick={onRetry}
-                className="mt-2 flex items-center gap-1.5 rounded-none border border-[#a81313] px-2.5 py-1 text-[12.5px] text-[#a81313] transition hover:bg-[#a81313]"
+                className="mt-2 flex items-center gap-1.5 rounded-lg border border-[var(--err-rule)] px-2.5 py-1 text-[12.5px] text-[var(--err)] transition hover:bg-[var(--err-bg)]"
               >
                 <RefreshCw size={12} /> Try again
               </button>
@@ -464,7 +464,7 @@ export default function Message({
           <button
             onClick={copy}
             title="Copy"
-            className="grid h-7 w-7 place-items-center rounded-none text-muted transition hover:bg-white/[.08] hover:text-ink"
+            className="grid h-7 w-7 place-items-center rounded-md text-muted transition hover:bg-white/[.08] hover:text-ink"
           >
             {copied ? <Check size={14} /> : <Copy size={14} />}
           </button>
@@ -472,7 +472,7 @@ export default function Message({
             <button
               onClick={onRetry}
               title="Regenerate"
-              className="grid h-7 w-7 place-items-center rounded-none text-muted transition hover:bg-white/[.08] hover:text-ink"
+              className="grid h-7 w-7 place-items-center rounded-md text-muted transition hover:bg-white/[.08] hover:text-ink"
             >
               <RefreshCw size={14} />
             </button>
@@ -480,7 +480,7 @@ export default function Message({
           <button
             onClick={() => setVote(vote === 1 ? null : 1)}
             title="Good response"
-            className={`grid h-7 w-7 place-items-center rounded-none transition hover:bg-white/[.08] hover:text-ink ${
+            className={`grid h-7 w-7 place-items-center rounded-md transition hover:bg-white/[.08] hover:text-ink ${
               vote === 1 ? 'text-ink' : 'text-muted'
             }`}
           >
@@ -489,13 +489,13 @@ export default function Message({
           <button
             onClick={() => setVote(vote === -1 ? null : -1)}
             title="Bad response"
-            className={`grid h-7 w-7 place-items-center rounded-none transition hover:bg-white/[.08] hover:text-ink ${
+            className={`grid h-7 w-7 place-items-center rounded-md transition hover:bg-white/[.08] hover:text-ink ${
               vote === -1 ? 'text-ink' : 'text-muted'
             }`}
           >
             <ThumbsDown size={14} />
           </button>
-          <span className="ml-1.5 text-[11.5px] text-[#4a463d]">
+          <span className="ml-1.5 text-[11.5px] text-[var(--text-dim)]">
             {msg.model}
             {/* Not `msg.note` while a picture is being drawn: that note is fal's own line, e.g.
                 "Waiting in the queue… 0", and printing it here put a bare queue number on screen —

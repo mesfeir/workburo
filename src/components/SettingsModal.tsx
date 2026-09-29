@@ -119,10 +119,10 @@ function HotkeyRecorder({
         const accel = toAccelerator(e)
         if (accel) onCommit(accel)
       }}
-      className={`flex min-w-[220px] items-center justify-between gap-3 rounded-none border px-3 py-2 text-left font-mono text-[13px] transition ${
+      className={`flex min-w-[220px] items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left font-mono text-[13px] transition ${
         recording
-          ? 'border-[#e61919] bg-[#e61919] text-ink'
-          : 'border-[#c9c5ba] bg-[#f4f4f0] text-[#16130f] hover:border-[#ddd9d0]'
+          ? 'border-[var(--accent-rule)] bg-[var(--accent-bg)] text-ink'
+          : 'border-[var(--rule)] bg-[var(--app)] text-[var(--text-mid)] hover:border-[var(--rule)]'
       }`}
     >
       <span>{recording ? 'Press your combination…' : value || 'Not set'}</span>
@@ -136,7 +136,7 @@ function HotkeyRecorder({
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
     <label className="block">
-      <div className="mb-1.5 text-[12.5px] font-medium text-[#1e1b17]">{label}</div>
+      <div className="mb-1.5 text-[12.5px] font-medium text-[var(--text-mid)]">{label}</div>
       {children}
       {hint && <div className="mt-1 text-[11.5px] leading-snug text-faint">{hint}</div>}
     </label>
@@ -144,7 +144,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 }
 
 const inputCls =
-  'w-full rounded-none border border-[#c9c5ba] bg-[#f4f4f0] px-3 py-2 text-[13.5px] text-ink placeholder:text-faint focus:border-[#e61919]'
+  'w-full rounded-lg border border-[var(--rule)] bg-[var(--app)] px-3 py-2 text-[13.5px] text-ink placeholder:text-faint focus:border-[var(--accent-rule)]'
 
 export default function SettingsModal({
   config,
@@ -579,26 +579,26 @@ export default function SettingsModal({
   })()
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#edebe5]/88 p-6" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" onMouseDown={onClose}>
       <div
-        className="flex h-[660px] max-h-[86vh] w-[740px] flex-col overflow-hidden rounded-none border border-[#e9e7e0] bg-[#f4f4f0] shadow-2xl"
+        className="flex h-[660px] max-h-[86vh] w-[740px] flex-col overflow-hidden rounded-2xl border border-[var(--rule)] bg-[var(--app)] shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-[#e9e7e0] px-5 py-3.5">
+        <div className="flex items-center justify-between border-b border-[var(--rule)] px-5 py-3.5">
           <h2 className="text-[16px] font-semibold">Settings</h2>
-          <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-none text-muted hover:bg-white/10 hover:text-ink">
+          <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-white/10 hover:text-ink">
             <X size={16} />
           </button>
         </div>
 
         <div className="flex min-h-0 flex-1">
-          <div className="w-[150px] shrink-0 border-r border-[#e9e7e0] p-2">
+          <div className="w-[150px] shrink-0 border-r border-[var(--rule)] p-2">
             {(['general', 'api', 'chat', 'models', 'images', 'apps', 'mcp', 'tools', 'agent', 'about'] as Tab[]).map((t) => (
               <button
                 key={t}
                 data-settings-tab={t}
                 onClick={() => setTab(t)}
-                className={`mb-0.5 w-full rounded-none px-3 py-2 text-left text-[13.5px] transition ${
+                className={`mb-0.5 w-full rounded-lg px-3 py-2 text-left text-[13.5px] transition ${
                   tab === t ? 'bg-white/[.09] text-ink' : 'text-muted hover:bg-white/[.05]'
                 }`}
               >
@@ -611,6 +611,30 @@ export default function SettingsModal({
             {tab === 'general' && (
               <div className="space-y-5">
                 <Field
+                  label="Theme"
+                  hint="Dark keeps the window as it was, on a very dark grey canvas rather than pure black. Paper is the same interface printed on unbleached stock: drafted mono labels, a faint grid, one hazard red. Everything works identically either way."
+                >
+                  <div className="flex flex-wrap gap-2">
+                    {(['dark', 'paper'] as const).map((t) => {
+                      const on = (config.theme || 'dark') === t
+                      return (
+                        <button
+                          key={t}
+                          data-theme-option={t}
+                          onClick={() => onConfig({ theme: t })}
+                          className={`rounded-lg border px-3.5 py-2 text-[13px] transition ${
+                            on
+                              ? 'border-[var(--accent-rule)] bg-[var(--accent-bg)] text-[var(--text)]'
+                              : 'border-[var(--rule)] bg-[var(--raised)] text-[var(--text-mid)] hover:text-[var(--text)]'
+                          }`}
+                        >
+                          {t === 'dark' ? 'Dark' : 'Paper'}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </Field>
+                <Field
                   label="Window behaviour"
                   hint="Zen Chat sits above other windows so the summon shortcut always finds it, and tucks itself away once you have gone elsewhere. Nothing is minimised while an answer or a picture is still on its way."
                 >
@@ -620,12 +644,12 @@ export default function SettingsModal({
                       data-always-on-top
                       checked={config.alwaysOnTop !== false}
                       onChange={(e) => onConfig({ alwaysOnTop: e.target.checked })}
-                      className="h-4 w-4 accent-[#c41414]"
+                      className="h-4 w-4 accent-[var(--accent)]"
                     />
-                    <span className="text-[13px] text-[#1e1b17]">Always keep it on top</span>
+                    <span className="text-[13px] text-[var(--text-mid)]">Always keep it on top</span>
                   </label>
                   <div className="mt-3 flex flex-wrap items-center gap-2.5">
-                    <span className="text-[13px] text-[#1e1b17]">Minimise after</span>
+                    <span className="text-[13px] text-[var(--text-mid)]">Minimise after</span>
                     <select
                       data-auto-minimize
                       className={inputCls + ' max-w-[170px]'}
@@ -665,10 +689,10 @@ export default function SettingsModal({
                         <button
                           key={p}
                           onClick={() => commitHotkey(p)}
-                          className={`rounded-none border px-2 py-1 font-mono text-[11.5px] transition ${
+                          className={`rounded-md border px-2 py-1 font-mono text-[11.5px] transition ${
                             config.hotkey === p
-                              ? 'border-[#e61919] bg-[#e9e7e0] text-ink'
-                              : 'border-[#c9c5ba] text-muted hover:bg-white/[.06] hover:text-ink'
+                              ? 'border-[var(--accent-rule)] bg-[var(--raised)] text-ink'
+                              : 'border-[var(--rule)] text-muted hover:bg-white/[.06] hover:text-ink'
                           }`}
                         >
                           {p}
@@ -676,7 +700,7 @@ export default function SettingsModal({
                       ))}
                       <button
                         onClick={clearHotkey}
-                        className="rounded-none border border-[#c9c5ba] px-2 py-1 text-[11.5px] text-muted transition hover:bg-white/[.06] hover:text-ink"
+                        className="rounded-md border border-[var(--rule)] px-2 py-1 text-[11.5px] text-muted transition hover:bg-white/[.06] hover:text-ink"
                       >
                         Clear
                       </button>
@@ -684,7 +708,7 @@ export default function SettingsModal({
                     {hotkeyMsg && (
                       <div
                         className={`flex items-start gap-1.5 text-[12px] ${
-                          hotkeyMsg.ok ? 'text-[#1b6b3a]' : 'text-[#a81313]'
+                          hotkeyMsg.ok ? 'text-[var(--ok)]' : 'text-[var(--err)]'
                         }`}
                       >
                         {hotkeyMsg.ok ? (
@@ -700,7 +724,7 @@ export default function SettingsModal({
                         {liveHotkey.fallback ? (
                           <>
                             Windows granted{' '}
-                            <b className="font-mono text-[#7a5a00]">{liveHotkey.active}</b> instead —{' '}
+                            <b className="font-mono text-[var(--warn)]">{liveHotkey.active}</b> instead —{' '}
                             <span className="font-mono">{liveHotkey.requested}</span> is held by another app.
                           </>
                         ) : liveHotkey.active ? (
@@ -721,16 +745,16 @@ export default function SettingsModal({
                   </div>
                 </Field>
 
-                <div className="rounded-none border border-[#e9e7e0] bg-[#f4f4f0] p-3">
+                <div className="rounded-xl border border-[var(--rule)] bg-[var(--app)] p-3">
                   <label className="flex cursor-pointer items-start gap-2.5">
                     <input
                       type="checkbox"
                       checked={Boolean(loginItem?.openAtLogin)}
                       onChange={(e) => toggleStartup(e.target.checked)}
-                      className="mt-0.5 accent-[#c41414]"
+                      className="mt-0.5 accent-[var(--accent)]"
                     />
                     <span>
-                      <span className="block text-[13px] text-[#1e1b17]">Start Zen Chat when Windows starts</span>
+                      <span className="block text-[13px] text-[var(--text-mid)]">Start Zen Chat when Windows starts</span>
                       <span className="mt-0.5 block text-[11.5px] leading-snug text-faint">
                         Starts quietly in the notification area — nothing steals focus at login. Press your summon
                         shortcut, or click the tray icon, to bring it up.
@@ -749,13 +773,13 @@ export default function SettingsModal({
                         const b = await window.zen.app.resetBounds()
                         if (b) setHotkeyMsg({ ok: true, msg: `Window reset to ${b.width}×${b.height}.` })
                       }}
-                      className="flex items-center gap-1.5 rounded-none border border-[#c9c5ba] px-3 py-2 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink"
+                      className="flex items-center gap-1.5 rounded-lg border border-[var(--rule)] px-3 py-2 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink"
                     >
                       <Minimize2 size={13} /> Reset to the default small size
                     </button>
                     <button
                       onClick={() => window.zen.app.hideWindow()}
-                      className="flex items-center gap-1.5 rounded-none border border-[#c9c5ba] px-3 py-2 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink"
+                      className="flex items-center gap-1.5 rounded-lg border border-[var(--rule)] px-3 py-2 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink"
                     >
                       <EyeOff size={13} /> Hide to tray
                     </button>
@@ -767,16 +791,16 @@ export default function SettingsModal({
             {tab === 'api' && (
               <div className="space-y-4">
                 <div>
-                  <div className="mb-1.5 text-[12.5px] font-medium text-[#1e1b17]">Presets</div>
+                  <div className="mb-1.5 text-[12.5px] font-medium text-[var(--text-mid)]">Presets</div>
                   <div className="flex flex-wrap gap-2">
                     {config.profiles.map((p) => (
                       <button
                         key={p.name}
                         onClick={() => onConfig({ baseUrl: p.baseUrl, sendAffinity: p.affinity })}
-                        className={`flex items-center gap-1.5 rounded-none border px-2.5 py-1.5 text-[12.5px] transition ${
+                        className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12.5px] transition ${
                           config.baseUrl === p.baseUrl
-                            ? 'border-[#e61919] bg-[#e9e7e0] text-ink'
-                            : 'border-[#c9c5ba] text-muted hover:bg-white/[.06] hover:text-ink'
+                            ? 'border-[var(--accent-rule)] bg-[var(--raised)] text-ink'
+                            : 'border-[var(--rule)] text-muted hover:bg-white/[.06] hover:text-ink'
                         }`}
                       >
                         <Globe size={12} /> {p.name}
@@ -819,16 +843,16 @@ export default function SettingsModal({
                   </div>
                 </Field>
 
-                <div className="rounded-none border border-[#e9e7e0] bg-[#f4f4f0] p-3">
+                <div className="rounded-xl border border-[var(--rule)] bg-[var(--app)] p-3">
                   <label className="flex cursor-pointer items-start gap-2.5">
                     <input
                       type="checkbox"
                       checked={config.sendAffinity}
                       onChange={(e) => onConfig({ sendAffinity: e.target.checked })}
-                      className="mt-0.5 accent-[#c41414]"
+                      className="mt-0.5 accent-[var(--accent)]"
                     />
                     <span>
-                      <span className="block text-[13px] text-[#1e1b17]">Send session affinity header</span>
+                      <span className="block text-[13px] text-[var(--text-mid)]">Send session affinity header</span>
                       <span className="mt-0.5 block text-[11.5px] leading-snug text-faint">
                         opencode's relay requires <code>x-opencode-session</code> or every request 400s. Keeps one
                         backend pinned and the prompt cache warm. Sent automatically when the host is
@@ -850,14 +874,14 @@ export default function SettingsModal({
                   <button
                     onClick={test}
                     disabled={status.kind === 'busy'}
-                    className="flex items-center gap-2 rounded-none bg-accent px-3.5 py-2 text-[13px] font-medium text-[#111111] transition hover:bg-[#e61919] disabled:opacity-60"
+                    className="flex items-center gap-2 rounded-lg bg-accent px-3.5 py-2 text-[13px] font-medium text-[var(--text-solid)] transition hover:bg-[var(--accent-bg)] disabled:opacity-60"
                   >
                     <Zap size={14} /> Test connection
                   </button>
                   {status.kind !== 'idle' && (
                     <div
                       className={`flex items-center gap-1.5 text-[12.5px] ${
-                        status.kind === 'ok' ? 'text-[#1b6b3a]' : status.kind === 'err' ? 'text-[#a81313]' : 'text-muted'
+                        status.kind === 'ok' ? 'text-[var(--ok)]' : status.kind === 'err' ? 'text-[var(--err)]' : 'text-muted'
                       }`}
                     >
                       {status.kind === 'ok' ? (
@@ -876,13 +900,13 @@ export default function SettingsModal({
 
             {tab === 'chat' && (
               <div className="space-y-4">
-                <div className="rounded-none border border-[#e9e7e0] bg-[#f4f4f0] p-3">
+                <div className="rounded-xl border border-[var(--rule)] bg-[var(--app)] p-3">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[13px] text-[#1e1b17]">Instructions</span>
+                    <span className="text-[13px] text-[var(--text-mid)]">Instructions</span>
                     {Boolean(config.systemPrompt?.trim()) && (
                       <button
                         onClick={() => onConfig({ systemPrompt: '' })}
-                        className="shrink-0 text-[11.5px] text-faint transition hover:text-[#a81313]"
+                        className="shrink-0 text-[11.5px] text-faint transition hover:text-[var(--err)]"
                       >
                         Clear
                       </button>
@@ -910,7 +934,7 @@ export default function SettingsModal({
                           if (cur.toLowerCase().includes(p.toLowerCase())) return
                           onConfig({ systemPrompt: cur.trim() ? `${cur.replace(/\s+$/, '')}\n${p}` : p })
                         }}
-                        className="rounded-full border border-[#c9c5ba] px-2 py-1 text-[11.5px] text-muted transition hover:bg-white/[.06] hover:text-ink"
+                        className="rounded-full border border-[var(--rule)] px-2 py-1 text-[11.5px] text-muted transition hover:bg-white/[.06] hover:text-ink"
                       >
                         + {p}
                       </button>
@@ -979,7 +1003,7 @@ export default function SettingsModal({
                         type="checkbox"
                         checked={config.stream}
                         onChange={(e) => onConfig({ stream: e.target.checked })}
-                        className="accent-[#c41414]"
+                        className="accent-[var(--accent)]"
                       />
                       Stream responses
                     </label>
@@ -988,7 +1012,7 @@ export default function SettingsModal({
                         type="checkbox"
                         checked={config.thinking}
                         onChange={(e) => onConfig({ thinking: e.target.checked })}
-                        className="accent-[#c41414]"
+                        className="accent-[var(--accent)]"
                       />
                       Thinking on by default
                     </label>
@@ -997,7 +1021,7 @@ export default function SettingsModal({
                         type="checkbox"
                         checked={config.showUsage}
                         onChange={(e) => onConfig({ showUsage: e.target.checked })}
-                        className="accent-[#c41414]"
+                        className="accent-[var(--accent)]"
                       />
                       Show token usage
                     </label>
@@ -1012,7 +1036,7 @@ export default function SettingsModal({
                   label="Agent mode"
                   hint="Hands for the model you already selected. Add Pi once here, then switch agent mode on in the chat: it can read and write files and run commands in one folder you pick."
                 >
-                  <div className="rounded-none border border-[#e9e7e0] bg-[#f4f4f0] p-3">
+                  <div className="rounded-xl border border-[var(--rule)] bg-[var(--app)] p-3">
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <div className="text-[13px] text-ink">
@@ -1030,7 +1054,7 @@ export default function SettingsModal({
                         <button
                           onClick={uninstallPi}
                           disabled={piBusy}
-                          className="flex h-[34px] shrink-0 items-center rounded-none border border-[#c9c5ba] px-3 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink disabled:opacity-50"
+                          className="flex h-[34px] shrink-0 items-center rounded-lg border border-[var(--rule)] px-3 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink disabled:opacity-50"
                         >
                           Remove
                         </button>
@@ -1038,7 +1062,7 @@ export default function SettingsModal({
                         <button
                           onClick={installPi}
                           disabled={piBusy || !piStatus}
-                          className="flex h-[34px] shrink-0 items-center gap-1.5 rounded-none border border-[#e61919] bg-[#e61919] px-3 text-[12.5px] text-[#c41414] transition hover:bg-[#e61919] disabled:opacity-50"
+                          className="flex h-[34px] shrink-0 items-center gap-1.5 rounded-lg border border-[var(--accent-rule)] bg-[var(--accent-bg)] px-3 text-[12.5px] text-[var(--accent-soft)] transition hover:bg-[var(--accent-bg)] disabled:opacity-50"
                         >
                           <RefreshCw size={13} className={piBusy ? 'animate-spin' : ''} />
                           {piBusy ? 'Installing…' : 'Install Pi'}
@@ -1046,9 +1070,9 @@ export default function SettingsModal({
                       )}
                     </div>
                     {piBusy && (
-                      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#edebe5]">
+                      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--raised)]">
                         <div
-                          className="h-full rounded-full bg-[#e61919] transition-all"
+                          className="h-full rounded-full bg-[var(--accent-bg)] transition-all"
                           style={{ width: `${piProgress?.pct ?? 6}%` }}
                         />
                       </div>
@@ -1056,7 +1080,7 @@ export default function SettingsModal({
                   </div>
                 </Field>
 
-                <div className="rounded-none border border-[#7a5a00] bg-[#f4f4f0] p-3 text-[11.5px] leading-snug text-[#7a5a00]">
+                <div className="rounded-xl border border-[var(--warn)] bg-[var(--app)] p-3 text-[11.5px] leading-snug text-[var(--warn)]">
                   <strong className="font-medium">While agent mode is on, Pi runs with the rights of your Windows account</strong>{' '}
                   in the folder below — it has no permission prompts of its own. Keep the folder narrow and switch the toggle
                   off when you are done. Nothing is downloaded, installed or scheduled until you press Install, and the API key
@@ -1071,14 +1095,14 @@ export default function SettingsModal({
                     <input className={inputCls} value={agent.workspace || ''} readOnly placeholder="No folder chosen yet" />
                     <button
                       onClick={chooseWorkspace}
-                      className="flex h-[38px] shrink-0 items-center rounded-none border border-[#c9c5ba] px-3 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink"
+                      className="flex h-[38px] shrink-0 items-center rounded-lg border border-[var(--rule)] px-3 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink"
                     >
                       Choose…
                     </button>
                     <button
                       onClick={() => void window.zen.pi.openWorkspace()}
                       disabled={!agent.workspace}
-                      className="flex h-[38px] shrink-0 items-center rounded-none border border-[#c9c5ba] px-3 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink disabled:opacity-50"
+                      className="flex h-[38px] shrink-0 items-center rounded-lg border border-[var(--rule)] px-3 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink disabled:opacity-50"
                     >
                       Open
                     </button>
@@ -1098,12 +1122,12 @@ export default function SettingsModal({
 
                 {piNote.msg && (
                   <div
-                    className={`flex items-start gap-2 rounded-none border px-3 py-2 text-[12.5px] ${
+                    className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-[12.5px] ${
                       piNote.kind === 'err'
-                        ? 'border-[#a81313] bg-[#a81313] text-[#a81313]'
+                        ? 'border-[var(--err-rule)] bg-[var(--err-bg)] text-[var(--err)]'
                         : piNote.kind === 'ok'
-                          ? 'border-[#1b6b3a] bg-[#edebe5] text-[#1b6b3a]'
-                          : 'border-[#e9e7e0] bg-[#f4f4f0] text-muted'
+                          ? 'border-[var(--ok)] bg-[var(--app)] text-[var(--ok)]'
+                          : 'border-[var(--rule)] bg-[var(--app)] text-muted'
                     }`}
                   >
                     {piNote.kind === 'err' ? (
@@ -1122,16 +1146,16 @@ export default function SettingsModal({
 
             {tab === 'tools' && (
               <div className="space-y-5">
-                <div className="rounded-none border border-[#e9e7e0] bg-[#f4f4f0] p-3">
+                <div className="rounded-xl border border-[var(--rule)] bg-[var(--app)] p-3">
                   <label className="flex cursor-pointer items-start gap-2.5">
                     <input
                       type="checkbox"
                       checked={config.toolsEnabled !== false}
                       onChange={(e) => onConfig({ toolsEnabled: e.target.checked })}
-                      className="mt-0.5 accent-[#c41414]"
+                      className="mt-0.5 accent-[var(--accent)]"
                     />
                     <span>
-                      <span className="block text-[13px] text-[#1e1b17]">Let the model use tools</span>
+                      <span className="block text-[13px] text-[var(--text-mid)]">Let the model use tools</span>
                       <span className="mt-0.5 block text-[11.5px] leading-snug text-faint">
                         Without this, a model can only answer from its training data — no live web, no real-time
                         anything. With it, the model can ask Zen Chat for information and then answer using it.
@@ -1156,10 +1180,10 @@ export default function SettingsModal({
                             onChange={(e) =>
                               onConfig({ toolToggles: { ...(config.toolToggles || {}), [t.name]: e.target.checked } })
                             }
-                            className="mt-0.5 accent-[#c41414] disabled:opacity-40"
+                            className="mt-0.5 accent-[var(--accent)] disabled:opacity-40"
                           />
                           <span className={config.toolsEnabled === false ? 'opacity-50' : ''}>
-                            <span className="block text-[13px] text-[#1e1b17]">{t.label}</span>
+                            <span className="block text-[13px] text-[var(--text-mid)]">{t.label}</span>
                             <span className="mt-0.5 block text-[11.5px] leading-snug text-faint">{t.describe}</span>
                           </span>
                         </label>
@@ -1179,7 +1203,7 @@ export default function SettingsModal({
                       onChange={(e) => onConfig({ searchUrl: e.target.value })}
                       spellCheck={false}
                       placeholder="http://localhost:8888"
-                      className="w-full rounded-none border border-[#c9c5ba] bg-[#f4f4f0] px-3 py-2 font-mono text-[12.5px] text-[#16130f] outline-none focus:border-[#e61919]"
+                      className="w-full rounded-lg border border-[var(--rule)] bg-[var(--app)] px-3 py-2 font-mono text-[12.5px] text-[var(--text-mid)] outline-none focus:border-[var(--accent-rule)]"
                     />
                     <button
                       disabled={testing}
@@ -1193,14 +1217,14 @@ export default function SettingsModal({
                           msg: r.ok ? `Search works — ${r.preview.slice(0, 150)}` : r.error || 'Search failed.',
                         })
                       }}
-                      className="flex items-center gap-1.5 rounded-none border border-[#c9c5ba] px-3 py-2 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink disabled:opacity-50"
+                      className="flex items-center gap-1.5 rounded-lg border border-[var(--rule)] px-3 py-2 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink disabled:opacity-50"
                     >
                       {testing ? <RefreshCw size={13} className="animate-spin" /> : <Globe size={13} />} Test search
                     </button>
                     {searchTest && (
                       <div
                         className={`flex items-start gap-1.5 text-[12px] ${
-                          searchTest.ok ? 'text-[#1b6b3a]' : 'text-[#a81313]'
+                          searchTest.ok ? 'text-[var(--ok)]' : 'text-[var(--err)]'
                         }`}
                       >
                         {searchTest.ok ? (
@@ -1224,7 +1248,7 @@ export default function SettingsModal({
                     max={8}
                     value={config.maxToolRounds ?? 4}
                     onChange={(e) => onConfig({ maxToolRounds: Math.min(Math.max(Number(e.target.value) || 0, 0), 8) })}
-                    className="w-[80px] rounded-none border border-[#c9c5ba] bg-[#f4f4f0] px-3 py-2 text-[13px] text-[#16130f] outline-none focus:border-[#e61919]"
+                    className="w-[80px] rounded-lg border border-[var(--rule)] bg-[var(--app)] px-3 py-2 text-[13px] text-[var(--text-mid)] outline-none focus:border-[var(--accent-rule)]"
                   />
                 </Field>
 
@@ -1237,9 +1261,9 @@ export default function SettingsModal({
                       type="checkbox"
                       checked={config.serverSearch !== false}
                       onChange={(e) => onConfig({ serverSearch: e.target.checked })}
-                      className="accent-[#c41414]"
+                      className="accent-[var(--accent)]"
                     />
-                    <span className="text-[13px] text-[#1e1b17]">Use the relay's built-in search where available</span>
+                    <span className="text-[13px] text-[var(--text-mid)]">Use the relay's built-in search where available</span>
                   </label>
                 </Field>
               </div>
@@ -1256,7 +1280,7 @@ export default function SettingsModal({
                   />
                   <button
                     onClick={test}
-                    className="flex shrink-0 items-center gap-1.5 rounded-none border border-[#c9c5ba] px-3 py-2 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink"
+                    className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--rule)] px-3 py-2 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink"
                   >
                     <RefreshCw size={13} /> Reload
                   </button>
@@ -1265,7 +1289,7 @@ export default function SettingsModal({
                   <strong className="font-medium text-muted">Zap</strong> = live test (runs a real call and an image
                   call to detect vision support). Click the eye to override what the app believes about a model.
                 </div>
-                <div className="divide-y divide-[#6e6a60] overflow-hidden rounded-none border border-[#e9e7e0]">
+                <div className="divide-y divide-[var(--rule)] overflow-hidden rounded-xl border border-[var(--rule)]">
                   {filtered.length === 0 && (
                     <div className="px-3 py-4 text-[13px] text-faint">
                       No models loaded. Use <strong>API &amp; key → Test connection</strong>.
@@ -1275,9 +1299,9 @@ export default function SettingsModal({
                     const p = config.modelPrefs?.[m.id] || {}
                     return (
                       <div key={m.id} className="flex items-center gap-2 px-3 py-1.5 hover:bg-white/[.03]">
-                        <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-[#1e1b17]">{m.id}</span>
+                        <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-[var(--text-mid)]">{m.id}</span>
                         {p.protocol && (
-                          <span className="rounded bg-white/10 px-1.5 text-[9.5px] uppercase tracking-wide text-[#2f2b25]">
+                          <span className="rounded bg-white/10 px-1.5 text-[9.5px] uppercase tracking-wide text-[var(--text-mid)]">
                             {p.protocol}
                           </span>
                         )}
@@ -1287,9 +1311,9 @@ export default function SettingsModal({
                           className="grid h-6 w-6 place-items-center rounded text-muted hover:bg-white/10 hover:text-ink"
                         >
                           {p.vision === 'yes' ? (
-                            <Eye size={13} className="text-[#1b6b3a]" />
+                            <Eye size={13} className="text-[var(--ok)]" />
                           ) : p.vision === 'no' ? (
-                            <EyeOff size={13} className="text-[#a81313]" />
+                            <EyeOff size={13} className="text-[var(--err)]" />
                           ) : (
                             <Eye size={13} className="opacity-30" />
                           )}
@@ -1299,7 +1323,7 @@ export default function SettingsModal({
                           disabled={probing === m.id}
                           className="grid h-6 w-6 place-items-center rounded text-muted hover:bg-white/10 hover:text-ink disabled:opacity-50"
                         >
-                          <Zap size={13} className={probing === m.id ? 'animate-pulse text-[#7a5a00]' : ''} />
+                          <Zap size={13} className={probing === m.id ? 'animate-pulse text-[var(--warn)]' : ''} />
                         </button>
                       </div>
                     )
@@ -1319,9 +1343,9 @@ export default function SettingsModal({
                       type="checkbox"
                       checked={Boolean(imageGen.enabled)}
                       onChange={(e) => setImageGen({ enabled: e.target.checked })}
-                      className="h-4 w-4 accent-[#c41414]"
+                      className="h-4 w-4 accent-[var(--accent)]"
                     />
-                    <span className="text-[13px] text-[#1e1b17]">
+                    <span className="text-[13px] text-[var(--text-mid)]">
                       Show the manual <strong className="font-medium">Image</strong> button in the composer
                     </span>
                   </label>
@@ -1334,7 +1358,7 @@ export default function SettingsModal({
                   </p>
                 </Field>
 
-                <div className="rounded-none border border-[#e9e7e0] bg-[#f4f4f0] p-3 text-[11.5px] leading-snug text-faint">
+                <div className="rounded-xl border border-[var(--rule)] bg-[var(--app)] p-3 text-[11.5px] leading-snug text-faint">
                   <strong className="font-medium text-muted">Only hosted generation is wired in.</strong> The local SANA
                   and Flux work is measured and written up in the repo docs, but nothing here loads a local pipeline
                   yet — every image this app makes is drawn by fal.ai and billed to your fal account.
@@ -1356,14 +1380,14 @@ export default function SettingsModal({
                     <button
                       onClick={() => setShowFalKey((s) => !s)}
                       title={showFalKey ? 'Hide key' : 'Show key'}
-                      className="grid h-[38px] w-10 shrink-0 place-items-center rounded-none border border-[#c9c5ba] text-muted transition hover:bg-white/[.06] hover:text-ink"
+                      className="grid h-[38px] w-10 shrink-0 place-items-center rounded-lg border border-[var(--rule)] text-muted transition hover:bg-white/[.06] hover:text-ink"
                     >
                       {showFalKey ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
                     <button
                       onClick={loadFalModels}
                       disabled={falBusy || !imageGen.falKey}
-                      className="flex h-[38px] shrink-0 items-center gap-1.5 rounded-none border border-[#c9c5ba] px-3 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink disabled:opacity-50"
+                      className="flex h-[38px] shrink-0 items-center gap-1.5 rounded-lg border border-[var(--rule)] px-3 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink disabled:opacity-50"
                     >
                       <RefreshCw size={13} className={falBusy ? 'animate-spin' : ''} />
                       Test key &amp; load models
@@ -1374,12 +1398,12 @@ export default function SettingsModal({
                 {falStatus.msg && (
                   <div
                     data-fal-status={falStatus.kind}
-                    className={`flex items-start gap-2 rounded-none border px-3 py-2 text-[12.5px] ${
+                    className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-[12.5px] ${
                       falStatus.kind === 'err'
-                        ? 'border-[#a81313] bg-[#a81313] text-[#a81313]'
+                        ? 'border-[var(--err-rule)] bg-[var(--err-bg)] text-[var(--err)]'
                         : falStatus.kind === 'ok'
-                          ? 'border-[#1b6b3a] bg-[#edebe5] text-[#1b6b3a]'
-                          : 'border-[#e9e7e0] bg-[#f4f4f0] text-muted'
+                          ? 'border-[var(--ok)] bg-[var(--app)] text-[var(--ok)]'
+                          : 'border-[var(--rule)] bg-[var(--app)] text-muted'
                     }`}
                   >
                     {falStatus.kind === 'err' ? (
@@ -1412,7 +1436,7 @@ export default function SettingsModal({
                       <span className="text-[11.5px] text-faint">Sort</span>
                       <div
                         data-fal-sort
-                        className="flex overflow-hidden rounded-none border border-[#e9e7e0]"
+                        className="flex overflow-hidden rounded-lg border border-[var(--rule)]"
                       >
                         {(
                           [
@@ -1434,7 +1458,7 @@ export default function SettingsModal({
                             }
                             className={`px-2 py-1 text-[11.5px] transition ${
                               falSort === k
-                                ? 'bg-[#e61919] text-[#c41414]'
+                                ? 'bg-[var(--accent-bg)] text-[var(--accent-soft)]'
                                 : 'text-muted hover:bg-white/[.05]'
                             }`}
                           >
@@ -1451,7 +1475,7 @@ export default function SettingsModal({
                   {falModels.length > 0 && (
                     <div
                       data-fal-models
-                      className="mt-2 max-h-[210px] divide-y divide-[#6e6a60] overflow-y-auto rounded-none border border-[#e9e7e0]"
+                      className="mt-2 max-h-[210px] divide-y divide-[var(--rule)] overflow-y-auto rounded-xl border border-[var(--rule)]"
                     >
                       {falFiltered.length === 0 && (
                         <div className="px-3 py-3 text-[12.5px] text-faint">No model matches that filter.</div>
@@ -1465,12 +1489,12 @@ export default function SettingsModal({
                             data-selected={on ? 'yes' : undefined}
                             onClick={() => setImageGen({ model: m.id })}
                             className={`flex w-full items-center gap-2 px-3 py-2 text-left transition ${
-                              on ? 'bg-[#e61919]' : 'hover:bg-white/[.03]'
+                              on ? 'bg-[var(--accent-bg)]' : 'hover:bg-white/[.03]'
                             }`}
                           >
                             <span className="min-w-0 flex-1">
                               <span className="flex items-baseline gap-2">
-                                <span className="truncate text-[13px] text-[#1e1b17]">{m.name}</span>
+                                <span className="truncate text-[13px] text-[var(--text-mid)]">{m.name}</span>
                                 {/* what it costs, right beside the name — the decision is made here,
                                     not in a panel further down the form */}
                                 <span
@@ -1483,13 +1507,13 @@ export default function SettingsModal({
                               </span>
                               <span className="block truncate font-mono text-[10.5px] text-faint">{m.id}</span>
                               {m.pricing && !falPrices[m.id]?.text && (
-                                <span className="mt-0.5 block truncate text-[10.5px] text-[#3a362f]">{m.pricing}</span>
+                                <span className="mt-0.5 block truncate text-[10.5px] text-[var(--text-dim)]">{m.pricing}</span>
                               )}
                             </span>
-                            <span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[9.5px] tracking-wide text-[#2f2b25] uppercase">
+                            <span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[9.5px] tracking-wide text-[var(--text-mid)] uppercase">
                               {m.category === 'text-to-image' ? 't2i' : 'i2i'}
                             </span>
-                            {on && <Check size={13} className="shrink-0 text-[#c41414]" />}
+                            {on && <Check size={13} className="shrink-0 text-[var(--accent-bright)]" />}
                           </button>
                         )
                       })}
@@ -1512,7 +1536,7 @@ export default function SettingsModal({
                       </>
                     ) : (
                       <>
-                        <span className="text-[#1e1b17]">{falCost.text}</span> at the size selected
+                        <span className="text-[var(--text-mid)]">{falCost.text}</span> at the size selected
                         {falCost.megapixels ? ` (${falCost.megapixels} MP — fal rounds part megapixels up)` : ''}
                         {imageGen.count > 1 ? ` · about ${falCost.forCount} for ${imageGen.count} images` : ''}.
                       </>
@@ -1557,7 +1581,7 @@ export default function SettingsModal({
                   {imageGen.editModelMovedFrom ? (
                     <div
                       data-editmodel-moved
-                      className="mt-2 flex items-start gap-2 rounded-none border border-[#7a5a00] bg-[#7a5a00] px-2.5 py-2 text-[11.5px] text-[#7a5a00]"
+                      className="mt-2 flex items-start gap-2 rounded-lg border border-[var(--warn)] bg-[var(--warn-bg)] px-2.5 py-2 text-[11.5px] text-[var(--warn)]"
                     >
                       <span className="flex-1">
                         Moved you off {imageGen.editModelMovedFrom}, which re-drew the picture from your
@@ -1566,7 +1590,7 @@ export default function SettingsModal({
                       <button
                         onClick={() => setImageGen({ editModelMovedFrom: '' })}
                         title="Understood"
-                        className="text-[#7a5a00] transition hover:text-ink"
+                        className="text-[var(--warn)] transition hover:text-ink"
                       >
                         <X size={13} />
                       </button>
@@ -1603,7 +1627,7 @@ export default function SettingsModal({
                   </Field>
                 </div>
 
-                <div className="rounded-none border border-[#e9e7e0] bg-[#f4f4f0] p-3">
+                <div className="rounded-xl border border-[var(--rule)] bg-[var(--app)] p-3">
                   <div className="mb-1 flex items-center gap-1.5 text-[13px] font-medium text-muted">
                     <ImageIcon size={13} className="text-faint" /> Test generation
                   </div>
@@ -1614,24 +1638,24 @@ export default function SettingsModal({
                   <button
                     onClick={runTestGeneration}
                     disabled={falBusy || !imageGen.falKey || !imageGen.model}
-                    className="flex items-center gap-1.5 rounded-none border border-[#c9c5ba] px-3 py-1.5 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink disabled:opacity-50"
+                    className="flex items-center gap-1.5 rounded-lg border border-[var(--rule)] px-3 py-1.5 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink disabled:opacity-50"
                   >
                     <Sparkles size={13} /> Generate one test image
                   </button>
                   {genTest && (
                     <div
                       data-gen-test={genTest.ok ? 'ok' : 'err'}
-                      className={`mt-2 flex items-start gap-2.5 rounded-none border px-3 py-2 text-[12.5px] ${
+                      className={`mt-2 flex items-start gap-2.5 rounded-lg border px-3 py-2 text-[12.5px] ${
                         genTest.ok
-                          ? 'border-[#1b6b3a] bg-[#edebe5] text-[#1b6b3a]'
-                          : 'border-[#a81313] bg-[#a81313] text-[#a81313]'
+                          ? 'border-[var(--ok)] bg-[var(--app)] text-[var(--ok)]'
+                          : 'border-[var(--err-rule)] bg-[var(--err-bg)] text-[var(--err)]'
                       }`}
                     >
                       {genTest.url ? (
                         <img
                           src={genTest.url}
                           alt="fal.ai test generation"
-                          className="h-16 w-16 shrink-0 rounded-none border border-black/10 object-cover"
+                          className="h-16 w-16 shrink-0 rounded-lg border border-white/10 object-cover"
                         />
                       ) : (
                         <TriangleAlert size={13} className="mt-[1px] shrink-0" />
@@ -1641,13 +1665,13 @@ export default function SettingsModal({
                   )}
                 </div>
 
-                <div className="flex items-center justify-between gap-3 rounded-none border border-[#e9e7e0] bg-[#f4f4f0] p-3">
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-[var(--rule)] bg-[var(--app)] p-3">
                   <div className="min-w-0 text-[11.5px] leading-snug text-faint">
                     Generated images are written as real files beside your store; the chat file keeps only their paths.
                   </div>
                   <button
                     onClick={() => window.zen.images.openFolder()}
-                    className="flex shrink-0 items-center gap-1.5 rounded-none border border-[#c9c5ba] px-2.5 py-1.5 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink"
+                    className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--rule)] px-2.5 py-1.5 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink"
                   >
                     <FolderOpen size={13} /> Open folder
                   </button>
@@ -1656,12 +1680,12 @@ export default function SettingsModal({
             )}
 
             {tab === 'about' && (
-              <div className="space-y-3 text-[13px] text-[#1e1b17]">
+              <div className="space-y-3 text-[13px] text-[var(--text-mid)]">
                 <div>
                   <strong className="font-medium">Zen Chat</strong> {info?.version} — a ChatGPT-style Windows client
                   that talks to any OpenAI-compatible endpoint you point it at.
                 </div>
-                <div className="rounded-none border border-[#e9e7e0] bg-[#f4f4f0] p-3">
+                <div className="rounded-xl border border-[var(--rule)] bg-[var(--app)] p-3">
                   <div className="mb-2 font-medium text-muted">Shortcuts</div>
                   <div className="grid grid-cols-2 gap-y-1.5">
                     {[
@@ -1674,7 +1698,7 @@ export default function SettingsModal({
                       ['Esc', 'Stop generating'],
                     ].map(([k, d]) => (
                       <div key={k} className="flex items-center gap-2">
-                        <kbd className="rounded border border-[#e4e1d9] bg-[#edebe5] px-1.5 py-0.5 font-mono text-[11px]">
+                        <kbd className="rounded border border-[var(--rule)] bg-[var(--raised)] px-1.5 py-0.5 font-mono text-[11px]">
                           {k}
                         </kbd>
                         <span className="text-[12.5px] text-muted">{d}</span>
@@ -1682,12 +1706,12 @@ export default function SettingsModal({
                     ))}
                   </div>
                 </div>
-                <div className="rounded-none border border-[#e9e7e0] bg-[#f4f4f0] p-3">
+                <div className="rounded-xl border border-[var(--rule)] bg-[var(--app)] p-3">
                   <div className="mb-1 font-medium text-muted">Where your data lives</div>
                   <div className="break-all font-mono text-[11.5px] text-faint">{info?.storePath}</div>
                   <button
                     onClick={() => window.zen.app.openStore()}
-                    className="mt-2 flex items-center gap-1.5 rounded-none border border-[#c9c5ba] px-2.5 py-1.5 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink"
+                    className="mt-2 flex items-center gap-1.5 rounded-lg border border-[var(--rule)] px-2.5 py-1.5 text-[12.5px] text-muted transition hover:bg-white/[.06] hover:text-ink"
                   >
                     <FolderOpen size={13} /> Open folder
                   </button>

@@ -44,6 +44,7 @@ function falProgressText(p: { label?: string; phase?: string; detail?: unknown }
 }
 
 const DEFAULTS: Config = {
+  theme: 'dark',
   baseUrl: 'https://opencode.ai/zen/go/v1',
   apiKey: '',
   model: 'deepseek-v4.1-flash',
@@ -1172,13 +1173,22 @@ export default function App() {
 
   const modelLabel = config.model || 'no model'
 
+  // The palette is a document attribute, so this one line flips every colour in the interface and
+  // nothing downstream has to know which theme is on.
+  useEffect(() => {
+    const name = config.theme || 'dark'
+    document.documentElement.dataset.theme = name
+    // the OS paints the window buttons above this page, so it has to be told too
+    void window.zen?.theme?.apply?.(name)
+  }, [config.theme])
+
   return (
     <div className="flex h-full w-full overflow-hidden bg-canvas paper-grid">
       {sidebarOpen && (
         <>
           {compact && (
             <div
-              className="fixed inset-0 z-20 bg-[#edebe5]/82"
+              className="fixed inset-0 z-20 bg-black/55"
               onClick={() => setSidebarOpen(false)}
             />
           )}
@@ -1209,11 +1219,14 @@ export default function App() {
 
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="drag-region titlebar-space flex h-11 shrink-0 items-center gap-1 pl-2">
+          <span className="ml-1 mr-1.5 select-none font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-muted">
+            WorkBuro
+          </span>
           {!sidebarOpen && (
             <button
               onClick={() => setSidebarOpen(true)}
               title="Show sidebar"
-              className="no-drag grid h-8 w-8 place-items-center rounded-none text-muted transition hover:bg-white/10 hover:text-ink"
+              className="no-drag grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-white/10 hover:text-ink"
             >
               <PanelLeft size={16} />
             </button>
@@ -1245,7 +1258,7 @@ export default function App() {
             onClick={() => setSettingsOpen(true)}
             title="Settings (Ctrl+,)"
             data-settings-open
-            className="no-drag mr-1 grid h-8 w-8 place-items-center rounded-none text-muted transition hover:bg-white/10 hover:text-ink"
+            className="no-drag mr-1 grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-white/10 hover:text-ink"
           >
             <Settings2 size={16} />
           </button>
@@ -1254,7 +1267,7 @@ export default function App() {
         {hotkeyNotice && (
           <div
             data-hotkey-banner
-            className="flex items-start gap-2 border-b border-[#7a5a00] bg-[#7a5a00] px-3 py-2 text-[12px] leading-snug text-[#7a5a00]"
+            className="flex items-start gap-2 border-b border-[var(--warn-bg)] bg-[var(--warn-bg)] px-3 py-2 text-[12px] leading-snug text-[var(--warn)]"
           >
             <TriangleAlert size={14} className="mt-[1px] shrink-0" />
             <span className="flex-1">
@@ -1268,14 +1281,14 @@ export default function App() {
             </span>
             <button
               onClick={() => setSettingsOpen(true)}
-              className="shrink-0 rounded-none border border-[#7a5a00] px-2 py-[3px] text-[11.5px] transition hover:bg-white/[.07]"
+              className="shrink-0 rounded-md border border-[var(--warn)] px-2 py-[3px] text-[11.5px] transition hover:bg-white/[.07]"
             >
               Change
             </button>
             <button
               onClick={() => setHotkeyNotice(null)}
               title="Dismiss"
-              className="shrink-0 rounded-none px-1 py-[3px] transition hover:bg-white/[.07]"
+              className="shrink-0 rounded-md px-1 py-[3px] transition hover:bg-white/[.07]"
             >
               <X size={13} />
             </button>
@@ -1364,15 +1377,15 @@ export default function App() {
       )}
 
       {dragging && (
-        <div className="pointer-events-none fixed inset-0 z-40 grid place-items-center bg-[#edebe5]/85">
-          <div className="rounded-none border border-dashed border-[#c9c5ba] px-8 py-6 text-[14px] text-muted">
+        <div className="pointer-events-none fixed inset-0 z-40 grid place-items-center bg-black/60">
+          <div className="rounded-2xl border border-dashed border-[var(--rule)] px-8 py-6 text-[14px] text-muted">
             Drop images to attach
           </div>
         </div>
       )}
 
       {toast && (
-        <div className="pointer-events-none fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-none border border-[#c9c5ba] bg-[#edebe5] px-4 py-2 text-[12.5px] text-[#1e1b17] shadow-xl">
+        <div className="pointer-events-none fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-xl border border-[var(--rule)] bg-[var(--raised)] px-4 py-2 text-[12.5px] text-[var(--text-mid)] shadow-xl">
           {toast}
         </div>
       )}

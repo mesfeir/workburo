@@ -1,6 +1,5 @@
-/* Paper blueprint faces, bundled rather than linked: the app's CSP is default-src 'self', so a
-   webfont CDN is blocked in the real window. These are the variable faces, so every weight the
-   interface asks for is a real one rather than a synthesised bold. */
+/* Bundled, not linked: the renderer's CSP is default-src 'self', so a webfont CDN is blocked.
+   These are the variable faces, so every weight asked for is a real one. */
 @font-face {
   font-family: 'Archivo Black';
   font-style: normal;
@@ -23,13 +22,110 @@
   src: url('./assets/fonts/JetBrainsMono.woff2') format('woff2');
 }
 
+
+/* ------------------------------------------------------------------ themes
+
+   Both palettes are declared here in full, side by side, and selected by one attribute on <html>.
+   The switch is a single data-theme value and nothing else has to know which is on.
+
+   Dark is the window as it always was, on a very dark grey canvas rather than pure black: #121212
+   reads the same in a dark room but stops panel edges from dissolving into the background.
+   Paper is the same interface on unbleached stock, with a faint drafted grid and one hazard red.
+*/
+:root {
+  /* dark: the default, very dark grey rather than black */
+  color-scheme: dark;
+  --font-sans: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'Cascadia Mono', Consolas, ui-monospace, monospace;
+
+  --app: #121212;
+  --raised: #181818;
+  --raised-2: #1f1f1f;
+  --raised-3: #262626;
+  --raised-4: #2e2e2e;
+  --rule: #2e2e2e;
+  --rule-soft: #242424;
+  --text: #ececec;
+  --text-mid: #a8a8a8;
+  --text-dim: #7a7a7a;
+  --text-faint: #6e6e6e;
+  --text-solid: #ffffff;
+  --accent: #2f6feb;
+  --accent-bright: #4f8cff;
+  --accent-bg: #20365a;
+  --accent-rule: #3f6db5;
+  --accent-soft: #dfeaff;
+  --ok: #67d68a;
+  --ok-bg: #12251a;
+  --warn: #ffd166;
+  --warn-bg: #241c0d;
+  --err: #ff9b9b;
+  --err-bg: #2a1414;
+  --err-rule: #522020;
+  --scrim: rgba(0,0,0,0.72);
+}
+
+:root[data-theme='paper'] {
+  /* paper: the same interface on unbleached stock */
+  --app: #f4f4f0;
+  --raised: #edebe5;
+  --raised-2: #e4e1d9;
+  --raised-3: #ddd9d0;
+  --raised-4: #d2cec3;
+  --rule: #c9c5ba;
+  --rule-soft: #ddd9d0;
+  --text: #111111;
+  --text-mid: #4a463d;
+  --text-dim: #6e6a60;
+  --text-faint: #7a756a;
+  --text-solid: #111111;
+  --accent: #e61919;
+  --accent-bright: #c41414;
+  --accent-bg: #f2dedb;
+  --accent-rule: #e0b3ae;
+  --accent-soft: #fbf1f0;
+  --ok: #1b6b3a;
+  --ok-bg: #e6f0e8;
+  --warn: #7a5a00;
+  --warn-bg: #f6e7c8;
+  --err: #a81313;
+  --err-bg: #f7e4e2;
+  --err-rule: #e0a9a4;
+  --scrim: rgba(237,235,229,0.88);
+
+  color-scheme: light;
+  --font-sans: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+}
+
+:root[data-theme='paper'] {
+--font-sans: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+}
+
+/* the paper theme is the only one that wants the graph grid and drafted mono labels */
+:root[data-theme='paper'] .paper-grid {
+  background-image: linear-gradient(to right, rgba(17, 17, 17, 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(17, 17, 17, 0.045) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+:root[data-theme='paper'] .uppercase {
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+}
+/* print has square corners. A theme cannot rewrite every class, so the one place that is legitimate
+   is a rule scoped to this theme; circles stay circles because dots and spinners mean something. */
+:root[data-theme='paper'] *:not([class*='rounded-full']) {
+  border-radius: 0 !important;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    color-scheme: light;
+    
   }
 
   html,
@@ -45,10 +141,10 @@
     font-size: 15px;
   }
 
-  /* thin ink scrollbars */
+  /* thin dark scrollbars, ChatGPT-style */
   * {
     scrollbar-width: thin;
-    scrollbar-color: #bfbbb0 transparent;
+    scrollbar-color: #3a3a3a transparent;
   }
   *::-webkit-scrollbar {
     width: 10px;
@@ -57,25 +153,19 @@
   *::-webkit-scrollbar-track {
     background: transparent;
   }
-  /* the theme owns the scrollbar: no native arrow buttons */
-  *::-webkit-scrollbar-button {
-    display: none;
-    width: 0;
-    height: 0;
-  }
   *::-webkit-scrollbar-thumb {
-    background-color: #bfbbb0;
+    background-color: #3a3a3a;
     border-radius: 999px;
     border: 3px solid transparent;
     background-clip: content-box;
   }
   *::-webkit-scrollbar-thumb:hover {
-    background-color: #9a958a;
+    background-color: #555;
     background-clip: content-box;
   }
 
   ::selection {
-    background: #e6191933;
+    background: #2f6feb66;
   }
 
   textarea,
@@ -94,17 +184,6 @@
   .titlebar-space {
     /* keep clear of the native window buttons drawn by titleBarOverlay */
     padding-right: 148px;
-  }
-  /* graph paper: a faint 24px grid, the substrate the whole interface sits on */
-  .paper-grid {
-    background-image: linear-gradient(to right, rgba(17, 17, 17, 0.045) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(17, 17, 17, 0.045) 1px, transparent 1px);
-    background-size: 24px 24px;
-  }
-  /* every uppercase micro-label is a drafted annotation, so it sets in mono */
-  .uppercase {
-    font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
-    letter-spacing: 0.08em;
   }
 }
 
@@ -149,10 +228,10 @@
   @apply border-l-2 border-hair pl-4 my-4 text-muted;
 }
 .prose-zen a {
-  @apply text-[#c41414] underline underline-offset-2 decoration-[#c4141455] hover:decoration-[#c41414];
+  @apply text-[#6ea8ff] underline underline-offset-2 decoration-[#6ea8ff55] hover:decoration-[#6ea8ff];
 }
 .prose-zen strong {
-  @apply font-semibold text-ink;
+  @apply font-semibold text-white;
 }
 .prose-zen hr {
   @apply my-6 border-hair;
@@ -168,10 +247,10 @@
   @apply bg-panel font-semibold;
 }
 .prose-zen code:not(pre code) {
-  @apply rounded-none border border-hair bg-[#e4e1d9] px-1.5 py-0.5 text-[13.5px] font-mono text-[#16130f];
+  @apply rounded bg-[#ffffff14] px-1.5 py-0.5 text-[13.5px] font-mono text-[#e8e8e8];
 }
 .prose-zen pre {
-  @apply my-4 overflow-hidden rounded-none border border-hair bg-[#EFEDE7];
+  @apply my-4 overflow-hidden rounded-xl border border-hair bg-[#0b0b0b];
 }
 .prose-zen pre code {
   @apply block overflow-x-auto p-4 text-[13px] leading-[1.6] font-mono;
@@ -204,9 +283,9 @@
   width: 42px;
   flex: none;
   overflow: hidden;
-  border-radius: 0;
-  border: 1px solid rgba(17, 17, 17, 0.12);
-  background: linear-gradient(135deg, #EDEBE5 0%, #E2DFD7 50%, #EDEBE5 100%);
+  border-radius: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(135deg, #1d1d24 0%, #2a2a34 50%, #1d1d24 100%);
 }
 .drawing-tile::after {
   content: '';
@@ -215,8 +294,8 @@
   background: linear-gradient(
     100deg,
     transparent 20%,
-    rgba(17, 17, 17, 0.16) 45%,
-    rgba(17, 17, 17, 0.05) 55%,
+    rgba(255, 255, 255, 0.16) 45%,
+    rgba(255, 255, 255, 0.05) 55%,
     transparent 80%
   );
   transform: translateX(-100%);
@@ -230,12 +309,12 @@
 }
 .drawing-title {
   font-size: 13.5px;
-  color: #16130f;
+  color: #e8e8e8;
   animation: breathe 2.4s ease-in-out infinite;
 }
 .drawing-phase {
   font-size: 11.5px;
-  color: var(--muted-foreground, #5c584f);
+  color: var(--muted-foreground, #8a8a8a);
 }
 @keyframes sweep {
   to {

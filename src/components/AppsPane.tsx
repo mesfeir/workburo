@@ -156,13 +156,13 @@ export default function AppsPane({
   return (
     <div className="space-y-5" data-apps-pane>
       <div>
-        <h3 className="text-[15px] font-medium text-[#16130f]">Connected apps</h3>
+        <h3 className="text-[15px] font-medium text-[var(--text-mid)]">Connected apps</h3>
         <p className="mt-1 text-[12.5px] leading-relaxed text-faint">
           Let the assistant work in your own accounts — Gmail, Calendar, Slack, Notion, Drive and
           hundreds more. Off by default: nothing here is reachable until you switch it on and connect
           an app yourself. It runs on{' '}
           <button
-            className="underline decoration-dotted hover:text-[#1e1b17]"
+            className="underline decoration-dotted hover:text-[var(--text-mid)]"
             onClick={() => window.zen.openExternal?.('https://composio.dev')}
           >
             Composio
@@ -171,15 +171,15 @@ export default function AppsPane({
         </p>
       </div>
 
-      <label className="flex items-center gap-3 rounded-none border border-[#e9e7e0] bg-[#edebe5] px-3.5 py-3">
+      <label className="flex items-center gap-3 rounded-xl border border-[var(--rule)] bg-[var(--raised)] px-3.5 py-3">
         <input
           type="checkbox"
           checked={!!saved.enabled}
           onChange={(e) => set({ enabled: e.target.checked })}
           data-apps-enabled
-          className="h-4 w-4 accent-[#c41414]"
+          className="h-4 w-4 accent-[var(--accent-bright)]"
         />
-        <span className="text-[13.5px] text-[#16130f]">
+        <span className="text-[13.5px] text-[var(--text-mid)]">
           Let the assistant use my connected apps
           <span className="mt-0.5 block text-[12px] text-faint">
             When this is on, it can send, post and create things in the accounts you connect below.
@@ -197,7 +197,7 @@ export default function AppsPane({
             onBlur={() => set({ apiKey: key.trim() })}
             placeholder="ak_…"
             data-apps-key
-            className="min-w-0 flex-1 rounded-none border border-[#e9e7e0] bg-[#f4f4f0] px-3 py-2 text-[13px] text-[#16130f] outline-none focus:border-[#f7e4e2]"
+            className="min-w-0 flex-1 rounded-lg border border-[var(--rule)] bg-[var(--app)] px-3 py-2 text-[13px] text-[var(--text-mid)] outline-none focus:border-[var(--accent-rule)]"
           />
           <button
             onClick={() => {
@@ -206,7 +206,7 @@ export default function AppsPane({
               refresh()
             }}
             disabled={!key.trim() || busy === 'list'}
-            className="rounded-none border border-[#e9e7e0] px-3 py-2 text-[13px] text-[#16130f] transition hover:bg-white/5 disabled:opacity-40"
+            className="rounded-lg border border-[var(--rule)] px-3 py-2 text-[13px] text-[var(--text-mid)] transition hover:bg-white/5 disabled:opacity-40"
           >
             {busy === 'list' ? <Loader2 size={15} className="animate-spin" /> : 'Save'}
           </button>
@@ -220,12 +220,12 @@ export default function AppsPane({
       {note && (
         <p
           data-apps-note
-          className={`rounded-none border px-3 py-2 text-[12.5px] ${
+          className={`rounded-lg border px-3 py-2 text-[12.5px] ${
             note.kind === 'err'
-              ? 'border-red-400/40 bg-red-500/10 text-[#a81313]'
+              ? 'border-red-400/40 bg-red-500/10 text-[var(--err)]'
               : note.kind === 'ok'
-                ? 'border-emerald-400/40 bg-emerald-500/10 text-[#1b6b3a]'
-                : 'border-[#e9e7e0] bg-[#edebe5] text-[#1e1b17]'
+                ? 'border-emerald-400/40 bg-emerald-500/10 text-[var(--ok)]'
+                : 'border-[var(--rule)] bg-[var(--raised)] text-[var(--text-mid)]'
           }`}
         >
           {note.msg}
@@ -245,20 +245,20 @@ export default function AppsPane({
                     if (e.key === 'Enter') load(query)
                   }}
                   placeholder="Search apps — gmail, slack, notion…"
-                  className="w-full rounded-none border border-[#e9e7e0] bg-[#f4f4f0] py-2 pl-8 pr-3 text-[13px] text-[#16130f] outline-none focus:border-[#f7e4e2]"
+                  className="w-full rounded-lg border border-[var(--rule)] bg-[var(--app)] py-2 pl-8 pr-3 text-[13px] text-[var(--text-mid)] outline-none focus:border-[var(--accent-rule)]"
                 />
               </div>
               <button
                 onClick={() => load(query)}
                 title="Search"
-                className="rounded-none border border-[#e9e7e0] p-2 text-[#16130f] transition hover:bg-white/5"
+                className="rounded-lg border border-[var(--rule)] p-2 text-[var(--text-mid)] transition hover:bg-white/5"
               >
                 <Search size={15} />
               </button>
               <button
                 onClick={refresh}
                 title="Check connection status again"
-                className="rounded-none border border-[#e9e7e0] p-2 text-[#16130f] transition hover:bg-white/5"
+                className="rounded-lg border border-[var(--rule)] p-2 text-[var(--text-mid)] transition hover:bg-white/5"
               >
                 <RefreshCw size={15} />
               </button>
@@ -276,11 +276,11 @@ export default function AppsPane({
                   <div
                     key={a.slug}
                     data-app-row={a.slug}
-                    className="flex items-center gap-3 rounded-none border border-[#e9e7e0] bg-[#edebe5] px-3 py-2.5"
+                    className="flex items-center gap-3 rounded-xl border border-[var(--rule)] bg-[var(--app)] px-3 py-2.5"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="truncate text-[13.5px] text-[#16130f]">{a.name}</span>
+                        <span className="truncate text-[13.5px] text-[var(--text-mid)]">{a.name}</span>
                         {a.noAuth && <span className="text-[11px] text-faint">no sign-in needed</span>}
                       </div>
                       <span className="mt-0.5 block truncate text-[12px] text-faint">
@@ -288,7 +288,7 @@ export default function AppsPane({
                       </span>
                     </div>
                     {st === 'connected' ? (
-                      <span className="flex shrink-0 items-center gap-1.5 text-[12.5px] text-[#1b6b3a]">
+                      <span className="flex shrink-0 items-center gap-1.5 text-[12.5px] text-[var(--ok)]">
                         <Check size={14} /> Connected
                       </span>
                     ) : (
@@ -302,7 +302,7 @@ export default function AppsPane({
                               ? 'Finish the sign-in in your browser'
                               : `Connect ${a.name}`
                         }
-                        className="flex shrink-0 items-center gap-1.5 rounded-none border border-[#e9e7e0] px-2.5 py-1.5 text-[12.5px] text-[#16130f] transition hover:bg-white/5 disabled:opacity-40"
+                        className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--rule)] px-2.5 py-1.5 text-[12.5px] text-[var(--text-mid)] transition hover:bg-white/5 disabled:opacity-40"
                       >
                         {busy === a.slug || st === 'pending' ? (
                           <Loader2 size={13} className="animate-spin" />
@@ -326,10 +326,10 @@ export default function AppsPane({
                   <span
                     key={c.id}
                     title={c.reason || c.status}
-                    className={`rounded-none border px-2.5 py-1 text-[12px] ${
+                    className={`rounded-lg border px-2.5 py-1 text-[12px] ${
                       c.active
-                        ? 'border-emerald-400/40 bg-emerald-500/10 text-[#1b6b3a]'
-                        : 'border-[#e9e7e0] bg-[#edebe5] text-faint'
+                        ? 'border-emerald-400/40 bg-emerald-500/10 text-[var(--ok)]'
+                        : 'border-[var(--rule)] bg-[var(--raised)] text-faint'
                     }`}
                   >
                     {c.app} · {c.status.toLowerCase()}
