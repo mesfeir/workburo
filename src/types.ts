@@ -181,6 +181,21 @@ export interface AppsConfig {
   userId: string
 }
 
+/** An MCP server the user added: a program run on this machine, spoken to over stdio. */
+export interface McpServer {
+  name: string
+  command: string
+  args?: string[]
+  env?: Record<string, string>
+  cwd?: string
+  enabled?: boolean
+}
+
+export interface McpConfig {
+  enabled: boolean
+  servers: McpServer[]
+}
+
 export interface Config {
   baseUrl: string
   apiKey: string
@@ -215,6 +230,7 @@ export interface Config {
   imageGen: ImageGenConfig
   /** connected apps via Composio; off unless switched on */
   apps?: AppsConfig
+  mcp?: McpConfig
   /** agent mode: Pi runs in the backend with hands, in a folder the user picks */
   agent: AgentConfig
   profiles: Profile[]

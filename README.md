@@ -190,6 +190,12 @@ what it asked for and what it returned, and cited pages are listed underneath.
 | **Time** | Current date and time | No |
 | **Make a file** | Writes a real CSV, XLSX, DOCX, PDF, MD, JSON or TXT into `Documents\Zen Chat` | No |
 | **Your connected apps** | Gmail, Calendar, Drive, Slack, Notion and hundreds more, through your own [Composio](https://composio.dev) key | Yes, your own `ak_…` key |
+| **MCP servers** | Runs the Model Context Protocol servers you add, and hands the model their tools beside the built-in ones | No, though a server may need its own |
+
+MCP servers extend that list rather than sitting beside it. Add a server command in **MCP servers**,
+press **Test** to see what it offers, switch the feature on, and its tools are callable in a chat with
+nothing else changed. The protocol moved recently and most servers are still on the older revision, so
+the client works out which one each server speaks rather than assuming.
 
 Some models additionally have genuine server-side search on the relay. Zen Chat uses that when it is
 available and hides its own duplicate, so the request does not fail with a duplicate-tool error.
@@ -234,6 +240,8 @@ SmartScreen will show "unknown publisher" until you sign it with your own certif
    button.
 6. Optional, for your own accounts: in **Connected apps**, paste a Composio project key, switch the
    tools on and connect an account.
+7. Optional, to bring your own tools: in **MCP servers**, add a server command, press **Test** to see
+   what it offers, then switch the feature on. The server starts the first time a message needs tools.
 
 ![Zen Chat settings, showing endpoint presets, the base URL and a masked API key field](docs/screenshots/readme-settings.png)
 
@@ -278,6 +286,7 @@ electron/files.cjs     reads pdf, docx, xlsx, csv and plain text
 electron/documents.cjs attached documents: read in main, folded into the request
 electron/create.cjs    writes csv, xlsx, docx, pdf, md, txt and json
 electron/composio.cjs  connected apps over Composio's REST API
+electron/mcp.cjs       MCP servers: JSON-RPC over stdio, working out each server's protocol era
 electron/capture.cjs   regenerates the README screenshots from the real UI
 electron/selftest.cjs  end-to-end harness: drives the real UI, writes screenshots and a report
 electron/preload.cjs   narrow contextBridge surface (no Node in the page)
@@ -371,8 +380,6 @@ ZEN_SELFTEST_KEY=sk-... npx electron . --capture
   hosted fal.ai was chosen for the first cut. The numbers and the design for a local sidecar are in
   [`docs/image-generation.md`](docs/image-generation.md). Local means a model download with its
   encoder and VAE, so it is deliberately not the first thing shipped.
-- **MCP servers.** The client is designed and the protocol revision is pinned, but nothing is wired in
-  yet.
 - **Encrypted key storage** with Windows DPAPI.
 - **Voice input**, and the **Library, Scheduled, Plugins and Projects** entries, which are disabled and
   labelled *coming soon*.
@@ -396,6 +403,10 @@ ZEN_SELFTEST_KEY=sk-... npx electron . --capture
 - **The fal key is stored in the same plain-text JSON** as the chat key.
 - **Connected apps need your own Composio key.** There is no shared account behind them, and the tools
   stay hidden from the model until you enable them.
+- **MCP servers are stdio only.** A server is a command run on this machine, and its tools run there
+  too. Servers reachable only over HTTP are not supported yet. An MCP server is a real program, so one
+  that misbehaves is a real program misbehaving; the app gives it a timeout, a filtered environment
+  and a clean shutdown, and shows you its own output rather than hiding it.
 
 ## FAQ
 

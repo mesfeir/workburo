@@ -765,29 +765,38 @@ async function runAppTool(args, opts = {}) {
 
 const ALL_TOOLS = Object.keys(REGISTRY)
 
-/** Tool definitions in chat/completions shape, for the tools the config enables. */
-function chatToolDefs(cfg) {
+/**
+ * Tool definitions in chat/completions shape, for the tools the config enables.
+ *
+ * `extra` carries the tools discovered on MCP servers. They are passed in rather than read from a
+ * module-level list because they do not exist until a server has been started, and a list computed
+ * once at load would leave every late-registered tool invisible forever.
+ */
+function chatToolDefs(cfg, extra = []) {
   // The master switch means no tools at all. Settings greys the per-tool toggles out when it
   // is off, so advertising tools anyway would contradict what the app says it is doing.
   if (cfg && cfg.toolsEnabled === false) return []
   const on = cfg.toolToggles || {}
-  return ALL_TOOLS.filter((n) => {
+  const built = ALL_TOOLS.filter((n) => {
     if (on[n] === false) return false
     // The connected-app tools act in someone's real accounts, so they stay hidden until the user
     // switches them on — and hidden for good without a key, rather than advertised and then refusing.
     if (APP_TOOLS.has(n) && !(cfg && cfg.apps && cfg.apps.enabled)) return false
     return true
   }).map((n) => REGISTRY[n].schema)
+  const discovered = (Array.isArray(extra) ? extra : []).filter(
+    (d) => d && d.function && d.function.name && on[d.function.name] !== false,
+  )
+  return [...built, ...discovered]
 }
 
 /** Same definitions flattened, which is what the Responses API expects. */
-function responsesToolDefs(cfg) {
-  return chatToolDefs(cfg).map((t) => ({ type: 'function', ...t.function }))
+function responsesToolDefs(cfg, extra = []) {
+  return chatToolDefs(cfg, extra).map((t) => ({ type: 'function', ...t.function }))
 }
 
 async function executeTool(name, argsRaw, opts = {}) {
   const tool = REGISTRY[name]
-  if (!tool) return { ok: false, name, error: `Unknown tool "${name}".`, text: '', sources: [] }
   let args = argsRaw
   if (typeof argsRaw === 'string') {
     try {
@@ -796,6 +805,31 @@ async function executeTool(name, argsRaw, opts = {}) {
       return { ok: false, name, error: `Arguments were not valid JSON: ${clamp(argsRaw, 200)}`, text: '', sources: [] }
     }
   }
+  // A tool found on an MCP server is not in the registry: it runs over the protocol, through the
+  // handle main passes in. Every failure here comes back as a failed tool result, so a hung or dead
+  // server can never hang the chat.
+  if (!tool && /^mcp__/.test(String(name || ''))) {
+    const bridge = opts.mcp
+    if (!bridge || typeof bridge.call !== 'function') {
+      return { ok: false, name, error: `The MCP tool "${name}" is not available in this turn.`, text: '', sources: [] }
+    }
+    try {
+      const r = await bridge.call(name, args || {})
+      return {
+        name,
+        text: r.text || '',
+        sources: [],
+        images: r.images || [],
+        files: r.files || [],
+        ok: r.ok !== false,
+        error: r.error || null,
+      }
+    } catch (err) {
+      const why = String((err && err.message) || err)
+      return { ok: false, name, error: `MCP server problem: ${why}`, text: `The MCP tool could not run: ${why}`, sources: [] }
+    }
+  }
+  if (!tool) return { ok: false, name, error: `Unknown tool "${name}".`, text: '', sources: [] }
   try {
     const r = await tool.run(args || {}, opts)
     return {

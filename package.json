@@ -17,6 +17,7 @@
     "test:images": "node scripts/test-images.cjs",
     "test:agent": "node scripts/test-agent.cjs",
     "test:errors": "node scripts/test-errors.cjs",
+    "test:mcp": "node scripts/test-mcp.cjs",
     "test:messages": "node scripts/test-messages.cjs",
     "test:pricing": "node scripts/test-pricing.cjs",
     "test:edit": "node scripts/test-edit.cjs",

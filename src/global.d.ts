@@ -45,6 +45,29 @@ export interface ZenApi {
     save: (data: StoreShape) => Promise<boolean>
     flush: (data: StoreShape) => Promise<boolean>
   }
+  // MCP servers: status and a test. The page never touches a child process itself.
+  mcp?: {
+    status: () => Promise<
+      {
+        name: string
+        key: string
+        running: boolean
+        era: string | null
+        info: { name?: string; version?: string }
+        tools: { name: string; description: string }[]
+        lastOutput: string[]
+      }[]
+    >
+    test: (server: unknown) => Promise<{
+      ok: boolean
+      name?: string
+      era?: string
+      info?: { name?: string; version?: string }
+      tools?: string[]
+      error?: string
+    }>
+    stop: (name: string) => Promise<{ ok: boolean; stopped?: number }>
+  }
   chat: {
     start: (req: any) => Promise<{ ok: boolean }>
     abort: (requestId: string) => Promise<boolean>

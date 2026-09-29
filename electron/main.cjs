@@ -148,6 +148,13 @@ function defaultStore() {
         count: 1,
         size: 'square_hd',
       },
+      // MCP servers. Off until the user turns it on, and while it is off nothing is spawned at all,
+      // so someone who does not use this never has child processes because of it.
+      // A server is { name, command, args: [], env: {}, cwd, enabled }.
+      mcp: {
+        enabled: false,
+        servers: [],
+      },
       profiles: [
         { name: 'OpenCode Zen (Go)', baseUrl: 'https://opencode.ai/zen/go/v1', affinity: true },
         { name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', affinity: false },
@@ -871,6 +878,21 @@ app.whenReady().then(() => {
   })
 })
 
+/**
+ * MCP servers are child processes of this app, and quitting must not leave them behind. `will-quit`
+ * does not wait for async work, so the teardown runs here, once, with a short budget so a server
+ * that refuses to die cannot block quitting.
+ */
+let mcpQuitting = false
+app.on('before-quit', (event) => {
+  if (mcpQuitting || mcp.live.size === 0) return
+  event.preventDefault()
+  mcpQuitting = true
+  Promise.race([mcp.closeAll(), new Promise((resolve) => setTimeout(resolve, 3000))])
+    .catch(() => {})
+    .then(() => app.quit())
+})
+
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
   if (tray && !tray.isDestroyed()) tray.destroy()
@@ -957,6 +979,8 @@ const REASONING_HINTS = /reasoning_effort|disabling thinking|thinking-only|reaso
 const TOOL_HINTS = /tool_calls|tool_choice|"tools"|tools are not supported|tool.*not supported|'function' is|invalid_parameter_error.*(tool|function)/i
 
 const { chatToolDefs, responsesToolDefs, executeTool, ALL_TOOLS, REGISTRY } = require('./tools.cjs')
+// MCP servers, spoken to directly. See ./mcp.cjs for why this is hand-rolled.
+const mcp = require('./mcp.cjs')
 
 // Stored conversation -> API payload lives in its own file, so its rules — above all "an
 // assistant turn never carries an image" — can be tested directly instead of assumed.
@@ -1044,7 +1068,10 @@ function buildChatBody(cfg, messages, withReasoning, systemPrompt, tools = {}) {
     body.reasoning_effort = cfg.thinking ? 'medium' : 'none'
   }
   if (tools.client) {
-    const defs = chatToolDefs(cfg)
+    // tools.mcp carries the tools discovered on MCP servers this turn, so they sit in the same flat
+    // list as the app's own. They are passed in, never read from a module-level constant: a list
+    // captured at load would never see a tool that arrived after a server started.
+    const defs = chatToolDefs(cfg, tools.mcp)
     if (defs.length) {
       body.tools = defs
       body.tool_choice = 'auto'
@@ -1068,7 +1095,7 @@ function buildResponsesBody(cfg, messages, systemPrompt, tools = {}) {
   }
   if (cfg.thinking === false) body.reasoning = { effort: 'none' }
 
-  let defs = tools.client ? responsesToolDefs(cfg) : []
+  let defs = tools.client ? responsesToolDefs(cfg, tools.mcp) : []
   if (tools.server) {
     // the relay's built-in search tool is ALSO called web_search, and duplicate
     // tool names are a hard 400 on this API. Native search beats our function,
@@ -1528,6 +1555,21 @@ ipcMain.handle('chat:start', async (event, req) => {
   const allSources = []
   const note = (value) => send({ type: 'notice', value })
 
+  // MCP servers are started here rather than at launch: only a turn that actually wants tools pays
+  // for a child process, and a server that will not start is reported instead of quietly missing.
+  // The turn goes ahead on the app's own tools either way.
+  let mcpDefs = []
+  if (toolsWanted && cfg.mcp && cfg.mcp.enabled) {
+    const reports = await mcp.ensure(cfg.mcp.servers, { log: (line) => note(`[mcp] ${line}`) })
+    for (const r of reports) {
+      if (!r.ok) note(`MCP server "${r.name}" did not start: ${r.error}`)
+    }
+    mcpDefs = mcp.defs()
+    if (mcpDefs.length) {
+      note(`${mcpDefs.length} extra tool${mcpDefs.length === 1 ? '' : 's'} from MCP servers`)
+    }
+  }
+
   try {
     let toolsClient = toolsWanted
     let droppedTools = false
@@ -1546,7 +1588,7 @@ ipcMain.handle('chat:start', async (event, req) => {
           systemPrompt,
           send,
           ac,
-          tools: { client: toolsClient, server: serverSearchWanted && protocol === 'responses' },
+          tools: { client: toolsClient, server: serverSearchWanted && protocol === 'responses', mcp: mcpDefs },
         })
         if (ac.signal.aborted) break
 
@@ -1643,6 +1685,10 @@ ipcMain.handle('chat:start', async (event, req) => {
         const r = await executeTool(tc.name, tc.arguments, {
           searchUrl: cfg.searchUrl,
           signal: ac.signal,
+          // A tool discovered on an MCP server runs over the protocol, through here: the page never
+          // touches a child process, and a dead server returns a failed tool result rather than
+          // hanging the turn.
+          mcp: { call: (n, a) => mcp.callTool(n, a) },
           // a picture is drawn here, in main: the key stays out of the renderer
           images: {
             key: cfg.imageGen?.falKey || '',
@@ -1953,6 +1999,26 @@ ipcMain.handle('app:getHotkey', () => ({ ...hotkeyStatus, accelerator: hotkeySta
 ipcMain.handle('app:getLoginItem', () => getLoginState())
 
 /* -------------------------------------------------------------- IPC: tools */
+
+/* ------------------------------------------------------------------ MCP servers */
+
+/**
+ * The Test button: connect, list the tools, disconnect. It leaves no process behind, and it proves
+ * the command exists — which is the failure a user can actually fix.
+ */
+ipcMain.handle('mcp:test', async (_e, { server } = {}) => {
+  if (!server || !String(server.name || '').trim()) return { ok: false, error: 'A server needs a name.' }
+  if (!String(server.command || '').trim()) return { ok: false, error: 'A server needs a command to run.' }
+  return mcp.test(server)
+})
+
+/** What is running right now, and the tools each server offers. */
+ipcMain.handle('mcp:status', () => mcp.status())
+
+/** Stop one server, or all of them, without touching the saved configuration. */
+ipcMain.handle('mcp:stop', async (_e, { name } = {}) =>
+  name ? { ok: await mcp.stop(String(name)) } : { ok: true, stopped: await mcp.closeAll() },
+)
 
 ipcMain.handle('tools:list', () =>
   ALL_TOOLS.map((name) => ({

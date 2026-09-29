@@ -7,6 +7,12 @@ contextBridge.exposeInMainWorld('zen', {
     save: (data) => ipcRenderer.invoke('store:save', data),
     flush: (data) => ipcRenderer.invoke('store:flush', data),
   },
+  // MCP servers: the page asks for a status and a test, and never touches a child process itself
+  mcp: {
+    status: () => ipcRenderer.invoke('mcp:status'),
+    test: (server) => ipcRenderer.invoke('mcp:test', { server }),
+    stop: (name) => ipcRenderer.invoke('mcp:stop', { name }),
+  },
   chat: {
     start: (req) => ipcRenderer.invoke('chat:start', req),
     abort: (requestId) => ipcRenderer.invoke('chat:abort', { requestId }),
