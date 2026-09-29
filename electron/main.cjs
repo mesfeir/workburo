@@ -912,7 +912,9 @@ function extractError(status, text) {
   try {
     const j = JSON.parse(text)
     const e = j.error || j
-    msg = e.message || e.type || ''
+    // the explanation, not the headline: a gateway's generic "Provider returned error" hides the
+    // upstream's own sentence in error.metadata.raw, and that sentence is the actionable part
+    msg = upstreamDetail(e).message
     kind = (e.type || e.code || '') + ''
     if (!msg) msg = JSON.stringify(e).slice(0, 300)
   } catch {
@@ -935,6 +937,8 @@ const { chatToolDefs, responsesToolDefs, executeTool, ALL_TOOLS, REGISTRY } = re
 // Stored conversation -> API payload lives in its own file, so its rules — above all "an
 // assistant turn never carries an image" — can be tested directly instead of assumed.
 const { toChatMessages, toResponsesInput } = require('./messages.cjs')
+// a generic provider error is not an explanation — see errors.cjs
+const { upstreamDetail, embeddedError } = require('./errors.cjs')
 
 // Pictures are a tool, not a mode: the model reaches for it as soon as the user
 // asks to see something. Saying so up front is what turns "show me what that
@@ -1107,6 +1111,12 @@ function consumeChunk(protocol, payload, out) {
     return
   }
   // chat completions
+  // an error can arrive as a stream event rather than as an HTTP status, which is what OpenRouter
+  // does when the upstream fails after the stream has already opened
+  if (payload.error && !payload.choices) {
+    out.onError(upstreamDetail(payload.error).message || 'the provider reported an error mid-stream')
+    return
+  }
   const choice = payload.choices?.[0]
   if (payload.usage) out.onUsage(normalizeUsage(payload.usage))
   if (!choice) return
@@ -1368,6 +1378,15 @@ async function runRound({ protocol, base, cfg, messages, systemPrompt, send, ac,
 
     if (cfg.stream === false) {
       const json = await opened.res.json()
+      // Some gateways answer 200 with an error object and no choices at all. Calling that a success
+      // produced an empty reply and no explanation anywhere, which is what one user saw on a
+      // rate-limited free model.
+      const embedded = embeddedError(json)
+      if (embedded) {
+        const detail = extractError(opened.res.status, JSON.stringify(json))
+        send({ type: 'error', value: detail.message })
+        return { ok: false, err: detail }
+      }
       readPlainResponse(protocol, json, out)
       const plainCalls = acc.calls()
       if (streamError && !text.trim() && !plainCalls.length) {
