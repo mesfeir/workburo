@@ -163,6 +163,12 @@ const drawOpts = (over = {}) => ({
     )
   })
 
+  calls.length = 0
+  await REGISTRY.generate_image.run({ prompt: 'a duck' }, drawOpts({ size: 'landscape_16_9' }))
+  check('and the shape picked in Settings is used when the model does not ask for one', () => {
+    assert.strictEqual(calls[0].size, 'landscape_16_9', `got "${calls[0].size}"`)
+  })
+
   const noKey = await REGISTRY.generate_image.run(
     { prompt: 'x' },
     { images: { generate: async () => { calls.push('drew'); return { ok: true } } } },

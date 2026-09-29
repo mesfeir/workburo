@@ -1535,6 +1535,9 @@ ipcMain.handle('chat:start', async (event, req) => {
             // an edit runs on the edit endpoint: the models that follow an instruction and keep
             // the picture, instead of re-drawing from the words alone
             editModel: cfg.imageGen?.editModel || '',
+            // the shape the user picked, so a picture the model draws comes out the same as one the
+            // Image switch would have made
+            size: cfg.imageGen?.size || '',
             // the pictures that are actually in this conversation, so the model can name one it
             // cannot see ("last") and still get exactly that picture changed
             references: referencesFor(messages),

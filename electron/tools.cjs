@@ -325,13 +325,16 @@ async function generateImage(args, opts = {}) {
 
   const count = Math.min(Math.max(Number(args.count) || 1, 1), 4)
   const asked = String(args.size || '').trim()
-  const size = falImages.SIZE_PRESETS.some((p) => p.id === asked) ? asked : ''
-  if (asked && !size) {
+  const isPreset = (s) => falImages.SIZE_PRESETS.some((p) => p.id === s)
+  const chosen = isPreset(asked) ? asked : ''
+  if (asked && !chosen) {
     return {
       ok: false,
       error: `Unknown size "${asked}". Use one of: ${falImages.SIZE_PRESETS.map((p) => p.id).join(', ')}.`,
     }
   }
+  // nothing asked for: use the shape the user picked in Settings, so both doors make the same canvas
+  const size = chosen || (isPreset(cfg.size) ? cfg.size : '')
 
   const result = await generate({
     key: cfg.key,
