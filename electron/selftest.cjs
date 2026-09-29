@@ -1413,6 +1413,44 @@ async function run({
   )
   await shot(win, '14-tools-off')
 
+  // ---------- 15b. put the switch back
+  // The check above switches tools off to prove tool calls stop — and it left them off, so every
+  // later section (reading an attached document, making a file, the connected-app tools) ran with no
+  // tools at all. That is why the create check found no card and no real file: the model had been
+  // told it had no tools, and said so plainly ("I can't save files to your device"). A test that
+  // leaks state into the ones after it turns one real failure into several mysterious ones, so the
+  // switch is restored here, and the restore is itself checked.
+  await inPage(win, function () {
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: ',', ctrlKey: true, bubbles: true }))
+  })
+  await sleep(900)
+  await inPage(win, function () {
+    const t = Array.from(document.querySelectorAll('button')).find((b) => (b.textContent || '').trim() === 'Tools')
+    if (t) t.click()
+  })
+  await sleep(900)
+  const restored = await inPage(win, function () {
+    const label = Array.from(document.querySelectorAll('label')).find((l) =>
+      (l.textContent || '').includes('Let the model use tools'),
+    )
+    const box = label && label.querySelector('input[type=checkbox]')
+    if (box && !box.checked) {
+      box.click()
+      return true
+    }
+    return !!(box && box.checked)
+  })
+  await sleep(400)
+  await inPage(win, function () {
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  })
+  await sleep(700)
+  record(
+    'and the switch goes back on, so the sections after this one have tools again',
+    restored === true,
+    `restored=${restored}`,
+  )
+
   // ---------- 16. the input rail: one tick per message you sent, click to jump back
   const railBefore = await inPage(win, function () {
     const marks = document.querySelectorAll('[data-rail] button')
@@ -1660,8 +1698,9 @@ async function run({
       swOn: sw ? !!sw.checked : null,
       list: !!list,
       // the pane's own text, not the page's: the page's first 500 characters are the sidebar and the
-      // chat behind the modal, so a whole-body read never reaches the thing being asserted
-      paneText: paneEl ? (paneEl.innerText || '').replace(/\s+/g, ' ').slice(0, 400) : '',
+      // chat behind the modal, so a whole-body read never reaches the thing being asserted. 900
+      // characters, because the key field and its explanation sit below the switch and the intro.
+      paneText: paneEl ? (paneEl.innerText || '').replace(/\s+/g, ' ').slice(0, 900) : '',
     }
   })
   record(
@@ -1707,6 +1746,18 @@ async function run({
   // ask in words, let the model call the tool, and check that a real file is on disk and a card
   // for it is on screen with a way to open it. A model that merely *says* it saved something
   // fails here — which is exactly the failure worth catching.
+  // a pre-condition, checked where it matters: a switch left off by an earlier section makes this
+  // section fail as a mystery ("no card, no file") instead of as the thing that is actually wrong
+  const toolsOnForCreate = await inPage(win, function () {
+    return window.zen.store.get().then(function (s) {
+      return s.config.toolsEnabled !== false
+    })
+  })
+  record(
+    'the create check starts with tools on — no leaked switch from an earlier section',
+    toolsOnForCreate === true,
+    `toolsEnabled=${toolsOnForCreate}`,
+  )
   await inPage(win, pageType, [
     'Please save a CSV file of three fruits and their quantities. Call it fruits.csv. Then tell me where you saved it.',
   ])
