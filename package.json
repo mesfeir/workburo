@@ -20,7 +20,8 @@
     "test:pricing": "node scripts/test-pricing.cjs",
     "test:edit": "node scripts/test-edit.cjs",
     "test:tools": "node scripts/test-tools.cjs",
-    "test:files": "node scripts/test-files.cjs"
+    "test:files": "node scripts/test-files.cjs",
+    "check:packaged": "node scripts/check-packaged-files.cjs"
   },
   "dependencies": {
     "highlight.js": "^11.10.0",

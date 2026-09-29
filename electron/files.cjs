@@ -123,18 +123,17 @@ function loadPdfjs() {
 async function readPdf(abs, size) {
   const pdfjs = await loadPdfjs()
   const data = new Uint8Array(fs.readFileSync(abs))
-  // No worker and no rendering: this only walks the text layer. The standard-font directory is
-  // handed over because pdf.js warns without it, and the warning reads like a failure next to a
-  // result that is actually fine.
-  const fonts = require
-    .resolve('pdfjs-dist/package.json')
-    .replace(/package\.json$/, 'standard_fonts')
-    .replace(`${path.sep}app.asar${path.sep}`, `${path.sep}app.asar.unpacked${path.sep}`)
+  // No worker and no rendering: this only walks the text layer, so none of pdf.js's rendering
+  // machinery is needed. `verbosity: 0` keeps its advisory messages out of the app's logs — they
+  // concern glyphs and canvases, which this never touches. (Pointing `standardFontDataUrl` at the
+  // package's own standard_fonts directory was tried and removed: pdf.js asks for a
+  // LiberationSans-Regular.ttf that the published package does not contain — the folder ships .pfb
+  // files only — so it replaced a harmless advisory with a missing-file error.)
   const doc = await pdfjs.getDocument({
     data,
     isEvalSupported: false,
     disableFontFace: true,
-    standardFontDataUrl: 'file:///' + fonts.replace(/\\/g, '/').replace(/^\//, '') + '/',
+    verbosity: 0,
   }).promise
   const pages = Math.min(doc.numPages, MAX_PDF_PAGES)
   const parts = []
