@@ -14,6 +14,7 @@ import type {
   ChatMessage,
   Config,
   Conversation,
+  CreatedFile,
   ModelInfo,
   Source,
   StoreShape,
@@ -116,6 +117,8 @@ interface StreamState {
   sources: Source[]
   /** pictures the model drew with the generate_image tool, mid-answer */
   genImages: Attachment[]
+  /** documents the model made with the create_document tool, mid-answer */
+  genFiles: CreatedFile[]
   /** when the first token arrived, for the speed readout; null until one does */
   firstTokenAt: number | null
   /** characters streamed so far — the honest basis for the live estimate */
@@ -260,6 +263,7 @@ export default function App() {
                         tools: [...s.tools],
                         sources: [...s.sources],
                         images: s.genImages.length ? [...s.genImages] : m.images,
+                        files: s.genFiles.length ? [...s.genFiles] : m.files,
                         // the animated drawing row. Both doors set these, so a picture the model
                         // asks for in words shows exactly what the Image switch shows, mid-answer
                         // included — which is the whole point of the flag: the old row was gated
@@ -333,6 +337,10 @@ export default function App() {
           for (const img of v.images || []) {
             if (img?.path && !s.genImages.some((x) => x.path === img.path)) s.genImages.push(img)
           }
+          // a tool that made a file hands that back too — a spreadsheet the user asked for
+          for (const f of v.files || []) {
+            if (f?.path && !s.genFiles.some((x) => x.path === f.path)) s.genFiles.push(f)
+          }
           // the picture has landed — the drawing row gives way to it
           if ((v.images || []).length) s.drawing = false
           flush(s)
@@ -392,6 +400,7 @@ export default function App() {
             sources: [...s.sources],
             ...(speed ? { speed } : {}),
             ...(s.genImages.length ? { images: [...s.genImages] } : {}),
+            ...(s.genFiles.length ? { files: [...s.genFiles] } : {}),
           }
           setConversations((prev) =>
             prev.map((c) =>
@@ -444,6 +453,7 @@ export default function App() {
         tools: [],
         sources: [],
         genImages: [],
+        genFiles: [],
         firstTokenAt: null,
         chars: 0,
       }

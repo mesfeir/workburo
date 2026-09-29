@@ -595,6 +595,47 @@ const REGISTRY = {
         },
       },
     },
+    create_document: {
+      label: 'Create a document',
+      describe: 'Write a file — a spreadsheet, a Word document, a PDF — and say where it went.',
+      run: createDocument,
+      schema: {
+        type: 'function',
+        function: {
+          name: 'create_document',
+          description:
+            'Create a file and save it for the user: a spreadsheet, a document, a PDF or plain text. ' +
+            'Use it whenever they ask for a file to be made, saved, exported or downloaded — a report, ' +
+            'a list, a table, a letter. Give the content as text: for xlsx and csv put the headings on ' +
+            'the first line and commas between columns, and they become a real table; in docx and pdf, ' +
+            'lines starting with # become headings and - becomes a bullet. Names only, never a path — ' +
+            'the file is saved in the folder the app uses. Never claim a file was saved without calling ' +
+            'this, and tell the user where it went afterwards.',
+          parameters: {
+            type: 'object',
+            properties: {
+              kind: {
+                type: 'string',
+                enum: ['xlsx', 'csv', 'docx', 'pdf', 'md', 'txt', 'json'],
+                description: 'The kind of file: xlsx = spreadsheet, docx = Word, pdf = PDF.',
+              },
+              filename: {
+                type: 'string',
+                description: 'A plain file name such as "quarterly-report.xlsx". No folders.',
+              },
+              title: { type: 'string', description: 'Optional title, shown at the top of docx and pdf files.' },
+              content: {
+                type: 'string',
+                description:
+                  'The contents as text. For xlsx and csv the first line is the column headings; for ' +
+                  'docx and pdf, plain text where # makes a heading and - makes a bullet.',
+              },
+            },
+            required: ['kind', 'content'],
+          },
+        },
+      },
+    },
   }
 
 /* ------------------------------------------------- connected apps (Composio) */
@@ -609,6 +650,30 @@ const REGISTRY = {
  * The account id is filled in down in composio.cjs — the model names an app and a tool, never an
  * account, so it cannot invent one.
  */
+/* ------------------------------------------------------- making documents */
+
+/**
+ * Write a document the user asked for and hand back where it went.
+ *
+ * The model supplies the words and a file name; the folder is chosen by the app (opts.docs.dir), and
+ * create.cjs refuses anything that is a path rather than a name. The result carries `files`, which
+ * main puts on the reply, so a spreadsheet reaches the user the same way a picture does.
+ */
+async function createDocument(args = {}, opts = {}) {
+  const docs = opts.docs
+  if (!docs || typeof docs.create !== 'function') {
+    return { ok: false, error: 'Saving documents is not available in this build.' }
+  }
+  const r = await docs.create({
+    kind: args.kind,
+    filename: args.filename,
+    title: args.title,
+    content: args.content,
+  })
+  if (!r || !r.ok) return { ok: false, error: (r && r.error) || 'Could not save that file.' }
+  return { ok: true, text: r.text, files: [r.file], sources: [] }
+}
+
 const APP_TOOLS = new Set(['list_connected_apps', 'search_app_tools', 'run_app_tool'])
 
 async function connectedApps(args, opts = {}) {

@@ -33,6 +33,9 @@ contextBridge.exposeInMainWorld('zen', {
         return ''
       }
     },
+    // a file the app made: open it, or show it in the folder. Main only allows its own folder.
+    open: (p) => ipcRenderer.invoke('files:open', { path: p }),
+    reveal: (p) => ipcRenderer.invoke('files:reveal', { path: p }),
   },
   apps: {
     /** the Composio app catalogue; the key lives in main and never comes back here */

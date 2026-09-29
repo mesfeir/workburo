@@ -52,6 +52,15 @@ export interface ToolActivity {
   sources?: Source[]
 }
 
+/** A file the assistant made — a spreadsheet, a document, a PDF — and where it is. */
+export interface CreatedFile {
+  path: string
+  name: string
+  kind: string
+  bytes: number
+  mime?: string
+}
+
 export interface ChatMessage {
   id: string
   role: Role
@@ -76,6 +85,8 @@ export interface ChatMessage {
   tools?: ToolActivity[]
   /** documents the user attached to this message; read in main, shown as chips here */
   documents?: Attachment[]
+  /** files the assistant made — a spreadsheet, a document, a PDF — with where they are */
+  files?: CreatedFile[]
   /** everything the answer was grounded in */
   sources?: Source[]
   /** how fast the answer came in, in tokens per second */

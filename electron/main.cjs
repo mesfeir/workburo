@@ -13,7 +13,6 @@ const {
   nativeImage,
   screen,
   globalShortcut,
-  shell,
 } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
@@ -922,6 +921,7 @@ const pictures = require('./pictures.cjs')
 const files = require('./files.cjs')
 const documents = require('./documents.cjs')
 const composio = require('./composio.cjs')
+const createDoc = require('./create.cjs')
 
 /**
  * The pictures the image tool may be pointed at. The model only ever *names* one ("last"), and main
@@ -1584,6 +1584,11 @@ ipcMain.handle('chat:start', async (event, req) => {
                 ? composio.makeClient({ apiKey: cfg.apps.apiKey, userId: cfg.apps.userId })
                 : null,
           },
+          // Making documents. The folder is decided here — the model only ever supplies a name, so
+          // it cannot write anywhere but the app's own folder.
+          docs: {
+            create: (a) => createDoc.create(a, { dir: documentsDir() }),
+          },
         })
         for (const s of r.sources || []) {
           if (!allSources.some((x) => x.url === s.url)) allSources.push(s)
@@ -1600,6 +1605,8 @@ ipcMain.handle('chat:start', async (event, req) => {
             sources: r.sources || [],
             // attachments the renderer hangs on the reply
             images: r.images || [],
+            // and files it made — a spreadsheet or a document the user asked for
+            files: r.files || [],
             preview: String(r.ok ? r.text : r.error || '')
               .replace(/\s+/g, ' ')
               .slice(0, 300),
@@ -2136,6 +2143,43 @@ ipcMain.handle('apps:status', async (_e, { id } = {}) => {
   const c = appsClient()
   if (!c) return NO_APPS_KEY
   return c.accountStatus(String(id || ''))
+})
+
+/**
+ * Where documents the app makes are saved.
+ *
+ * One predictable folder in the user's own Documents, so "where did it go?" always has the same
+ * answer, and so everything the model can write is in one place it cannot escape.
+ */
+function documentsDir() {
+  return path.join(app.getPath('documents'), 'Zen Chat')
+}
+
+/** Only a file this app put in its own folder may be opened or revealed. */
+function inDocumentsDir(p) {
+  const target = path.resolve(String(p || ''))
+  const base = path.resolve(documentsDir())
+  return path.dirname(target) === base
+}
+
+ipcMain.handle('files:open', async (_e, { path: p } = {}) => {
+  if (!inDocumentsDir(p)) return { ok: false, error: 'That file is not in the Zen Chat folder.' }
+  try {
+    const err = await shell.openPath(path.resolve(p))
+    return err ? { ok: false, error: err } : { ok: true }
+  } catch (err) {
+    return { ok: false, error: (err && err.message) || 'Could not open that file.' }
+  }
+})
+
+ipcMain.handle('files:reveal', async (_e, { path: p } = {}) => {
+  if (!inDocumentsDir(p)) return { ok: false, error: 'That file is not in the Zen Chat folder.' }
+  try {
+    shell.showItemInFolder(path.resolve(p))
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: (err && err.message) || 'Could not show that file.' }
+  }
 })
 
 /**

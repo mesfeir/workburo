@@ -8,7 +8,10 @@ import {
   Clock3,
   Copy,
   Download,
+  ExternalLink,
+  FileSpreadsheet,
   FileText,
+  FolderOpen,
   Globe,
   ImageOff,
   Link2,
@@ -240,6 +243,14 @@ function Sources({ sources }: { sources: Source[] }) {
   )
 }
 
+/** A file size a person can read at a glance. */
+function fileSize(bytes?: number): string {
+  const n = Number(bytes) || 0
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`
+}
+
 /** "38.4 tok/s", with a ≈ while it is still an estimate rather than the endpoint's own count. */
 function fmtSpeed(speed?: ChatMessage['speed']): string {
   if (!speed || !Number.isFinite(speed.tps) || speed.tps <= 0) return ''
@@ -378,6 +389,46 @@ export default function Message({
           {msg.streaming && (
             <span className="ml-0.5 inline-block h-[15px] w-[8px] translate-y-[2px] animate-blink rounded-[1px] bg-[#d8d8d8]" />
           )}
+        </div>
+      )}
+
+      {(msg.files || []).length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2" data-msg-files>
+          {(msg.files || []).map((f, i) => (
+            <div
+              key={`${f.path}-${i}`}
+              className="flex items-center gap-2 rounded-xl border border-white/12 bg-white/[0.03] py-2 pl-2.5 pr-2"
+              title={f.path}
+            >
+              {f.kind === 'xlsx' || f.kind === 'csv' ? (
+                <FileSpreadsheet size={16} className="shrink-0 text-[#8fd6ab]" />
+              ) : (
+                <FileText size={16} className="shrink-0 text-[#8fb8d6]" />
+              )}
+              <div className="min-w-0">
+                <div className="truncate text-[12.5px] text-[#e8e8e8]">{f.name}</div>
+                <div className="text-[11px] text-faint">
+                  {f.kind.toUpperCase()} · {fileSize(f.bytes)}
+                </div>
+              </div>
+              <button
+                onClick={() => void window.zen.files.open(f.path)}
+                data-open-file={f.name}
+                title="Open it"
+                className="ml-1 flex items-center gap-1 rounded-lg border border-white/12 px-2 py-1 text-[11.5px] text-[#e4e4e4] transition hover:bg-white/10"
+              >
+                <ExternalLink size={12} /> Open
+              </button>
+              <button
+                onClick={() => void window.zen.files.reveal(f.path)}
+                data-reveal-file={f.name}
+                title="Show it in the folder"
+                className="rounded-lg border border-white/12 px-2 py-1 text-[#e4e4e4] transition hover:bg-white/10"
+              >
+                <FolderOpen size={12} />
+              </button>
+            </div>
+          ))}
         </div>
       )}
 

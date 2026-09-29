@@ -63,6 +63,9 @@ export interface ZenApi {
     add: (paths?: string[]) => Promise<{ ok: boolean; added: Attachment[]; canceled?: boolean }>
     /** a dropped file's path on disk — Electron 32 removed File.path */
     pathFor: (file: File) => string
+    /** open a file the app made, or show it in the folder; only its own folder is allowed */
+    open: (path: string) => Promise<{ ok: boolean; error?: string }>
+    reveal: (path: string) => Promise<{ ok: boolean; error?: string }>
   }
   apps: {
     /** the Composio app catalogue; the key stays in main and never comes back to the page */

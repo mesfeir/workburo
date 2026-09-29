@@ -1707,6 +1707,56 @@ async function run({
   )
   await shot(win, '18-connected-apps')
 
+  // ---------- 19. creating a document: the other half of "neither import or create"
+  // The reading side once shipped without a door, so this walks the whole path inside the app:
+  // ask in words, let the model call the tool, and check that a real file is on disk and a card
+  // for it is on screen with a way to open it. A model that merely *says* it saved something
+  // fails here — which is exactly the failure worth catching.
+  await inPage(win, pageType, [
+    'Please save a CSV file of three fruits and their quantities. Call it fruits.csv. Then tell me where you saved it.',
+  ])
+  await inPage(win, pageSend)
+  await waitFor(win, pageIdle, 180000, 400, 'the file to be created')
+  await sleep(900)
+  const madeCard = await inPage(win, function () {
+    const el = document.querySelector('[data-msg-files]')
+    return el ? (el.innerText || '').replace(/\s+/g, ' ').slice(0, 200) : ''
+  })
+  record(
+    'a file the model makes appears on the reply, with a way to open it',
+    /\.csv/i.test(madeCard),
+    `card="${madeCard}"`,
+  )
+  const openButton = await inPage(win, function () {
+    return !!document.querySelector('[data-open-file]')
+  })
+  record('and the card offers to open the file it just made', openButton === true, `openButton=${openButton}`)
+
+  // and it is really on disk, in the folder the app uses — not just described in prose
+  const docsFolder = require('electron').app.getPath('documents')
+  const madeDir = path.join(docsFolder, 'Zen Chat')
+  let madeFiles = []
+  try {
+    madeFiles = fs.readdirSync(madeDir)
+  } catch {
+    madeFiles = []
+  }
+  const csvFile = madeFiles.find((f) => /\.csv$/i.test(f))
+  record(
+    'and the file genuinely exists in the Zen Chat folder in Documents',
+    !!csvFile,
+    `folder=${madeDir} found=${madeFiles.slice(0, 6).join(', ') || '(nothing)'}`,
+  )
+  if (csvFile) {
+    const body = fs.readFileSync(path.join(madeDir, csvFile), 'utf8')
+    record(
+      'with the content asked for in it, not an empty file',
+      body.trim().length > 0 && /\d/.test(body),
+      `first line="${body.split(/\r?\n/)[0]}"`,
+    )
+  }
+  await shot(win, '19-created-document')
+
   console.log('\n=== summary ===')
   const failed = results.filter((r) => !r.pass)
   console.log(`${results.length - failed.length}/${results.length} checks passed`)

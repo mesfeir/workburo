@@ -23,13 +23,18 @@
     "test:files": "node scripts/test-files.cjs",
     "test:documents": "node scripts/test-documents.cjs",
     "test:composio": "node scripts/test-composio.cjs",
+    "test:create": "node scripts/test-create.cjs",
+    "check:syntax": "node scripts/check-syntax.cjs",
+    "predist": "npm run check:syntax",
     "check:packaged": "node scripts/check-packaged-files.cjs"
   },
   "dependencies": {
+    "docx": "^9.8.1",
     "highlight.js": "^11.10.0",
     "lucide-react": "^0.460.0",
     "mammoth": "^1.13.0",
     "pdfjs-dist": "^6.3.289",
+    "pdfkit": "^0.20.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^9.0.1",
