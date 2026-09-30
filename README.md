@@ -55,9 +55,22 @@
 - **Images.** **fal.ai**'s live catalogue, each endpoint with its **published price**, prompts written by the model, **progress** while it draws, and a **gallery** in the sidebar of everything you have sent or drawn.
 
   ![WorkBuro's fal.ai image model list, with live prices and filters](docs/screenshots/readme-images.png)
+- **No server to run.** Nothing to install on a box, no container, no sign-in screen. If you have tried **Open WebUI** and wanted the same thing without running a server, this is that: an **alternative to a ChatGPT subscription** in the way that matters, because the key, the endpoint and the files stay yours.
 - **Made for a desktop.** A **small window** that **remembers its size**, **starts with Windows** if you want, **stays above** other windows, and **tucks itself away** 30 seconds after you leave it, unless an answer is still arriving.
 - **Local-first.** **No telemetry** and no backend. Every conversation lives in **one JSON file** you can open, back up or hand-edit.
 - **Small enough to read.** A few thousand lines of **TypeScript** and **CommonJS**, and a **self-test** that drives the **real window** instead of a mock.
+
+## Common questions
+
+**Is this a ChatGPT alternative?** In the way people usually mean it, yes. It is a **chat app that works like ChatGPT**: streaming answers, a composer, a sidebar, an image mode, tools and agents. What is different is the model behind it, which is **whatever you point it at**, not one company's model behind one company's account. It is **not affiliated with OpenAI** and it does not claim to be ChatGPT.
+
+**Is there a free option?** The app costs nothing and there is no subscription. With no API key at all it will download a **small model** (429 MB) and run it **on your machine**, which is free to use from then on. If you already pay for a model, it uses your **own key** instead, and either way there is no second bill.
+
+**Why not just use Open WebUI?** Open WebUI is a web app you install, run and sign into, usually in Docker and usually on a server you maintain. WorkBuro is a **desktop app for Windows**: install it, press **Alt+Space**, get an answer, close it. No server, no browser, no account. If you want a shared web UI for a team, use Open WebUI. If you want a **desktop client** that writes a **real file** into a **real folder**, this is the one.
+
+**Do I need an account?** No. There is no sign-in, no telemetry, and no backend to sign into.
+
+**Does it only work with one model?** No, and that is the point. **OpenAI**, **OpenRouter**, **Groq**, **DeepSeek**, **Mistral**, **OpenCode Zen**, **LM Studio**, **Ollama**, **llama.cpp**, **vLLM**, **LocalAI**, or **your own gateway**. If it speaks the **OpenAI-compatible** API, it works.
 
 ## Install
 
