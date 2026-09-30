@@ -17,6 +17,7 @@ const {
 const path = require('node:path')
 const fs = require('node:fs')
 const falImages = require('./images.cjs')
+const localModel = require('./local.cjs')
 const titles = require('./title.cjs')
 
 const DEV_URL = 'http://localhost:5173'
@@ -379,8 +380,11 @@ let autoMinTimer = null
 let imageJobs = 0
 let lastAutoMinSec = null
 
+/** Naming a chat is work for the user, so the window must not hide itself while one is in flight. */
+let pendingTitles = 0
+
 function workInFlight() {
-  return inflight.size > 0 || activeAgentTurns.size > 0 || imageJobs > 0
+  return inflight.size > 0 || activeAgentTurns.size > 0 || imageJobs > 0 || pendingTitles > 0
 }
 
 function autoMinimizeSecs(cfg) {
@@ -427,6 +431,13 @@ function sendToRenderer(channel, payload) {
 // until the user asks for it, and when the toggle is off no process is ever spawned.
 
 const pi = require('./pi.cjs')
+
+/* The local model: its own folder under the profile, and one child process the app owns. */
+function LOCAL_ROOT () {
+  return path.join(app.getPath('userData'), 'local')
+}
+let localServed = null
+let localInstalling = false
 const { dialog: piDialog } = require('electron')
 
 /** Pi lives beside the store, so uninstalling is deleting one folder. */
@@ -922,6 +933,12 @@ app.on('before-quit', (event) => {
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
   if (tray && !tray.isDestroyed()) tray.destroy()
+  // The model server is this app's own child, started only when asked for, so it goes when the
+  // app goes. Nothing else on the machine is touched.
+  if (localServed) {
+    try { localServed.stop() } catch {}
+    localServed = null
+  }
 })
 
 app.on('window-all-closed', () => {
@@ -1185,6 +1202,7 @@ async function quickTitle(cfg, messages) {
   })())
 
   try {
+    pendingTitles++
     let lastErr = 'no reply'
     // chat/completions first, whatever the chat protocol is. Measured, not preferred: on the
     // Responses protocol a reasoning model spends a short token budget on hidden thinking and
@@ -1263,6 +1281,15 @@ async function quickTitle(cfg, messages) {
       console.log(`[title] applied "${cleaned}" via ${protocol} on ${titleCfg.model}`)
       return { ok: true, title: cleaned, model: titleCfg.model, protocol }
     }
+    // Every model attempt refused, which happens: a model will sometimes hand the request back
+    // twice in a row. Leaving a three-line message as the name of a chat is a worse outcome than a
+    // title taken from its own words, so take one. Derived from the words, not summarised from the
+    // meaning, and labelled that way so nothing here pretends otherwise.
+    const derived = titles.fallbackTitle(asked)
+    if (derived && titles.usable(derived, asked, assistantText)) {
+      console.log(`[title] derived from the opening: "${derived}"`)
+      return { ok: true, title: derived, model: titleCfg.model, protocol: 'derived' }
+    }
     // Visible in the harness log and in a terminal run. An invisible title failure is how a
     // feature looks broken for a week: the fallback works, so nothing else ever complains.
     console.log(`[title] not applied: ${asText(lastErr)}`)
@@ -1270,6 +1297,7 @@ async function quickTitle(cfg, messages) {
   } catch (err) {
     return { ok: false, error: String((err && err.message) || err) }
   } finally {
+    pendingTitles--
     clearTimeout(timer)
   }
 }
@@ -2046,6 +2074,58 @@ ipcMain.handle('pi:stop', (_e, { requestId }) => {
   h.kill()
   return { stopped: true }
 })
+
+/* ---- the local model: one click, no account, about a second to an answer ---- */
+
+ipcMain.handle('local:status', async () => {
+  const root = LOCAL_ROOT()
+  const st = localModel.status(root)
+  return {
+    ...st,
+    root,
+    pinned: localModel.LLAMA_VERSION,
+    defaultModel: localModel.DEFAULT_MODEL,
+    catalogue: localModel.CATALOGUE.map((m) => ({ ...m, size: localModel.humanSize(m.bytes) })),
+    running: localServed ? { baseUrl: localServed.baseUrl, port: localServed.port } : null,
+  }
+})
+
+ipcMain.handle('local:install', async (_e, { model } = {}) => {
+  if (localInstalling) return { busy: true }
+  localInstalling = true
+  try {
+    return await localModel.install({
+      root: LOCAL_ROOT(),
+      model,
+      onProgress: (p) => sendToRenderer('local:progress', p),
+    })
+  } catch (err) {
+    const message = String((err && err.message) || err)
+    sendToRenderer('local:progress', { phase: 'error', message })
+    return { ok: false, error: message }
+  } finally {
+    localInstalling = false
+  }
+})
+
+ipcMain.handle('local:start', async (_e, { model } = {}) => {
+  if (localServed) return { ok: true, baseUrl: localServed.baseUrl, port: localServed.port, already: true }
+  const served = await localModel.serve({ root: LOCAL_ROOT(), model })
+  if (!served.ok) return served
+  localServed = served
+  return { ok: true, baseUrl: served.baseUrl, port: served.port, tookMs: served.tookMs }
+})
+
+ipcMain.handle('local:stop', () => {
+  if (localServed) {
+    try { localServed.stop() } catch {}
+    localServed = null
+  }
+  return { ok: true }
+})
+
+ipcMain.handle('local:detect', () => localModel.detect())
+ipcMain.handle('local:open', () => shell.openPath(LOCAL_ROOT()))
 
 ipcMain.handle('models:list', async (_e, { cfg, label }) => {
   console.log(
