@@ -749,7 +749,8 @@ async function run({
   showInactive()
   await sleep(600)
   const unfocused = !win.isFocused()
-  armAutoMinimize({ autoMinimizeSec: 0.5 })
+  // force: the run keeps the tuck disarmed on purpose, and this check is the tuck.
+  armAutoMinimize({ autoMinimizeSec: 0.5 }, { force: true })
   await sleep(1800)
   const tuckedAway = isMinimized()
   record(
