@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowDown, Sparkles } from 'lucide-react'
 import Message from './Message'
+import FirstRun from './FirstRun'
 import type { Attachment, Conversation, Config } from '../types'
 
 const SUGGESTIONS = [
@@ -52,6 +53,10 @@ export default function ChatView({
   conversation,
   config,
   imageMode,
+  firstRun,
+  onConfig,
+  onOpenSettings,
+  onReady,
   onRetry,
   onPickSuggestion,
   onUseImage,
@@ -60,6 +65,12 @@ export default function ChatView({
   config: Config
   /** composer is aimed at the image generator */
   imageMode?: boolean
+  /** nothing is set up yet: offer the three ways to get an answer instead of chat prompts */
+  firstRun?: boolean
+  onConfig: (patch: Partial<Config>) => void
+  onOpenSettings: () => void
+  /** a model has started answering; reload the list using the config it was given */
+  onReady: (cfg?: Partial<Config>) => void
   onRetry: (messageId: string) => void
   onPickSuggestion: (text: string) => void
   /** put a picture from the transcript into the composer so the next message changes it */
@@ -194,7 +205,11 @@ export default function ChatView({
     <div className="relative min-h-0 flex-1">
       <div ref={scroller} onScroll={onScroll} className="h-full overflow-y-auto">
         {!conversation || conversation.messages.length === 0 ? (
-          <EmptyState onPick={onPickSuggestion} imageMode={imageMode} />
+          firstRun ? (
+            <FirstRun onConfig={onConfig} onOpenSettings={onOpenSettings} onReady={onReady} />
+          ) : (
+            <EmptyState onPick={onPickSuggestion} imageMode={imageMode} />
+          )
         ) : (
           <div className="mx-auto w-full max-w-[768px] px-4 py-6">
             {conversation.messages.map((m) => (

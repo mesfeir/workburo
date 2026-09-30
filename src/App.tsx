@@ -1022,8 +1022,10 @@ export default function App() {
 
   /* ------------------------------------------------------------- models */
 
-  const refreshModels = useCallback(async () => {
-    const cfg = configRef.current
+  const refreshModels = useCallback(async (override?: Partial<Config>) => {
+    // A caller that has just changed the endpoint passes it in: the ref this reads is only updated
+    // on the next render, so asking the server we just switched away from would come back empty.
+    const cfg = { ...configRef.current, ...(override || {}) }
     setToast('Loading models…')
     const res = await window.zen.models.list(cfg)
     if (res.ok) {
@@ -1335,6 +1337,10 @@ export default function App() {
           conversation={active}
           config={config}
           imageMode={imageMode}
+          firstRun={!String(config.apiKey || '').trim() && conversations.length === 0 && models.length === 0}
+          onConfig={patchConfig}
+          onOpenSettings={() => setSettingsOpen(true)}
+          onReady={(cfg) => void refreshModels(cfg)}
           onRetry={regenerate}
           onUseImage={useImageAsReference}
           onPickSuggestion={(t) => {

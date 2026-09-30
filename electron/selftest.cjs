@@ -2009,6 +2009,58 @@ async function run({
   )
   await shot(win, '20-streaming-reveal')
 
+  // ---------- 21. a brand new install is asked one question, not sent to Settings
+  // The old first run was an empty model picker and a line telling you to go and test an API. The
+  // three cards are the answer to that: one of them needs no account, no browser and no key.
+  const savedStore = await inPage(win, function () {
+    return window.zen.store.get()
+  })
+  await inPage(win, function () {
+    return window.zen.store.get().then(function (s) {
+      s.config = { ...(s.config || {}), apiKey: '' }
+      s.conversations = []
+      return window.zen.store.save(s)
+    })
+  })
+  await win.webContents.reload()
+  await sleep(2500)
+  const firstRunUi = await inPage(win, function () {
+    const text = document.body.innerText || ''
+    return {
+      heading: /Ask it anything/i.test(text),
+      here: /Run a model here/i.test(text),
+      key: /Use a key I have/i.test(text),
+      running: /Use what is running/i.test(text),
+      size: /429 MB/.test(text),
+      oldLine: /open settings to test your api/i.test(text),
+    }
+  })
+  record(
+    'a brand new install is offered three ways to get an answer, before it asks for a key',
+    firstRunUi.heading &&
+      firstRunUi.here &&
+      firstRunUi.key &&
+      firstRunUi.running &&
+      firstRunUi.size &&
+      !firstRunUi.oldLine,
+    JSON.stringify(firstRunUi),
+  )
+  await shot(win, '21-first-run')
+
+  // Put the profile back exactly as it was. Restoring before the reload matters: the app saves its
+  // own state as it goes, so a restore without a reload would simply be overwritten.
+  await inPage(
+    win,
+    function (saved) {
+      return window.zen.store.save(saved).then(function () {
+        return true
+      })
+    },
+    [savedStore],
+  )
+  await win.webContents.reload()
+  await sleep(2000)
+
   console.log('\n=== summary ===')
   const failed = results.filter((r) => !r.pass)
   console.log(`${results.length - failed.length}/${results.length} checks passed`)
