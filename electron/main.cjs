@@ -17,6 +17,7 @@ const {
 const path = require('node:path')
 const fs = require('node:fs')
 const falImages = require('./images.cjs')
+const titles = require('./title.cjs')
 
 const DEV_URL = 'http://localhost:5173'
 const isDev = !app.isPackaged
@@ -467,7 +468,10 @@ function agentEventFor (requestId, ev) {
           query: ev.tool.summary
         }
       }
-    case 'tool_end':
+    case 'tool_end': {
+      // A file the agent made but the chat cannot post says so on the row. Silence is the whole
+      // bug: the file is written, the model truthfully says it saved it, and nothing appears.
+      const preview = [ev.text, ...(ev.notPosted || [])].filter(Boolean).join(' · ')
       return {
         type: 'tool',
         value: {
@@ -475,10 +479,17 @@ function agentEventFor (requestId, ev) {
           name: ev.name,
           phase: 'end',
           ok: ev.ok,
-          preview: ev.text,
-          error: ev.ok ? null : (ev.text || 'the command failed')
+          preview,
+          error: ev.ok ? null : (ev.text || 'the command failed'),
+          // widened deliberately, the third time this lesson has been paid for: a tool that makes
+          // more than text hands back files and pictures, and this is where they travel. The
+          // renderer already renders both (it is the built-in tools' own shape), so a document or
+          // a picture the agent produced arrives the same way a picture from generate_image does.
+          ...(ev.files && ev.files.length ? { files: ev.files } : {}),
+          ...(ev.images && ev.images.length ? { images: ev.images } : {})
         }
       }
+    }
     case 'error':
       return { type: 'error', value: ev.message }
     default:
@@ -1126,6 +1137,143 @@ function endpointFor(base, protocol) {
   return protocol === 'responses' ? `${base}/responses` : `${base}/chat/completions`
 }
 
+/**
+ * One small non-streaming call, for work that is not a chat turn — naming a conversation today.
+ *
+ * Deliberately cheap and bounded: no tools, a hard token cap, and a timeout. It never shares the
+ * chat's request path, so a title can neither hold up a send nor leave a request hanging, and a
+ * failure is not an error the user has to see: the opening-words title simply stays.
+ *
+ * The model is `cfg.titleModel` when one is set, otherwise the chat model. The reply is put
+ * through the same rules the offline tests cover, including the refusal of a reply that only
+ * echoes the opening — that check has to live here, on the side that can see the whole transcript.
+ */
+async function quickTitle(cfg, messages) {
+  let base
+  try {
+    base = normalizeBaseUrl(cfg.baseUrl)
+  } catch (err) {
+    return { ok: false, error: err.message }
+  }
+  // Two framings, tried in order: the reply then the request, and then the request on its own. A
+  // model that has just answered will sometimes hand that request back as the title; asked for a
+  // subject for it alone, it usually names the subject instead.
+  const framings = [
+    titles.transcript(messages),
+    titles.transcript(messages, { only: 'user' }),
+  ].filter(Boolean)
+  if (!framings.length) return { ok: false, error: 'there was nothing to read' }
+
+  const titleCfg = { ...cfg, model: cfg.titleModel || cfg.model, thinking: false, temperature: 0.2 }
+  if (!titleCfg.model) return { ok: false, error: 'no model selected' }
+
+  const order =
+    cfg.protocol === 'auto' ? ['chat', 'responses'] : [cfg.protocol, cfg.protocol === 'chat' ? 'responses' : 'chat']
+
+  const ac = new AbortController()
+  const timer = setTimeout(() => ac.abort(), titles.TIMEOUT_MS)
+  const firstUser = (messages || []).find((m) => m && m.role === 'user')
+  const firstAssistant = (messages || []).find((m) => m && m.role === 'assistant')
+  const asked = String((firstUser && firstUser.content) || '')
+  const assistantText = String((firstAssistant && firstAssistant.content) || '')
+  const asText = (v) => (typeof v === 'string' ? v : (() => {
+    try {
+      return JSON.stringify(v)
+    } catch {
+      return String(v)
+    }
+  })())
+
+  try {
+    let lastErr = 'no reply'
+    // chat/completions first, whatever the chat protocol is. Measured, not preferred: on the
+    // Responses protocol a reasoning model spends a short token budget on hidden thinking and
+    // returns no text at all, so a title requested that way silently never arrives. Every framing
+    // is tried before the opening words are left standing: a refusal on the first try is not a
+    // reason to give up, since the fallback is only ever the prefix it was meant to replace.
+    const attempts = []
+    for (const framing of framings) {
+      for (const protocol of ['chat', 'responses']) attempts.push({ input: framing, protocol })
+    }
+    for (const { input, protocol } of attempts) {
+      const turn = [{ role: 'user', content: input }]
+      const body =
+        protocol === 'responses'
+          ? buildResponsesBody(titleCfg, turn, titles.INSTRUCTIONS, {})
+          : // withReasoning true with thinking off makes buildChatBody send reasoning_effort
+            // 'none'. Without it a reasoning model thinks its way past the token cap and answers
+            // with nothing, which is the failure this whole path was hitting.
+            buildChatBody(titleCfg, turn, true, titles.INSTRUCTIONS, {})
+      body.stream = false
+      // A title is a handful of words, but the cap still needs a floor: a reasoning model spends
+      // a short budget thinking before it emits a single token, and then returns no text.
+      if (protocol === 'responses') body.max_output_tokens = 200
+      else body.max_tokens = 200
+      delete body.tools
+      delete body.tool_choice
+
+      let res
+      try {
+        res = await fetch(endpointFor(base, protocol), {
+          method: 'POST',
+          headers: headersFor(titleCfg, 'application/json'),
+          body: JSON.stringify(body),
+          signal: ac.signal,
+        })
+      } catch (err) {
+        // a timeout or a dead network is not worth a second protocol on the same broken route
+        lastErr = err && err.name === 'AbortError' ? 'the title request timed out' : String((err && err.message) || err)
+        break
+      }
+
+      if (!res.ok) {
+        // extractError can hand back an object when a gateway puts one in `detail`, and an
+        // object in a log line reads as "[object Object]" — the failure reason, lost.
+        lastErr = asText(extractError(res.status, await res.text().catch(() => '')))
+        continue
+      }
+      const json = await res.json().catch(() => null)
+      if (!json) {
+        lastErr = 'the reply was not JSON'
+        continue
+      }
+
+      let raw = ''
+      readPlainResponse(protocol, json, {
+        onText: (t) => {
+          raw += t
+        },
+        onReasoning: () => {},
+        onUsage: () => {},
+        onFinish: () => {},
+        onItem: () => {},
+        onChatToolDeltas: () => {},
+      })
+
+      const cleaned = titles.clean(raw)
+      if (!cleaned) {
+        lastErr = `${titleCfg.model} replied with nothing usable`
+        continue
+      }
+      if (!titles.usable(cleaned, asked, assistantText)) {
+        // exactly the failure this feature exists to fix: the reply is the opening words again
+        lastErr = `${titleCfg.model} only repeated the opening words`
+        continue
+      }
+      console.log(`[title] applied "${cleaned}" via ${protocol} on ${titleCfg.model}`)
+      return { ok: true, title: cleaned, model: titleCfg.model, protocol }
+    }
+    // Visible in the harness log and in a terminal run. An invisible title failure is how a
+    // feature looks broken for a week: the fallback works, so nothing else ever complains.
+    console.log(`[title] not applied: ${asText(lastErr)}`)
+    return { ok: false, error: asText(lastErr) }
+  } catch (err) {
+    return { ok: false, error: String((err && err.message) || err) }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 /* ------------------------------------------------------------------- SSE */
 
 function makeSSEParser(onEvent) {
@@ -1526,6 +1674,17 @@ ipcMain.handle('theme:apply', (_e, name) => {
     // an older Electron or a window that is gone: the overlay simply keeps the default
   }
   return true
+})
+
+// Naming a conversation: one cheap call, asked for after the first exchange and never on the
+// send path. Returns { ok:false } with a reason rather than throwing, because the caller's
+// fallback — the opening words already on the conversation — is a perfectly good title.
+ipcMain.handle('chat:title', async (_e, req = {}) => {
+  try {
+    return await quickTitle(req.cfg || {}, req.messages || [])
+  } catch (err) {
+    return { ok: false, error: String((err && err.message) || err) }
+  }
 })
 
 ipcMain.handle('chat:start', async (event, req) => {

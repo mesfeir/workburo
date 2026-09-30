@@ -189,6 +189,9 @@ export default function Sidebar({
           {list.map((c) => (
             <div
               key={c.id}
+              data-conv={c.id}
+              data-conv-title={c.title}
+              data-active={c.id === activeId ? 'true' : undefined}
               className={`group relative flex items-center rounded-lg ${
                 c.id === activeId ? 'bg-[var(--raised-2)]' : 'hover:bg-[var(--raised)]'
               }`}

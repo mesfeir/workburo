@@ -170,6 +170,14 @@ export default function App() {
   const configRef = useRef(config)
   configRef.current = config
 
+  // The stream event handler is registered once and cannot close over the latest conversations,
+  // so the list is mirrored into a ref the same way the config is. Titles are named from the
+  // first user turn, which never changes, so a one-commit-old copy is the right thing here.
+  const conversationsRef = useRef(conversations)
+  conversationsRef.current = conversations
+  /** conversations already asked about, so a model that will not answer is not asked forever */
+  const titleTried = useRef(new Set<string>())
+
   const active = useMemo(
     () => conversations.find((c) => c.id === activeId) || null,
     [conversations, activeId],
@@ -434,6 +442,32 @@ export default function App() {
                   },
             ),
           )
+          // A chat is named once its first exchange is in, by a small call that is not on the
+          // send path. Until it lands the opening words stand, and if it fails they stay: the
+          // fallback is not an error path, it is the title that is already there.
+          const conv = conversationsRef.current.find((c) => c.id === s.convId)
+          const firstUser = conv?.messages.find((m) => m.role === 'user')
+          if (conv?.titleAuto && !titleTried.current.has(s.convId) && s.text.trim() && !s.error) {
+            titleTried.current.add(s.convId)
+            void window.zen.chat
+              .title({
+                cfg: configRef.current,
+                messages: [
+                  ...(firstUser ? [{ role: 'user', content: firstUser.content }] : []),
+                  { role: 'assistant', content: s.text },
+                ],
+              })
+              .then((res) => {
+                if (!res?.ok || !res.title) return
+                setConversations((prev) =>
+                  prev.map((c) =>
+                    c.id === s.convId ? { ...c, title: String(res.title), titleAuto: false } : c,
+                  ),
+                )
+              })
+              // the title call failing is not worth a word to the user; the fallback stands
+              .catch(() => {})
+          }
           break
         }
       }
@@ -708,6 +742,7 @@ export default function App() {
         const conv: Conversation = {
           id: convId,
           title: titleFrom(text, attached.length),
+          titleAuto: true,
           createdAt: Date.now(),
           updatedAt: Date.now(),
           messages: [userMsg],
@@ -728,6 +763,7 @@ export default function App() {
                   messages: next,
                   updatedAt: Date.now(),
                   title: c.messages.length === 0 ? titleFrom(text, attached.length) : c.title,
+                  titleAuto: c.messages.length === 0 ? true : c.titleAuto,
                 },
           ),
         )
@@ -823,6 +859,7 @@ export default function App() {
       const conv: Conversation = {
         id: convId,
         title: titleFrom(text, 0),
+        titleAuto: true,
         createdAt: Date.now(),
         updatedAt: Date.now(),
         messages: [userMsg, placeholder],
@@ -975,7 +1012,8 @@ export default function App() {
   )
 
   const renameConv = useCallback((id: string, title: string) => {
-    setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, title } : c)))
+    // a title the user typed is final: the summary call must never overwrite it
+    setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, title, titleAuto: false } : c)))
   }, [])
 
   const pinConv = useCallback((id: string) => {

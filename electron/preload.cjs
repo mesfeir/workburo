@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('zen', {
   chat: {
     start: (req) => ipcRenderer.invoke('chat:start', req),
     abort: (requestId) => ipcRenderer.invoke('chat:abort', { requestId }),
+    title: (req) => ipcRenderer.invoke('chat:title', req),
     onEvent: (handler) => {
       const listener = (_e, payload) => handler(payload)
       ipcRenderer.on('chat:event', listener)

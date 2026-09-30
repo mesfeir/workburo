@@ -611,6 +611,60 @@ async function run({
   })
   await sleep(600)
 
+  // ---------- 8b. a conversation is named by what it is about
+  // A fresh chat, one real exchange, then the small naming call that follows it. The title
+  // starts as the opening words and must end up as a summary that is not those words. The
+  // rules that read the model's reply are covered offline (npm run test:titles); this is the
+  // half that needs a live model.
+  await inPage(win, function () {
+    const open = Array.from(document.querySelectorAll('button')).find((x) =>
+      (x.getAttribute('title') || '').toLowerCase().includes('sidebar'),
+    )
+    if (open) open.click()
+  })
+  await sleep(600)
+  await inPage(win, function () {
+    const b = Array.from(document.querySelectorAll('button')).find((x) => (x.textContent || '').trim() === 'New chat')
+    if (b) b.click()
+  })
+  await sleep(700)
+  const OPENING =
+    'I need a hand turning a messy list of supplier prices into something I can sort, filter and total up.'
+  await inPage(win, pageType, [OPENING])
+  await sleep(400)
+  await inPage(win, pageSend)
+  await waitFor(win, pageIdle, 150000, 500, 'the opening answer')
+
+  const pageSummaryTitle = function () {
+    // The title is read from the app's own store rather than the sidebar: in a small window the
+    // drawer starts closed, and the stored value is the one that survives a restart anyway.
+    return window.zen.store.get().then((s) => {
+      const list = (s && s.conversations) || []
+      const active = list.find((c) => c.id === (s && s.activeId)) || list[0]
+      return active
+        ? { title: String(active.title || ''), auto: active.titleAuto === true }
+        : { title: '', auto: false }
+    })
+  }
+  const titleBefore = await inPage(win, pageSummaryTitle)
+  let titleAfter = titleBefore
+  for (let i = 0; i < 30; i++) {
+    await sleep(800)
+    titleAfter = await inPage(win, pageSummaryTitle)
+    if (titleAfter.title && titleAfter.title !== titleBefore.title) break
+  }
+  const titled = String(titleAfter.title || '').split(/\s+/).filter(Boolean)
+  const summarised =
+    Boolean(titleAfter.title) &&
+    titleAfter.title !== titleBefore.title &&
+    !OPENING.trim().toLowerCase().startsWith(titleAfter.title.toLowerCase())
+  record(
+    'a chat ends up named by a summary, not by its opening words',
+    summarised && titled.length <= 4 && titleAfter.title.length <= 43,
+    `opening="${titleBefore.title}" → title="${titleAfter.title}" (${titled.length} words, summary=${summarised}, auto=${titleAfter.auto})`,
+  )
+  await shot(win, '08c-summary-title')
+
   // ---------- 9. persistence across reload
   const beforeReload = await inPage(win, pageAssistantTurns)
   await win.webContents.reload()
@@ -1251,8 +1305,13 @@ async function run({
   await inPage(win, function () {
     // found by attribute, not by text: a mode chip hides its label until it is on, so a text lookup
     // matches nothing and the check would pass without having clicked anything at all
+    // And only clicked when it is OFF. Clicking blind flips the switch the other way: if an earlier
+    // section left Image mode on, this turned it off, and the section then measured a plain chat
+    // while reporting that it had tested the Image mode.
+    const row = document.querySelector('[data-modes]')
+    const alreadyOn = row ? String(row.getAttribute('data-modes') || '').includes('image') : false
     const pill = document.querySelector('[data-modes] [data-mode="image"]')
-    if (pill) pill.click()
+    if (pill && !alreadyOn) pill.click()
     const ta = document.querySelector('textarea')
     if (ta) {
       const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set

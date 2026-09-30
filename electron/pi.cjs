@@ -80,6 +80,139 @@ function resultText (result) {
   try { return JSON.stringify(result) } catch { return '' }
 }
 
+/** Pictures worth posting into the chat, and documents worth posting. */
+const IMAGE_EXT = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'avif'])
+const FILE_EXT = new Set(['xlsx', 'csv', 'tsv', 'docx', 'doc', 'pdf', 'md', 'txt', 'json', 'html', 'pptx', 'ods'])
+/** Tools whose own arguments name the file they touch, so the path needs no guessing. */
+const PATH_ARG_TOOLS = {
+  write: ['path', 'file_path', 'filePath'],
+  edit: ['path', 'file_path', 'filePath'],
+  multi_edit: ['path', 'file_path', 'filePath'],
+  notebook_edit: ['path', 'file_path', 'filePath']
+}
+const SHELL_TOOLS = new Set(['bash', 'shell', 'powershell', 'sh'])
+
+/** Absolute paths mentioned in a command or its output. Quotes and trailing punctuation are not. */
+function pathsInText (text) {
+  const s = String(text || '')
+  const out = []
+  for (const m of s.matchAll(/[A-Za-z]:[\\/][^\s"'<>|,;]+/g)) out.push(m[0])
+  for (const m of s.matchAll(/\/(?:[^\s"'<>|:,;]+\/)+[^\s"'<>|:,;]+/g)) out.push(m[0])
+  return out
+}
+
+/** Is this path inside the folder the session was told to work in? */
+function insideWorkspace (abs, workspace) {
+  if (!workspace) return false
+  const rel = path.relative(path.resolve(workspace), path.resolve(abs))
+  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel)
+}
+
+/** Files under the workspace touched since a moment in time. Bounded: this can sit on a big folder. */
+function touchedSince (workspace, since, depth = 3, seen = { n: 0 }) {
+  const found = []
+  if (!workspace || depth < 1 || seen.n > 600) return found
+  let entries = []
+  try {
+    entries = fs.readdirSync(workspace, { withFileTypes: true })
+  } catch {
+    return found
+  }
+  for (const ent of entries) {
+    if (seen.n++ > 600) break
+    if (ent.name.startsWith('.')) continue
+    const abs = path.join(workspace, ent.name)
+    if (ent.isDirectory()) {
+      found.push(...touchedSince(abs, since, depth - 1, seen))
+      continue
+    }
+    const ext = path.extname(ent.name).slice(1).toLowerCase()
+    if (!IMAGE_EXT.has(ext) && !FILE_EXT.has(ext)) continue
+    try {
+      const st = fs.statSync(abs)
+      if (st.mtimeMs >= since) found.push(abs)
+    } catch {}
+  }
+  return found
+}
+
+/**
+ * What a tool call left on disk, in the shape the chat already renders.
+ *
+ * The bug this exists for: agent mode could write a document or draw a picture and the chat showed
+ * only the tool's text. The file was really there, the model truthfully said it had saved it, and
+ * nothing ever appeared on the reply — a silent drop, the third time a return shape has gone
+ * missing here. So the rule is: if a tool produced a file, the file travels with the tool's own
+ * result, in the same `files` / `images` shape the built-in tools use.
+ *
+ * The workspace is the boundary. A session is told which folder it may work in and the window says
+ * so, so a file from outside it is not posted: an agent must not be able to surface any file on the
+ * machine as an attachment. When something plausible cannot be posted, the reason is returned
+ * rather than swallowed, because "nothing happened" is the failure being fixed.
+ */
+function outputsFromTool ({ name, args, result, workspace, since } = {}) {
+  const files = []
+  const images = []
+  const notPosted = []
+  const a = args && typeof args === 'object' ? args : {}
+
+  const named = []
+  for (const key of PATH_ARG_TOOLS[name] || []) {
+    if (typeof a[key] === 'string' && a[key].trim()) named.push(a[key].trim())
+  }
+  for (const f of Array.isArray(a.files) ? a.files : []) {
+    if (f && typeof f.path === 'string' && f.path.trim()) named.push(f.path.trim())
+  }
+
+  // A shell command names no single output file, so its paths are read out of the command and its
+  // output instead. Only shell tools guess: a read or a grep result also mentions paths, and
+  // posting those would put a card on the reply for a file the agent merely looked at.
+  const guessed = named.length || !SHELL_TOOLS.has(name)
+    ? []
+    : [...pathsInText(a.command), ...pathsInText(resultText(result))]
+
+  const add = (raw, trusted) => {
+    const abs = path.resolve(workspace || '.', raw)
+    const base = path.basename(abs)
+    const ext = path.extname(abs).slice(1).toLowerCase()
+    if (!IMAGE_EXT.has(ext) && !FILE_EXT.has(ext)) return
+    let st
+    try {
+      st = fs.statSync(abs)
+    } catch {
+      if (trusted) notPosted.push(`${base} was not written`)
+      return
+    }
+    if (!st.isFile()) return
+    if (!insideWorkspace(abs, workspace)) {
+      // Only worth saying when the tool itself aimed there: a command mentioning a path outside the
+      // folder is usually something it read, not something it made.
+      if (trusted) notPosted.push(`${base} is outside ${workspace}`)
+      return
+    }
+    if (since && st.mtimeMs < since) {
+      if (trusted) notPosted.push(`${base} was not changed by this call`)
+      return
+    }
+    if (images.some((i) => i.path === abs) || files.some((f) => f.path === abs)) return
+    const entry = { name: base, path: abs, bytes: st.size }
+    if (IMAGE_EXT.has(ext)) images.push(entry)
+    else files.push({ ...entry, kind: ext })
+  }
+
+  for (const raw of named) add(raw, true)
+  for (const raw of guessed) add(raw, false)
+
+  // Last resort, shell tools only: a command that writes a file without printing its name leaves
+  // nothing to find in the text. So look at the folder itself for files that changed while that
+  // one command ran.
+  if (SHELL_TOOLS.has(name) && !files.length && !images.length && workspace) {
+    for (const abs of touchedSince(workspace, since || 0, 3).slice(0, 8)) add(abs, false)
+  }
+
+  return { files, images, notPosted }
+}
+
 function assetFor (platform = process.platform, arch = process.arch) {
   const a = arch === 'arm64' ? 'arm64' : 'x64'
   if (platform === 'win32') return `pi-windows-${a}.zip`
@@ -295,9 +428,11 @@ function writeConfig ({ agentDir, baseUrl, models }) {
  * compliant: it splits on U+2028/U+2029, which are legal inside JSON strings. So framing is done
  * here by hand, on LF only.
  */
-function createTranslator (onEvent) {
+function createTranslator (onEvent, opts = {}) {
   const emit = onEvent || (() => {})
   const state = { text: '', thinking: '', tools: [], usage: null, sessionId: null, lines: 0, unparsed: 0 }
+  // When each tool began, so what it produced can be told apart from what was already on disk.
+  const startedAt = new Map()
   let buf = ''
 
   function handle (line) {
@@ -327,6 +462,7 @@ function createTranslator (onEvent) {
       }
       case 'tool_execution_start': {
         const tool = { id: e.toolCallId, name: e.toolName, label: TOOL_LABELS[e.toolName] || e.toolName, summary: summarize(e.toolName, e.args), args: e.args, ok: null }
+        startedAt.set(e.toolCallId, Date.now())
         state.tools.push(tool)
         emit({ kind: 'tool_start', tool })
         break
@@ -334,7 +470,23 @@ function createTranslator (onEvent) {
       case 'tool_execution_end': {
         const tool = state.tools.find(t => t.id === e.toolCallId)
         if (tool) tool.ok = !e.isError
-        emit({ kind: 'tool_end', id: e.toolCallId, name: e.toolName, ok: !e.isError, text: resultText(e.result), result: e.result })
+        // What the call produced, in the shape the chat renders. A failed call produced nothing
+        // worth posting, and guessing at files after a failure is how a stray path gets a card.
+        const outs = e.isError
+          ? { files: [], images: [], notPosted: [] }
+          : outputsFromTool({
+              name: e.toolName,
+              args: (tool && tool.args) || e.args,
+              result: e.result,
+              workspace: opts.workspace,
+              // a little slack: mtime and Date.now() come from the same clock but not the same instant
+              since: (startedAt.get(e.toolCallId) || opts.startedAt || 0) - 2000
+            })
+        if (tool) {
+          tool.files = outs.files
+          tool.images = outs.images
+        }
+        emit({ kind: 'tool_end', id: e.toolCallId, name: e.toolName, ok: !e.isError, text: resultText(e.result), result: e.result, files: outs.files, images: outs.images, notPosted: outs.notPosted })
         break
       }
       case 'agent_end':
@@ -401,7 +553,7 @@ function runTurn (opts) {
   })
 
   let stderr = ''
-  const translator = createTranslator(opts.onEvent)
+  const translator = createTranslator(opts.onEvent, { workspace: opts.workspace, startedAt: Date.now() })
   const emit = opts.onEvent || (() => {})
   let settled = false
   let killed = false
@@ -491,6 +643,7 @@ module.exports = {
   install,
   writeConfig,
   createTranslator,
+  outputsFromTool,
   runTurn,
   modelsFor,
   shaFor

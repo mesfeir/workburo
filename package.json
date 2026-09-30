@@ -15,6 +15,7 @@
     "dist:dir": "npm run build && electron-builder --win --dir && node scripts/apply-icon.cjs",
     "selftest": "electron . --selftest",
     "test:images": "node scripts/test-images.cjs",
+    "test:titles": "node scripts/test-titles.cjs",
     "test:agent": "node scripts/test-agent.cjs",
     "test:errors": "node scripts/test-errors.cjs",
     "test:mcp": "node scripts/test-mcp.cjs",
@@ -26,6 +27,7 @@
     "test:documents": "node scripts/test-documents.cjs",
     "test:composio": "node scripts/test-composio.cjs",
     "test:create": "node scripts/test-create.cjs",
+    "test": "node scripts/check-syntax.cjs && npm run test:titles --silent && npm run test:agent --silent && npm run test:tools --silent && npm run test:files --silent && npm run test:documents --silent && npm run test:messages --silent && npm run test:errors --silent && npm run test:create --silent && npm run test:mcp --silent && npm run test:images --silent && npm run test:edit --silent && npm run test:pricing --silent && npm run test:composio --silent",
     "check:syntax": "node scripts/check-syntax.cjs",
     "predist": "npm run check:syntax",
     "check:packaged": "node scripts/check-packaged-files.cjs"

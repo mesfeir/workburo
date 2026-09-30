@@ -75,6 +75,14 @@ export interface ZenApi {
   chat: {
     start: (req: any) => Promise<{ ok: boolean }>
     abort: (requestId: string) => Promise<boolean>
+    /**
+     * One cheap non-streaming call that names a conversation from its first exchange. Never on
+     * the send path: if it fails, the opening-words title stays and nothing else changes.
+     */
+    title: (req: {
+      cfg: any
+      messages: { role: string; content: string }[]
+    }) => Promise<{ ok: boolean; title?: string; model?: string; protocol?: string; error?: string }>
     onEvent: (handler: (ev: ChatEvent) => void) => () => void
   }
   models: {

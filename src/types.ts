@@ -102,6 +102,8 @@ export interface Speed {
 export interface Conversation {
   id: string
   title: string
+  /** true while the title is still the opening words, so a real summary may replace it */
+  titleAuto?: boolean
   createdAt: number
   updatedAt: number
   pinned?: boolean

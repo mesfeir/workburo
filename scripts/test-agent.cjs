@@ -223,13 +223,125 @@ check('11c. "has Pi written a session here" answers honestly', () => {
   return true
 })
 
+/* ------------------------------------------- what a tool produced, and how it reaches the chat */
+/*
+ * The bug these exist for: agent mode could write a document or draw a picture and the chat showed
+ * only the tool's text. The file was really there, the model truthfully said it had saved it, and
+ * nothing appeared on the reply. This is the third time a return shape has gone missing here, so
+ * the check is a stand-in injection: records shaped exactly like Pi's, with real files on disk,
+ * pushed through the translator, asserting the file travels with that tool's own result.
+ */
+const wsRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'zen-pi-out-'))
+
+function toolEnds (records, workspace = wsRoot) {
+  const events = []
+  const t = pi.createTranslator((e) => events.push(e), { workspace, startedAt: Date.now() })
+  t.push(records.map((o) => JSON.stringify(o)).join('\n') + '\n')
+  t.flush()
+  return events.filter((e) => e.kind === 'tool_end')
+}
+
+/** One tool call, as Pi writes it: a start record then an end record with the result. */
+function call (callId, toolName, args, text) {
+  return [
+    { type: 'tool_execution_start', toolCallId: callId, toolName, args },
+    { type: 'tool_execution_end', toolCallId: callId, toolName, args, result: { content: [{ type: 'text', text }] }, isError: false }
+  ]
+}
+
+check('20. a document the agent writes travels with its own tool result', () => {
+  const file = path.join(wsRoot, 'quarterly.xlsx')
+  fs.writeFileSync(file, 'x'.repeat(120))
+  const end = toolEnds(call('c1', 'write', { path: 'quarterly.xlsx', content: '…' }, 'Successfully wrote to quarterly.xlsx'))[0]
+  assert(Array.isArray(end.files) && end.files.length === 1, `expected one posted file, got ${(end.files || []).length}`)
+  assert(end.files[0].kind === 'xlsx', `the kind came out as ${JSON.stringify(end.files[0].kind)}`)
+  assert(end.files[0].path === file, 'the posted path is not the file that was written')
+  assert(end.files[0].bytes === 120, `the size is not the size on disk: ${end.files[0].bytes}`)
+  assert(!end.images.length, 'a spreadsheet was posted as a picture')
+  return true
+})
+
+check('21. a picture the agent draws arrives as a picture, with the shape the chat renders', () => {
+  const file = path.join(wsRoot, 'render.png')
+  fs.writeFileSync(file, Buffer.alloc(64, 7))
+  const end = toolEnds(call('c2', 'write', { path: 'render.png' }, 'Wrote render.png'))[0]
+  assert(end.images.length === 1, `expected one posted picture, got ${end.images.length}`)
+  assert(end.images[0].name === 'render.png', 'the picture lost its name')
+  assert(end.images[0].path === file, 'the picture lost its path')
+  // No url is set on purpose: the app rebuilds it from the path on load, and shows "file missing"
+  // rather than a blank frame when the file is gone.
+  assert(!end.images[0].url, 'a url was invented rather than left for the app to fill')
+  assert(!end.files.length, 'a picture was also posted as a document')
+  return true
+})
+
+check('22. a file outside the session folder is refused, and says why', () => {
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'zen-pi-elsewhere-'))
+  const file = path.join(outside, 'secrets.xlsx')
+  fs.writeFileSync(file, 'x')
+  const end = toolEnds(call('c3', 'write', { path: file }, `Wrote ${file}`))[0]
+  assert(!end.files.length, 'a file from outside the workspace was posted into the chat')
+  assert(end.notPosted.some((r) => /outside/.test(r)), `no reason was given: ${JSON.stringify(end.notPosted)}`)
+  return true
+})
+
+check('23. a file the agent says it wrote but did not is not posted, and says so', () => {
+  const end = toolEnds(call('c4', 'write', { path: 'ghost.docx' }, 'Successfully wrote to ghost.docx'))[0]
+  assert(!end.files.length, 'a file that does not exist was posted')
+  assert(end.notPosted.some((r) => /not written/.test(r)), `no reason was given: ${JSON.stringify(end.notPosted)}`)
+  return true
+})
+
+check('24. a file the agent only read is never posted as if it made it', () => {
+  const file = path.join(wsRoot, 'notes.md')
+  fs.writeFileSync(file, '# notes\n')
+  const end = toolEnds(call('c5', 'read', { path: 'notes.md' }, `Read ${file} — 8 bytes`))[0]
+  assert(!end.files.length, 'a file the agent read was posted as if it had made it')
+  return true
+})
+
+check('25. a command that writes a picture without naming it still reaches the chat', () => {
+  // The ComfyUI case: the command saves a file and prints nothing useful about where. Its own
+  // workspace on purpose — the sweep is scoped to files changed while that one command ran, so a
+  // fresh folder is what proves it rather than a shared one full of other tests' output.
+  const own = fs.mkdtempSync(path.join(os.tmpdir(), 'zen-pi-comfy-'))
+  const nested = path.join(own, 'output')
+  fs.mkdirSync(nested, { recursive: true })
+  const file = path.join(nested, 'comfy_00001.png')
+  fs.writeFileSync(file, Buffer.alloc(32, 3))
+  const end = toolEnds(call('c6', 'bash', { command: 'python gen.py' }, 'Done.'), own)[0]
+  assert(end.images.length === 1, `the unsigned picture was not found — got ${end.images.length}`)
+  assert(end.images[0].path === file, 'the wrong file was posted')
+  return true
+})
+
+check('26. two calls touching one file each report it; the chat is what dedupes', () => {
+  // The renderer keeps one entry per path, so the honest thing here is for both calls to report
+  // what they did and for neither to lie about it.
+  const file = path.join(wsRoot, 'twice.csv')
+  fs.writeFileSync(file, 'a,b\n')
+  const ends = toolEnds([
+    ...call('c7', 'write', { path: 'twice.csv' }, 'Wrote twice.csv'),
+    ...call('c8', 'edit', { path: 'twice.csv' }, 'Edited twice.csv')
+  ])
+  const all = ends.flatMap((e) => e.files)
+  assert(all.filter((f) => f.path === file).length === 2, 'a call did not report the file it touched')
+  assert(all.every((f) => f.kind === 'csv'), 'the kind drifted between calls')
+  return true
+})
+
 // ---- live checks -------------------------------------------------------------------------
 // Skipped unless a Pi install is pointed at and a key can be found.
 
 function storeConfig () {
-  const file = path.join(process.env.APPDATA || '', 'zen-chat', 'zen-chat-store.json')
-  if (!fs.existsSync(file)) return {}
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')).config || {} } catch { return {} }
+  // WorkBuro's own data directory. The old zen-chat path is kept as a fallback so a machine that
+  // has not migrated yet still runs the live checks rather than reporting a missing key.
+  for (const dir of ['WorkBuro', 'zen-chat']) {
+    const file = path.join(process.env.APPDATA || '', dir, 'zen-chat-store.json')
+    if (!fs.existsSync(file)) continue
+    try { return JSON.parse(fs.readFileSync(file, 'utf8')).config || {} } catch {}
+  }
+  return {}
 }
 
 async function live () {
@@ -295,6 +407,24 @@ async function live () {
     assert(events.some(e => e.kind === 'tool_end'), 'and complete')
     assert(r.unparsed === 0 || r.unparsed < 5, `${r.unparsed} lines were unparseable`)
     console.log(`        ${secs}s · ${r.tools.length} tool calls · ${r.events.lines} events · ${r.usage ? r.usage.totalTokens + ' tokens' : 'no usage reported'}`)
+    return true
+  })
+
+  /* The thing agent mode was reported broken for: a file it creates has to reach the chat as a card.
+     The file existing on disk is check 13; this is the other half, that it travelled with the tool
+     result the window was already sent. It runs against a real turn, on the chosen model, because
+     "the file is there and nothing appeared in the chat" is exactly the failure being fixed. */
+  check('14b. the file it created travelled with the tool result, ready for a card', () => {
+    const carried = events
+      .filter(e => e.kind === 'tool_end')
+      .flatMap(e => e.files || [])
+    assert(
+      carried.some(f => f.name === 'agent-check.txt'),
+      `no tool result carried the file — carried ${JSON.stringify(carried.map(f => f.name))}`
+    )
+    const entry = carried.find(f => f.name === 'agent-check.txt')
+    assert(entry.path === file, 'the carried path is not the file on disk')
+    assert(entry.kind === 'txt' && entry.bytes === body.length + 1, `the entry is wrong: ${JSON.stringify(entry)}`)
     return true
   })
 
