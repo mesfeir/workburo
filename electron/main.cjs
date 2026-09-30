@@ -205,6 +205,17 @@ function readStore() {
         editModelMovedFrom: 'fal-ai/flux/dev/image-to-image',
       }
     }
+    // A model id that is a path on disk is a leftover from before the local server was given an
+    // alias: llama.cpp used to report its model as the full path, and that path was saved as the
+    // selection. The model control shows exactly what is stored, so it read a filesystem path, and
+    // the server's own name did not match it in the list either — so nothing looked selected.
+    // Only a real Windows path is touched: an id like meta-llama/Llama-3-8B has a slash and is
+    // perfectly normal, and must be left alone.
+    const stored = String(cfg.model || '')
+    if (/^[a-zA-Z]:[\\/]/.test(stored) || stored.startsWith('\\\\')) {
+      const tidy = (stored.split(/[\\/]/).pop() || '').replace(/\.gguf$/i, '')
+      if (tidy) cfg.model = tidy
+    }
     return restoreInlineImages({
       config: cfg,
       conversations: Array.isArray(parsed.conversations) ? parsed.conversations : [],
