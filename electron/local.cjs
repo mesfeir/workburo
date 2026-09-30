@@ -330,8 +330,13 @@ async function serve (opts = {}) {
   const st = status(root, id)
   if (!st.ready) return { ok: false, error: 'the local model is not installed yet.' }
   const port = opts.port || (await freePort())
+  // Name it ourselves. Left alone, llama.cpp reports the model as its full path on disk, so the
+  // app's model control read "C:\Users\...\local\models\Qwen3-0.6B-Q4_0.gguf" with a seven-tab
+  // truncation of the same. An alias makes the server call it by a name worth showing.
+  const alias = path.basename(st.modelPath).replace(/\.gguf$/i, '')
   const args = [
     '-m', st.modelPath,
+    '--alias', alias,
     '--port', String(port),
     '-c', String(opts.context || 4096),
     '-t', String(opts.threads || Math.max(4, os.cpus().length - 2)),

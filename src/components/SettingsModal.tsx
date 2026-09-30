@@ -337,12 +337,16 @@ export default function SettingsModal({
   }
 
   /**
-   * Point the chat at a server on this machine. Neither one needs a key, so the field is cleared.
-   * A local server names its own model, so ask it rather than leaving the previous name selected:
-   * the control at the top has to say which model is actually answering.
+   * Point the chat at a server on this machine. A local server names its own model, so ask it
+   * rather than leaving the previous name selected: the control at the top has to say which model
+   * is actually answering.
+   *
+   * The key is deliberately left alone. A local server ignores the Authorization header, and
+   * clearing the field used to throw away a working relay key the moment someone tried the local
+   * option — switching should never cost you the setup you already had.
    */
   const useLocal = async (baseUrl: string, model?: string) => {
-    onConfig({ baseUrl, apiKey: '', ...(model ? { model } : {}) })
+    onConfig({ baseUrl, ...(model ? { model } : {}) })
     if (model) {
       setLocalNote({ kind: 'ok', msg: `${baseUrl} is the endpoint, using ${model}.` })
       return

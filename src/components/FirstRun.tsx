@@ -73,9 +73,9 @@ export default function FirstRun({
       })
       return
     }
-    onConfig({ baseUrl, apiKey: '', model: first })
+    onConfig({ baseUrl, model: first })
     setNote({ kind: 'ok', msg: `${first} is answering from this machine. Type below.` })
-    onReady({ baseUrl, apiKey: '', model: first })
+    onReady({ baseUrl, model: first })
   }
 
   /** One click: fetch it, start it, and use it. Downloading is the only slow part. */
@@ -192,9 +192,9 @@ export default function FirstRun({
                 <button
                   key={f.id}
                   onClick={() => {
-                    onConfig({ baseUrl: f.baseUrl, apiKey: '', ...(f.models[0] ? { model: f.models[0] } : {}) })
+                    onConfig({ baseUrl: f.baseUrl, ...(f.models[0] ? { model: f.models[0] } : {}) })
                     setNote({ kind: 'ok', msg: `${f.label} is answering from this machine.` })
-                    onReady({ baseUrl: f.baseUrl, apiKey: '', ...(f.models[0] ? { model: f.models[0] } : {}) })
+                    onReady({ baseUrl: f.baseUrl, ...(f.models[0] ? { model: f.models[0] } : {}) })
                   }}
                   className={act}
                 >
