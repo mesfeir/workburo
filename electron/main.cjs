@@ -594,13 +594,21 @@ async function runAgentTurn (req) {
   const seed = firstAgentTurn ? agentSeed(store, req.conversationId, req.prompt) : ''
   const prompt = seed ? `${seed}\n\n---\n\n${req.prompt}` : req.prompt
 
+  // A local server needs no key, but Pi reads one from the environment before it will start at all,
+  // so an empty key made agent mode refuse with "No API key found for zen" while the chat beside it
+  // worked fine. The placeholder is not a credential: llama.cpp ignores the header completely. This
+  // is the same lesson as the tool-return shape — fix it where the value is produced as well as
+  // where it is passed on.
+  const localEndpoint = /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?(\/|$)/i.test(String(cfg.baseUrl || ''))
+  const relayKey = String(cfg.apiKey || '').trim() || (localEndpoint ? 'local-server-no-key-needed' : '')
+
   const handle = pi.runTurn({
     piRoot: PI_ROOT(),
     workspace,
     sessionDir,
     agentDir,
     model: req.model || cfg.model,
-    relayKey: cfg.apiKey,
+    relayKey,
     prompt,
     timeoutMs: 15 * 60 * 1000,
     onEvent: ev => {

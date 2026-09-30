@@ -336,10 +336,28 @@ export default function SettingsModal({
     await refreshLocal()
   }
 
-  /** Point the chat at a server on this machine. Neither one needs a key, so the field is cleared. */
-  const useLocal = (baseUrl: string, model?: string) => {
+  /**
+   * Point the chat at a server on this machine. Neither one needs a key, so the field is cleared.
+   * A local server names its own model, so ask it rather than leaving the previous name selected:
+   * the control at the top has to say which model is actually answering.
+   */
+  const useLocal = async (baseUrl: string, model?: string) => {
     onConfig({ baseUrl, apiKey: '', ...(model ? { model } : {}) })
-    setLocalNote({ kind: 'ok', msg: `${baseUrl} is now the endpoint. Type something and it will answer.` })
+    if (model) {
+      setLocalNote({ kind: 'ok', msg: `${baseUrl} is the endpoint, using ${model}.` })
+      return
+    }
+    const r = await window.zen.models.list({ baseUrl, apiKey: '' })
+    const first = r?.models?.[0]?.id
+    if (first) {
+      onConfig({ baseUrl, apiKey: '', model: first })
+      setLocalNote({ kind: 'ok', msg: `${first} is the model selected at the top, answering from this machine.` })
+    } else {
+      setLocalNote({
+        kind: 'err',
+        msg: `It is running at ${baseUrl}, but it did not report a model name. Press the refresh button beside the model picker.`,
+      })
+    }
   }
 
   const detectLocal = async () => {
