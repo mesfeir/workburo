@@ -269,6 +269,71 @@ async function run({
   console.log('waiting for app to settle…')
   await sleep(2500)
 
+  // If the run ends without a summary, this says why: a closed window ends the process silently,
+  // which is what has been cutting runs short. `win` is passed into this function; `app` is NOT in
+  // scope here, and reaching for it crashed the whole run with a ReferenceError.
+  win.on('closed', () => console.log('   [mark] THE WINDOW CLOSED — the run cannot continue'))
+
+  // ---------- 0. a brand new install is asked one question, not sent to Settings
+  // Runs first on purpose. The old first run was an empty model picker and a line telling you to go
+  // and test an API; the three cards are the answer to that, and one of them needs no account, no
+  // browser and no key. It saves the profile, clears the key, reloads, checks, then puts everything
+  // back, so it is safe ahead of the rest — and at this point there are no created chats to lose.
+  // Being first also means a run that stops early cannot lose this check.
+  const savedStore = await inPage(win, function () {
+    return window.zen.store.get()
+  })
+  // Write the store file directly rather than through the app's own save IPC. The app saves its own
+  // state as it goes, so a clear it can undo gets undone before the reload lands: the seeded key came
+  // straight back and the screen under test never appeared. Direct writes, twice, with a reload
+  // between — the first drops the key the running renderer holds, the second catches anything the old
+  // renderer wrote back on its way out.
+  const storeInfo = await inPage(win, function () {
+    return window.zen.app.info().then(function (i) {
+      return { storePath: i.storePath }
+    })
+  })
+  const blankProfile = function () {
+    const s = JSON.parse(fs.readFileSync(storeInfo.storePath, 'utf8'))
+    s.config = { ...(s.config || {}), apiKey: '' }
+    s.conversations = []
+    fs.writeFileSync(storeInfo.storePath, JSON.stringify(s))
+  }
+  blankProfile()
+  await win.webContents.reload()
+  await sleep(1500)
+  blankProfile()
+  await win.webContents.reload()
+  await sleep(2500)
+  const firstRunUi = await inPage(win, function () {
+    const text = document.body.innerText || ''
+    return {
+      heading: /Ask it anything/i.test(text),
+      here: /Run a model here/i.test(text),
+      key: /Use a key I have/i.test(text),
+      running: /Use what is running/i.test(text),
+      size: /429 MB/.test(text),
+      oldLine: /open settings to test your api/i.test(text),
+    }
+  })
+  record(
+    'a brand new install is offered three ways to get an answer, before it asks for a key',
+    firstRunUi.heading &&
+      firstRunUi.here &&
+      firstRunUi.key &&
+      firstRunUi.running &&
+      firstRunUi.size &&
+      !firstRunUi.oldLine,
+    JSON.stringify(firstRunUi),
+  )
+  await shot(win, '00-first-run')
+
+  // Put the profile back exactly as it was, also as a direct write, and reload so the running app
+  // picks it up rather than saving over it.
+  fs.writeFileSync(storeInfo.storePath, JSON.stringify(savedStore))
+  await win.webContents.reload()
+  await sleep(2000)
+
   // ---------- 1. shell renders
   const shell = await inPage(win, function () {
     const toggleBtn = Array.from(document.querySelectorAll('button')).find((b) =>
@@ -1764,6 +1829,7 @@ async function run({
   await shot(win, '17-documents')
 
   // ---------- 17b. the name is written once, not twice
+  console.log('   [mark] 17b start')
   // It was drawn in both the top bar and the sidebar header, so on every screen the app said its
   // own name twice. Once, in the sidebar header, with the brain mark beside it.
   await inPage(win, function () {
@@ -1803,6 +1869,7 @@ async function run({
     `count=${brand.count} where=${JSON.stringify(brand.where)}`,
   )
   await shot(win, '17b-one-wordmark')
+  console.log('   [mark] 17b end')
 
   // ---------- 18. connected apps: the door, and the truth told before there is a key
   // These tools can send mail and post messages in someone's real accounts, so the two things worth
@@ -2008,58 +2075,6 @@ async function run({
     `${reveal.settled} word spans left after settling`,
   )
   await shot(win, '20-streaming-reveal')
-
-  // ---------- 21. a brand new install is asked one question, not sent to Settings
-  // The old first run was an empty model picker and a line telling you to go and test an API. The
-  // three cards are the answer to that: one of them needs no account, no browser and no key.
-  const savedStore = await inPage(win, function () {
-    return window.zen.store.get()
-  })
-  await inPage(win, function () {
-    return window.zen.store.get().then(function (s) {
-      s.config = { ...(s.config || {}), apiKey: '' }
-      s.conversations = []
-      return window.zen.store.save(s)
-    })
-  })
-  await win.webContents.reload()
-  await sleep(2500)
-  const firstRunUi = await inPage(win, function () {
-    const text = document.body.innerText || ''
-    return {
-      heading: /Ask it anything/i.test(text),
-      here: /Run a model here/i.test(text),
-      key: /Use a key I have/i.test(text),
-      running: /Use what is running/i.test(text),
-      size: /429 MB/.test(text),
-      oldLine: /open settings to test your api/i.test(text),
-    }
-  })
-  record(
-    'a brand new install is offered three ways to get an answer, before it asks for a key',
-    firstRunUi.heading &&
-      firstRunUi.here &&
-      firstRunUi.key &&
-      firstRunUi.running &&
-      firstRunUi.size &&
-      !firstRunUi.oldLine,
-    JSON.stringify(firstRunUi),
-  )
-  await shot(win, '21-first-run')
-
-  // Put the profile back exactly as it was. Restoring before the reload matters: the app saves its
-  // own state as it goes, so a restore without a reload would simply be overwritten.
-  await inPage(
-    win,
-    function (saved) {
-      return window.zen.store.save(saved).then(function () {
-        return true
-      })
-    },
-    [savedStore],
-  )
-  await win.webContents.reload()
-  await sleep(2000)
 
   console.log('\n=== summary ===')
   const failed = results.filter((r) => !r.pass)

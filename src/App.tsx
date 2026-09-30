@@ -1337,7 +1337,11 @@ export default function App() {
           conversation={active}
           config={config}
           imageMode={imageMode}
-          firstRun={!String(config.apiKey || '').trim() && conversations.length === 0 && models.length === 0}
+          // Nothing can answer: no key, and no model list loaded. The conversation count is
+          // deliberately NOT part of this: the app creates a chat on startup, so requiring an empty
+          // list made this unreachable and the cards could never appear for anyone. A working local
+          // setup is excluded anyway, because its model list has one entry in it.
+          firstRun={!String(config.apiKey || '').trim() && models.length === 0}
           onConfig={patchConfig}
           onOpenSettings={() => setSettingsOpen(true)}
           onReady={(cfg) => void refreshModels(cfg)}
