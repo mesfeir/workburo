@@ -1475,7 +1475,14 @@ async function openStream({ protocol, base, cfg, messages, systemPrompt, withRea
     // carried one. So when a model not confirmed as able to read them rejects a request that
     // carried a picture, the request is made again with the picture described in words, and the
     // model is remembered as text-only rather than being asked again next time.
-    if (carriedPictures && vision !== 'no' && [400, 413, 422].includes(res.status)) {
+    //
+    // The trigger is the error's own words, not only its status. A relay that wraps the upstream
+    // failure answers with a 5xx while saying "This model does not support image inputs", so keying
+    // on 400/413/422 alone skipped the retry and handed the user the raw refusal: an attached
+    // picture then failed every later message in that conversation, including after a model switch.
+    const refusedPictures =
+      /image input|image_url|input_image|does not support image|unsupported content|invalid.*image/i.test(text)
+    if (carriedPictures && vision !== 'no' && (refusedPictures || [400, 413, 422].includes(res.status))) {
       const blind = await post(build(blindConfig(cfg)))
       if (blind.ok) {
         if (vision === 'unknown') {
