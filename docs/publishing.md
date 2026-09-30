@@ -5,12 +5,15 @@ into GitHub. Keep this file in the repo — it's the record of what the "About" 
 
 ## Repository
 
-- **Slug:** `mesfeir/zenchat-desktop`
+- **Slug:** `mesfeir/workburo`
 - **Visibility:** currently **private**. Flip with Settings → General → Danger Zone → *Change
-  visibility* on the repo page, or `PATCH /repos/mesfeir/zenchat-desktop {"private": false}`.
-- **Name rationale:** `zen-chat` collides with a lot of existing projects. `zenchat-desktop` is
-  unique globally (checked via the GitHub search API), keeps the product name, and still
-  carries the "chat" + "desktop" search terms.
+  visibility* on the repo page, or `PATCH /repos/mesfeir/workburo {"private": false}`.
+- **Name rationale:** the repo is named after the product. `mesfeir/workburo` was free when we
+  renamed to it; the repo used to be `mesfeir/zenchat-desktop`, and GitHub redirects the old URL so
+  existing clones keep working. Worth knowing: `workburo.com` belongs to an unrelated design studio
+  in Seoul, and the `workburo` GitHub org and npm package name are still unclaimed. Two old names
+  remain on purpose, because changing them is a migration rather than a rename: the app's own store
+  file is still `zen-chat-store.json`, and the local checkout folder is still `zen-chat`.
 
 ## Description (the About box, 350 char max)
 
@@ -37,7 +40,7 @@ icon on a dark background would be better.
       licence, which some contributors care about. Add `LICENSE`, then update the License
       section of the README and add a `license` field to `package.json`.
 - [ ] **Run the secret scan.** `node scripts/check-secrets.cjs` — must report zero findings.
-      Also confirm the config file (`%APPDATA%\zen-chat\zen-chat-store.json`) is not in the
+      Also confirm the config file (`%APPDATA%\WorkBuro\zen-chat-store.json`) is not in the
       repo; it is gitignored, and it should never be copied in.
 - [ ] **Check the screenshots.** They are captured from the real UI. Confirm the API key field
       is masked (it is `type=password` by default), that no session id other than the demo
@@ -54,7 +57,7 @@ icon on a dark background would be better.
 SSH is already authenticated on this machine as `mesfeir`, so no token is needed for pushes:
 
 ```bash
-git remote add origin git@github.com:mesfeir/zenchat-desktop.git
+git remote add origin git@github.com:mesfeir/workburo.git
 git push -u origin main
 ```
 

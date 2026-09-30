@@ -54,8 +54,8 @@ If you have used a modern AI chat app, the shape will look familiar: a sidebar o
 There is no prebuilt binary published yet, so build it:
 
 ```bash
-git clone git@github.com:mesfeir/zenchat-desktop.git
-cd zenchat-desktop
+git clone git@github.com:mesfeir/workburo.git
+cd workburo
 npm install
 npm run dist     # -> release/WorkBuro-Setup-<version>.exe
 ```
