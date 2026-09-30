@@ -398,13 +398,23 @@ function applyAlwaysOnTop(cfg) {
   win.setAlwaysOnTop(cfg ? cfg.alwaysOnTop !== false : true, 'floating')
 }
 
+/**
+ * A self-test drives this window for minutes at a time, so the tuck stays off for the whole run
+ * unless the test arms it itself. Without this the blur handler re-arms the real delay mid-run,
+ * the window minimises, and every section after that point fails for a reason that has nothing to
+ * do with what it was checking. The check that deliberately tests the tuck passes { force: true }.
+ */
+let tuckDisarmed = false
+if (SELFTEST) tuckDisarmed = true
+
 function cancelAutoMinimize() {
   if (autoMinTimer) clearTimeout(autoMinTimer)
   autoMinTimer = null
 }
 
-function armAutoMinimize(cfg) {
+function armAutoMinimize(cfg, opts = {}) {
   cancelAutoMinimize()
+  if (tuckDisarmed && !opts.force) return
   const secs = autoMinimizeSecs(cfg)
   if (!win || win.isDestroyed() || secs <= 0) return
   if (win.isFocused() || win.isMinimized() || !win.isVisible()) return

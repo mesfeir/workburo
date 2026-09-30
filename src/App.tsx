@@ -1258,9 +1258,6 @@ export default function App() {
 
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="drag-region titlebar-space flex h-11 shrink-0 items-center gap-1 pl-2">
-          <span className="ml-1 mr-1.5 select-none font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-muted">
-            WorkBuro
-          </span>
           {!sidebarOpen && (
             <button
               onClick={() => setSidebarOpen(true)}

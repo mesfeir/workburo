@@ -77,6 +77,19 @@ contextBridge.exposeInMainWorld('zen', {
       return () => ipcRenderer.removeListener('images:progress', listener)
     },
   },
+  /* the local model: fetch it, start it, stop it. No key anywhere in this path. */
+  local: {
+    status: () => ipcRenderer.invoke('local:status'),
+    install: (model) => ipcRenderer.invoke('local:install', { model }),
+    start: (model) => ipcRenderer.invoke('local:start', { model }),
+    stop: () => ipcRenderer.invoke('local:stop'),
+    detect: () => ipcRenderer.invoke('local:detect'),
+    open: () => ipcRenderer.invoke('local:open'),
+    onProgress: (listener) => {
+      ipcRenderer.on('local:progress', listener)
+      return () => ipcRenderer.removeListener('local:progress', listener)
+    },
+  },
   pi: {
     status: () => ipcRenderer.invoke('pi:status'),
     install: () => ipcRenderer.invoke('pi:install'),

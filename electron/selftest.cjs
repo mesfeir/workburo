@@ -943,7 +943,9 @@ async function run({
   // run in progress is worse than one extra window on screen
   win.blur()
   await sleep(300)
-  armAutoMinimize({ autoMinimizeSec: 0.5 })
+  // `force` because this run keeps the tuck disarmed on purpose: this check is the one place the
+  // behaviour under test is the tuck itself.
+  armAutoMinimize({ autoMinimizeSec: 0.5 }, { force: true })
   let sawWork = false
   let minimisedWhileBusy = false
   for (let i = 0; i < 7; i += 1) {
@@ -1759,6 +1761,47 @@ async function run({
     `reply="${docAnswer.slice(0, 140)}"`,
   )
   await shot(win, '17-documents')
+
+  // ---------- 17b. the name is written once, not twice
+  // It was drawn in both the top bar and the sidebar header, so on every screen the app said its
+  // own name twice. Once, in the sidebar header, with the brain mark beside it.
+  await inPage(win, function () {
+    // Only click when the drawer is actually shut: a blind click on a toggle opens it and closes it
+    // again, and then this measures a closed drawer and blames the app.
+    if (document.querySelector('aside')) return true
+    const show = Array.from(document.querySelectorAll('button')).find(function (b) {
+      return /show sidebar/i.test(String(b.getAttribute('title') || ''))
+    })
+    if (show) show.click()
+    return true
+  })
+  await sleep(500)
+  const brand = await inPage(win, function () {
+    // The wordmark sits beside the brain mark, so the element that holds it has children. Take the
+    // innermost element whose whole text is the name: that is the mark, not a wrapper that also
+    // contains an icon.
+    const says = function (el) {
+      return String(el.textContent || '').replace(/\s+/g, ' ').trim() === 'WorkBuro'
+    }
+    const holders = Array.from(document.querySelectorAll('span, div, h1, h2')).filter(function (el) {
+      if (!says(el)) return false
+      return !Array.from(el.children).some(says)
+    })
+    return {
+      count: holders.length,
+      where: holders.map(function (el) {
+        if (el.closest('aside')) return 'sidebar'
+        if (el.closest('header')) return 'header'
+        return 'elsewhere'
+      }),
+    }
+  })
+  record(
+    'the app writes its own name once, in the sidebar',
+    brand.count === 1 && brand.where[0] === 'sidebar',
+    `count=${brand.count} where=${JSON.stringify(brand.where)}`,
+  )
+  await shot(win, '17b-one-wordmark')
 
   // ---------- 18. connected apps: the door, and the truth told before there is a key
   // These tools can send mail and post messages in someone's real accounts, so the two things worth

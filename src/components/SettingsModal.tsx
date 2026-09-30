@@ -235,6 +235,122 @@ export default function SettingsModal({
 
   useEffect(() => window.zen.pi.onProgress(setPiProgress), [])
 
+  /* ---- the local model: no key, no account, about a second to an answer ---- */
+
+  const [localStatus, setLocalStatus] = useState<Awaited<
+    ReturnType<typeof window.zen.local.status>
+  > | null>(null)
+  const [localBusy, setLocalBusy] = useState(false)
+  const [localProgress, setLocalProgress] = useState<{
+    phase: string
+    got?: number
+    total?: number
+    note?: string
+    message?: string
+  } | null>(null)
+  const [localStarted, setLocalStarted] = useState('')
+  const [localNote, setLocalNote] = useState<{ kind: 'idle' | 'ok' | 'err'; msg: string }>({
+    kind: 'idle',
+    msg: '',
+  })
+  const [localDetected, setLocalDetected] = useState<
+    { id: string; label: string; baseUrl: string; models: string[] }[]
+  >([])
+
+  const refreshLocal = async () => {
+    const st = await window.zen.local.status()
+    setLocalStatus(st)
+    setLocalStarted(st?.running?.baseUrl || '')
+    return st
+  }
+
+  useEffect(() => {
+    if (tab === 'api') void refreshLocal()
+  }, [tab])
+
+  useEffect(() => window.zen.local.onProgress(setLocalProgress), [])
+
+  /** Real numbers only: the byte count is carried by the progress event itself. */
+  const localPct = () => {
+    const p = localProgress
+    if (!p || !p.total) return 6
+    return Math.max(2, Math.min(99, Math.round(((p.got || 0) / p.total) * 100)))
+  }
+
+  const localPhaseLabel = () => {
+    switch (localProgress?.phase) {
+      case 'runtime':
+        return `Downloading llama.cpp ${localStatus?.pinned || ''} · ${localPct()}%`
+      case 'unpacking':
+        return 'Unpacking it and checking it runs'
+      case 'model':
+        return `Downloading the model · ${localPct()}%`
+      case 'model-done':
+        return 'Checked. Starting it'
+      default:
+        return localProgress?.message || 'Getting it'
+    }
+  }
+
+  const installLocal = async () => {
+    setLocalBusy(true)
+    setLocalNote({ kind: 'idle', msg: '' })
+    try {
+      const res = await window.zen.local.install()
+      const st = await refreshLocal()
+      if (res?.error) setLocalNote({ kind: 'err', msg: res.error })
+      else if (st?.ready) setLocalNote({ kind: 'ok', msg: 'It is on this machine now. Start it when you want it.' })
+    } catch (err: any) {
+      setLocalNote({ kind: 'err', msg: String(err?.message || err) })
+    } finally {
+      setLocalBusy(false)
+      setLocalProgress(null)
+    }
+  }
+
+  const startLocal = async () => {
+    setLocalBusy(true)
+    setLocalNote({ kind: 'idle', msg: '' })
+    try {
+      const res = await window.zen.local.start()
+      if (res?.ok) {
+        setLocalStarted(res.baseUrl || '')
+        setLocalNote({
+          kind: 'ok',
+          msg: `Ready at ${res.baseUrl}${res.tookMs ? `, up in ${(res.tookMs / 1000).toFixed(1)} s` : ''}.`,
+        })
+      } else {
+        setLocalNote({ kind: 'err', msg: String(res?.error || 'the model did not start') })
+      }
+      await refreshLocal()
+    } catch (err: any) {
+      setLocalNote({ kind: 'err', msg: String(err?.message || err) })
+    } finally {
+      setLocalBusy(false)
+    }
+  }
+
+  const stopLocal = async () => {
+    await window.zen.local.stop()
+    setLocalStarted('')
+    await refreshLocal()
+  }
+
+  /** Point the chat at a server on this machine. Neither one needs a key, so the field is cleared. */
+  const useLocal = (baseUrl: string, model?: string) => {
+    onConfig({ baseUrl, apiKey: '', ...(model ? { model } : {}) })
+    setLocalNote({ kind: 'ok', msg: `${baseUrl} is now the endpoint. Type something and it will answer.` })
+  }
+
+  const detectLocal = async () => {
+    const r = await window.zen.local.detect()
+    const found = Array.isArray(r?.found) ? r.found : []
+    setLocalDetected(found)
+    if (!found.length) {
+      setLocalNote({ kind: 'idle', msg: 'Nothing answered on 127.0.0.1:1234 or 127.0.0.1:11434.' })
+    }
+  }
+
   const installPi = async () => {
     setPiBusy(true)
     setPiNote({ kind: 'idle', msg: '' })
@@ -790,6 +906,116 @@ export default function SettingsModal({
 
             {tab === 'api' && (
               <div className="space-y-4">
+                {/* Offered before the key, because a first run should not need an account. */}
+                <div className="rounded-xl border border-[var(--rule)] bg-[var(--app)] p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-[13px] text-ink">
+                        {localStatus?.ready
+                          ? `${localStatus.catalogue?.[0]?.label || 'A model'} is on this machine`
+                          : 'No key? Run a small model here'}
+                      </div>
+                      <div className="mt-0.5 text-[11.5px] leading-snug text-faint">
+                        {localBusy
+                          ? localPhaseLabel()
+                          : localStatus?.ready
+                            ? localStarted
+                              ? 'Running here. Point the chat at it and type.'
+                              : `Starts in about a second, then answers with no account and no key.${
+                                  localStatus.catalogue?.[0] ? ` ${localStatus.catalogue[0].label} is ${localStatus.catalogue[0].size}.` : ''
+                                }`
+                            : localStatus?.catalogue?.[0]
+                              ? `${localStatus.catalogue[0].note} It is ${localStatus.catalogue[0].size}, downloaded once, and checked against a pinned checksum before it runs.`
+                              : 'Checking what is on this machine…'}
+                      </div>
+                    </div>
+                    {localStatus?.ready ? (
+                      localStarted ? (
+                        <button
+                          onClick={stopLocal}
+                          disabled={localBusy}
+                          className="flex h-[34px] shrink-0 items-center rounded-lg border border-[var(--rule)] px-3 text-[12.5px] text-muted transition hover:bg-[var(--raised)] hover:text-ink disabled:opacity-50"
+                        >
+                          Stop
+                        </button>
+                      ) : (
+                        <button
+                          onClick={startLocal}
+                          disabled={localBusy}
+                          className="flex h-[34px] shrink-0 items-center rounded-lg border border-[var(--accent-rule)] bg-[var(--accent-bg)] px-3 text-[12.5px] text-[var(--accent-soft)] transition disabled:opacity-50"
+                        >
+                          {localBusy ? 'Starting…' : 'Start'}
+                        </button>
+                      )
+                    ) : (
+                      <button
+                        onClick={installLocal}
+                        disabled={localBusy || !localStatus}
+                        className="flex h-[34px] shrink-0 items-center gap-1.5 rounded-lg border border-[var(--accent-rule)] bg-[var(--accent-bg)] px-3 text-[12.5px] text-[var(--accent-soft)] transition disabled:opacity-50"
+                      >
+                        <RefreshCw size={13} className={localBusy ? 'animate-spin' : ''} />
+                        {localBusy ? 'Getting it…' : 'Get it'}
+                      </button>
+                    )}
+                  </div>
+
+                  {localBusy && (
+                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--raised)]">
+                      <div
+                        className="h-full rounded-full bg-[var(--accent-bg)] transition-all"
+                        style={{ width: `${localPct()}%` }}
+                      />
+                    </div>
+                  )}
+
+                  {localStarted && !localBusy && (
+                    <button
+                      onClick={() => useLocal(localStarted)}
+                      className="mt-3 flex h-[32px] items-center rounded-lg border border-[var(--accent-rule)] bg-[var(--accent-bg)] px-3 text-[12.5px] text-[var(--accent-soft)] transition"
+                    >
+                      Use this as the endpoint
+                    </button>
+                  )}
+
+                  {localNote.msg && (
+                    <div
+                      className={`mt-2 break-words text-[11.5px] leading-snug ${
+                        localNote.kind === 'err' ? 'text-[var(--err)]' : 'text-[var(--ok)]'
+                      }`}
+                    >
+                      {localNote.msg}
+                    </div>
+                  )}
+
+                  {!localStatus?.ready && !localBusy && (
+                    <button
+                      onClick={detectLocal}
+                      className="mt-2 text-[11.5px] text-faint underline decoration-dotted underline-offset-2 transition hover:text-muted"
+                    >
+                      Already running a local server? Look for it
+                    </button>
+                  )}
+
+                  {localDetected.length > 0 && (
+                    <div className="mt-2.5 space-y-1 border-t border-[var(--rule)] pt-2.5">
+                      {localDetected.map((d) => (
+                        <div key={d.id} className="flex items-center justify-between gap-2">
+                          <span className="min-w-0 truncate text-[11.5px] text-faint">
+                            {d.label} is running here
+                            {d.models.length ? `, with ${d.models.length} model${d.models.length === 1 ? '' : 's'}` : ''}
+                          </span>
+                          <button
+                            onClick={() => useLocal(d.baseUrl, d.models[0])}
+                            className="flex h-[28px] shrink-0 items-center rounded-lg border border-[var(--rule)] px-2.5 text-[11.5px] text-muted transition hover:bg-[var(--raised)] hover:text-ink"
+                          >
+                            Use it
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <div>
                   <div className="mb-1.5 text-[12.5px] font-medium text-[var(--text-mid)]">Presets</div>
                   <div className="flex flex-wrap gap-2">

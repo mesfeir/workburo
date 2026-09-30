@@ -173,6 +173,45 @@ export interface ZenApi {
     openFolder: () => Promise<{ ok: boolean; error: string | null }>
     onProgress: (handler: (p: { requestId: string; phase: string; detail?: string }) => void) => () => void
   }
+  /**
+   * The local model. Nothing here needs an account, and nothing downloads until it is asked for:
+   * the size is known before it starts, and the runtime and the model are each checked against a
+   * pinned digest before anything is run.
+   */
+  local: {
+    status: () => Promise<{
+      installed: boolean
+      version: string | null
+      pinned: string
+      model: string
+      modelPath: string | null
+      modelReady: boolean
+      ready: boolean
+      root: string
+      defaultModel: string
+      catalogue: { id: string; label: string; file: string; bytes: number; size: string; note: string }[]
+      running: { baseUrl: string; port: number } | null
+    }>
+    install: (model?: string) => Promise<{ ok?: boolean; busy?: boolean; error?: string }>
+    start: (model?: string) => Promise<{
+      ok: boolean
+      baseUrl?: string
+      port?: number
+      tookMs?: number
+      already?: boolean
+      error?: string
+    }>
+    stop: () => Promise<{ ok: boolean }>
+    /** LM Studio and Ollama, if either is already running on this machine */
+    detect: () => Promise<{
+      found: { id: string; label: string; baseUrl: string; models: string[] }[]
+      tried: string[]
+    }>
+    open: () => Promise<string>
+    onProgress: (
+      handler: (p: { phase: string; got?: number; total?: number; note?: string; message?: string }) => void,
+    ) => () => void
+  }
   pi: {
     status: () => Promise<{
       installed: boolean
