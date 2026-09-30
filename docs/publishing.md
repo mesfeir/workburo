@@ -8,9 +8,10 @@ into GitHub. Keep this file in the repo — it's the record of what the "About" 
 - **Slug:** `mesfeir/workburo`
 - **Visibility:** currently **private**. Flip with Settings → General → Danger Zone → *Change
   visibility* on the repo page, or `PATCH /repos/mesfeir/workburo {"private": false}`.
-- **Name rationale:** the repo is named after the product. `mesfeir/workburo` was free when we
-  renamed to it; the repo used to be `mesfeir/zenchat-desktop`, and GitHub redirects the old URL so
-  existing clones keep working. Worth knowing: `workburo.com` belongs to an unrelated design studio
+- **Name rationale:** the repo is named after the product. It was `mesfeir/zenchat-desktop` once,
+  then briefly `workburo` with a rewritten history, and is now a **fresh repo created from this
+  clone**, so the marketing plan and the worklist were never pushed to it at all. Worth knowing:
+  `workburo.com` belongs to an unrelated design studio
   in Seoul, and the `workburo` GitHub org and npm package name are still unclaimed. Two old names
   remain on purpose, because changing them is a migration rather than a rename: the app's own store
   file is still `zen-chat-store.json`, and the local checkout folder is still `zen-chat`.
