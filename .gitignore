@@ -40,3 +40,11 @@ desktop.ini
 /sent-messages.json
 /picture-context-probe.cjs
 /*-probe.cjs
+
+# ---- ours, not the reader's ----
+# The marketing plan and the build worklist stay on disk and out of the repo. They were committed
+# once, so they are also removed from history rather than only untracked.
+/MARKETING.md
+/WORKLIST.md
+# electron nightly release metadata, 1.3 MB, left behind by a curl during a research step
+/er.json
