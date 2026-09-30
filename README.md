@@ -44,6 +44,14 @@
 - **A brief burst of agent work.** Flip **Agent** on and the model gets **shell** and **file** tools inside a **folder you can see**, then you flip it off again. Nothing installs or schedules in the background.
 - **No key at all?** It will run a **lightweight model on your machine**. One **429 MB** download, then about a **second to an answer**, with **no account** and **no browser**.
 
+<p align="center">
+  <img src="docs/screenshots/readme-agent-1.png" width="32%" alt="WorkBuro's agent running a shell command to list the folder">
+  <img src="docs/screenshots/readme-agent-2.png" width="32%" alt="WorkBuro's agent reading a file, then planning a new one">
+  <img src="docs/screenshots/readme-agent-3.png" width="32%" alt="WorkBuro's agent handing back a finished HTML file, 8 KB, with an Open button">
+</p>
+
+*The agent at work in a small window: it lists the folder, reads a file, writes one, and hands you the finished file with **Open** next to it. Same window, same keystroke, no second app.*
+
 ## Main features
 
 - **Any OpenAI-compatible endpoint.** **OpenCode Zen**, **OpenAI**, **OpenRouter**, **Groq**, **Together**, **DeepSeek**, **Mistral**, **LM Studio**, **Ollama**, **vLLM**, **llama.cpp**, **LocalAI**, or **your own gateway**. One **base URL** field, with **presets** for the common ones.
