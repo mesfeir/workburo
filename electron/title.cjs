@@ -101,4 +101,44 @@ function usable(candidate, firstUserText, firstAssistantText) {
   return true
 }
 
-module.exports = { INSTRUCTIONS, transcript, clean, usable, MAX_WORDS, MAX_CHARS, PER_MESSAGE, TIMEOUT_MS }
+/** Words that carry no subject, so they never earn a place in a title. */
+const STOP_WORDS = new Set([
+  'a','an','the','and','or','but','if','then','than','that','this','these','those','i','me','my','we','our','you','your',
+  'it','its','he','she','they','them','their','is','are','was','were','be','been','being','am','do','does','did','doing',
+  'have','has','had','can','could','would','should','will','shall','may','might','must','to','of','in','on','at','by','for',
+  'with','without','from','into','onto','about','over','under','up','down','out','off','again','here','there','when','where',
+  'why','how','all','any','some','no','not','only','own','same','so','too','very','just','also','please','thanks','thank',
+  'something','anything','everything','nothing','thing','things','stuff','need','needs','want','wants','like','make','makes',
+  'made','get','gets','got','give','gives','take','takes','use','uses','help','helps','let','lets','going','gonna','can'
+])
+
+/**
+ * The last resort title: the most substantial words from the opening, in the order they were
+ * written, capped at four.
+ *
+ * It exists because a model will sometimes hand the request back twice in a row, and "the model
+ * would not" is a poor reason to leave a three-line message as the name of a chat. This is derived
+ * from the words, not summarised from the meaning, and it is only reached after every model
+ * attempt has refused — which is why it is named that way here rather than called a summary.
+ */
+function fallbackTitle(firstUserText) {
+  const text = String(firstUserText || '').toLowerCase().replace(/[^a-z0-9\s'-]+/g, ' ')
+  const words = text.split(/\s+/).filter((w) => w.length > 2 && !STOP_WORDS.has(w))
+  const unique = [...new Set(words)]
+  if (!unique.length) return ''
+  if (unique.length <= MAX_WORDS) return capitalise(unique.join(' '))
+  const score = (w) => w.length - (/(ing|ed)$/.test(w) ? 3 : 0)
+  const picks = unique
+    .map((w, i) => ({ w, i }))
+    .sort((a, b) => score(b.w) - score(a.w) || a.i - b.i)
+    .slice(0, MAX_WORDS)
+    .sort((a, b) => a.i - b.i)
+    .map((x) => x.w)
+  return capitalise(picks.join(' '))
+}
+
+function capitalise(s) {
+  return String(s).replace(/^([a-z])/, (m, c) => c.toUpperCase())
+}
+
+module.exports = { INSTRUCTIONS, transcript, clean, usable, fallbackTitle, MAX_WORDS, MAX_CHARS, PER_MESSAGE, TIMEOUT_MS }

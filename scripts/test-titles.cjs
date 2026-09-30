@@ -193,6 +193,24 @@ check('23. the second framing asks for a subject for the request alone', () => {
   return true
 })
 
+check('24. the last resort title comes from the words, and is never the opening itself', () => {
+  const opening =
+    'I need a hand turning a messy list of supplier prices into something I can sort, filter and total up.'
+  const t = titles.fallbackTitle(opening)
+  const words = t.split(' ').filter(Boolean)
+  assert(t, 'a long opening produced no fallback at all')
+  assert(words.length >= 2 && words.length <= titles.MAX_WORDS, `wrong shape: ${JSON.stringify(t)}`)
+  assert(!opening.toLowerCase().startsWith(t.toLowerCase()), 'the fallback is just the opening again')
+  assert(titles.usable(t, opening, ''), 'the fallback would be refused by the rule that guards titles')
+  // It must not invent a word that was never written: this is derived text, not generated text.
+  for (const w of words) {
+    assert(opening.toLowerCase().includes(w.toLowerCase()), `${w} does not appear in the opening`)
+  }
+  assert(titles.fallbackTitle('') === '', 'an empty opening must yield nothing rather than a guess')
+  assert(titles.fallbackTitle('hi there') === '', 'a two-word greeting has no subject worth keeping')
+  return true
+})
+
 console.log(`\n=== summary ===`)
 console.log(`  ${passed} passed, ${failed} failed`)
 if (failures.length) {
