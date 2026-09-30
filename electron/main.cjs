@@ -916,10 +916,13 @@ app.whenReady().then(() => {
         const { run } = require('./capture.cjs')
         await run({
           win,
-          apiKey: argAfter('--capture') || '',
           storePath: storePath(),
           readStore,
           writeStore,
+          // Same expression as the seeded config above. This used to be argAfter('--capture') || ''
+          // alone, so without a key on the command line every live answer failed and the shots came
+          // out empty. The key belongs in the environment, never in argv.
+          apiKey: argAfter('--capture') || testKey() || '',
         })
       } catch (err) {
         console.error('capture crashed:', err)

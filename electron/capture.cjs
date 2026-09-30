@@ -264,7 +264,9 @@ async function run({ win, storePath, readStore, writeStore, apiKey }) {
   // ---- seed an isolated profile: the real config, plus plausible history
   // prefer the real profile's config (presets, model prefs, search endpoint) so
   // the settings shot looks like a used install; the key always comes from argv
-  const realStore = path.join(require('electron').app.getPath('appData'), 'zen-chat', 'zen-chat-store.json')
+  // NOTE: the folder is WorkBuro. It was zen-chat before the rename, and while this said
+  // 'zen-chat' the merge silently fell through to defaults on every capture run.
+  const realStore = path.join(require('electron').app.getPath('appData'), 'WorkBuro', 'zen-chat-store.json')
   let base = readStore()
   try {
     if (fs.existsSync(realStore)) {
@@ -281,6 +283,11 @@ async function run({ win, storePath, readStore, writeStore, apiKey }) {
     config: {
       ...base.config,
       apiKey,
+      // This run produces pictures for publication, so the endpoint and the model are pinned to
+      // the hosted relay. Without this, the real profile's config (which may point at a model on
+      // this machine) would be merged in and end up visible in a screenshot.
+      baseUrl: 'https://opencode.ai/zen/go/v1',
+      model: process.env.ZEN_SHOT_MODEL || 'deepseek-v4.1-flash',
       toolsEnabled: true,
       showUsage: true,
       thinking: true,
@@ -398,7 +405,9 @@ async function run({ win, storePath, readStore, writeStore, apiKey }) {
   const armed = await inPage(win, pageArmImageMode).catch(() => false)
   console.log(`   image mode armed in the composer: ${armed}`)
   await sleep(400)
-  await inPage(win, pageType, ['a single red dot centred on a white background'])
+  // A subject that draws well in one pass. This shot ends up in the README, and the old prompt
+  // ("a single red dot centred on a white background") reliably came back with speckle.
+  await inPage(win, pageType, ['a red fox in falling snow, soft winter light'])
   await sleep(400)
   await inPage(win, pageSend)
   let turn = null
@@ -415,7 +424,17 @@ async function run({ win, storePath, readStore, writeStore, apiKey }) {
   const imgDir = path.join(path.dirname(storePath), 'images')
   fs.mkdirSync(imgDir, { recursive: true })
   const fixture = path.join(imgDir, 'zen-fixture-1.png')
-  fs.copyFileSync(path.join(__dirname, '..', 'build', 'icon.png'), fixture)
+  // build/icon.png exists in the source tree but is not inside the packaged asar, so this copy
+  // worked from source and threw from a packaged build, crashing the run after every shot had
+  // already been taken. The fixture is only a placeholder that has to render, so fall back to a
+  // one pixel PNG instead.
+  try {
+    fs.copyFileSync(path.join(__dirname, '..', 'build', 'icon.png'), fixture)
+  } catch {
+    fs.writeFileSync(fixture, Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==',
+      'base64'))
+  }
   const persisted = readStore()
   const when = Date.now()
   persisted.config.imageGen = { ...persisted.config.imageGen, enabled: true }

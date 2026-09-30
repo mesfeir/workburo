@@ -18,12 +18,13 @@
 
 ## What it is
 
-**WorkBuro** is a **small Windows app** that answers on **one keystroke**, works with **any OpenAI-compatible endpoint**, and can run a **model on your own machine** with **no account at all**.
+**WorkBuro** is a **chat app for Windows** that talks to **any OpenAI-compatible LLM**, answers on **one keystroke**, can run a **model on your own machine** with **no account at all**, and turns any of them into an **agent** when a job needs hands.
 
 ## Why we made it
 
 - The **best part** of an AI assistant is the **model**, and the **worst part** is everything in front of it: the **tab**, the **sign-in**, the **wait**.
 - A **hotkey** beats a **tab**. **Alt+Space** over whatever you are doing, a question, an answer, gone.
+- We wanted **quick access to agents** inside the same chat app. Flip **Agent** on and the model gets **hands** in a folder you can see, then flip it off again. No second app, no **terminal**, no session left running.
 - It should **do something**, not only talk: ask for a spreadsheet and get a **real .xlsx** in a **real folder**.
 - We wanted **no second subscription**. Point it at the endpoint you **already pay for**, or at a **model on your own machine**.
 - The interface is **familiar**, and everything underneath is **yours**: your **key**, your **endpoint**, your **files**.
@@ -38,6 +39,8 @@
 - **Real files out.** Say "**save a CSV of three fruits and their quantities**" and you get a real **.csv**, **.xlsx**, **.docx**, **.pdf**, **.md**, **.json** or **.txt** in **Documents\WorkBuro**, shown on the reply with **Open** and **Show in folder**.
 - **Documents in.** Attach a **PDF**, **Word**, **Excel**, **CSV**, **Markdown** or **text** file and the model answers from what is inside it. One it cannot read comes back as a **reason you can see**, not an empty answer.
 - **Pictures both ways.** Ask to see something and it **draws it**. Send a picture and it can **change it from your words**, or **look at it and answer**.
+
+  ![WorkBuro drawing a picture from a prompt, then offering to edit it, with the finished image attached to the composer as a reference](docs/screenshots/readme-composer.png)
 - **A brief burst of agent work.** Flip **Agent** on and the model gets **shell** and **file** tools inside a **folder you can see**, then you flip it off again. Nothing installs or schedules in the background.
 - **No key at all?** It will run a **small model on your machine**. One **429 MB** download, then about a **second to an answer**, with **no account** and **no browser**.
 
@@ -47,7 +50,11 @@
 - **Model discovery and real capability checks.** It reads **/models** from your endpoint, and the **lightning button** makes a **real call** to find out whether a model takes **images**, whether it **reasons**, and which **wire protocol** it wants. What it learns is **remembered**, so you stop guessing which of three similarly named models can really see.
 - **It copes with awkward endpoints.** **Chat Completions** first, and the **Responses API** by itself when an endpoint refuses the first. Relay quirks such as **session headers**, a missing **User-Agent**, or **/v1** pasted twice become **readable errors** instead of mystery HTML.
 - **Tools the model can call.** **Web search** through your own **SearXNG**, **read a page**, **weather**, **time**, **make a file**, your own **connected apps** through your own **Composio** key, and any **MCP servers** you add.
+
+  ![WorkBuro calling a live weather tool and citing where the answer came from](docs/screenshots/readme-tools.png)
 - **Images.** **fal.ai**'s live catalogue, each endpoint with its **published price**, prompts written by the model, **progress** while it draws, and a **gallery** in the sidebar of everything you have sent or drawn.
+
+  ![WorkBuro's fal.ai image model list, with live prices and filters](docs/screenshots/readme-images.png)
 - **Made for a desktop.** A **small window** that **remembers its size**, **starts with Windows** if you want, **stays above** other windows, and **tucks itself away** 30 seconds after you leave it, unless an answer is still arriving.
 - **Local-first.** **No telemetry** and no backend. Every conversation lives in **one JSON file** you can open, back up or hand-edit.
 - **Small enough to read.** A few thousand lines of **TypeScript** and **CommonJS**, and a **self-test** that drives the **real window** instead of a mock.
