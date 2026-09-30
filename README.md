@@ -18,12 +18,12 @@
 
 ## What it is
 
-**WorkBuro** is a **chat app for Windows** that talks to **any OpenAI-compatible LLM**, answers on **one keystroke**, can run a **model on your own machine** with **no account at all**, and turns any of them into an **agent** when a job needs hands.
+**WorkBuro** is a **lightweight, powerful chat app for Windows** that talks to **any OpenAI-compatible LLM**, answers on **one keystroke**, can run a **model on your own machine** with **no account at all**, and turns any of them into an **agent** when a job needs hands.
 
 ## Why we made it
 
-- The **best part** of an AI assistant is the **model**, and the **worst part** is everything in front of it: the **tab**, the **sign-in**, the **wait**.
-- A **hotkey** beats a **tab**. **Alt+Space** over whatever you are doing, a question, an answer, gone.
+- The **best part** of an AI assistant is the **model**, and the **worst part** is everything in front of it: the **tab**, the **sign-in**, the **wait**. A **powerful** model deserves a **lightweight** window, not a browser tab and a queue.
+- A **hotkey** beats a **tab**. **Alt+Space** over whatever you are doing, a question, an answer, gone. **Lightweight** enough to live on a keypress, and light enough to leave running all day.
 - We wanted **quick access to agents** inside the same chat app. Flip **Agent** on and the model gets **hands** in a folder you can see, then flip it off again. No second app, no **terminal**, no session left running.
 - It should **do something**, not only talk: ask for a spreadsheet and get a **real .xlsx** in a **real folder**.
 - We wanted **no second subscription**. Point it at the endpoint you **already pay for**, or at a **model on your own machine**.
@@ -34,15 +34,15 @@
 
 ## What it does
 
-- **It is summoned, not opened.** A **global hotkey** (**Alt+Space** by default, rebindable) brings a **small window** over your work and puts it away again. A **tray icon** means a hidden window is never a lost one.
-- **Answers you can use.** **Streamed markdown**, **tables**, **syntax-highlighted code** with a copy button, and **Stop**, **Regenerate** and **copy** on every reply.
+- **It is summoned, not opened.** A **global hotkey** (**Alt+Space** by default, rebindable) brings a **lightweight window** over your work and puts it away again. A **tray icon** means a hidden window is never a lost one.
+- **Answers you can use.** **Streamed markdown**, **tables**, **syntax-highlighted code** with a copy button, and **Stop**, **Regenerate** and **copy** on every reply. It looks like the **powerful** chat client you already know, and it is small enough to forget about.
 - **Real files out.** Say "**save a CSV of three fruits and their quantities**" and you get a real **.csv**, **.xlsx**, **.docx**, **.pdf**, **.md**, **.json** or **.txt** in **Documents\WorkBuro**, shown on the reply with **Open** and **Show in folder**.
 - **Documents in.** Attach a **PDF**, **Word**, **Excel**, **CSV**, **Markdown** or **text** file and the model answers from what is inside it. One it cannot read comes back as a **reason you can see**, not an empty answer.
 - **Pictures both ways.** Ask to see something and it **draws it**. Send a picture and it can **change it from your words**, or **look at it and answer**.
 
   ![WorkBuro drawing a picture from a prompt, then offering to edit it, with the finished image attached to the composer as a reference](docs/screenshots/readme-composer.png)
 - **A brief burst of agent work.** Flip **Agent** on and the model gets **shell** and **file** tools inside a **folder you can see**, then you flip it off again. Nothing installs or schedules in the background.
-- **No key at all?** It will run a **small model on your machine**. One **429 MB** download, then about a **second to an answer**, with **no account** and **no browser**.
+- **No key at all?** It will run a **lightweight model on your machine**. One **429 MB** download, then about a **second to an answer**, with **no account** and **no browser**.
 
 ## Main features
 
@@ -57,14 +57,14 @@
   ![WorkBuro's fal.ai image model list, with live prices and filters](docs/screenshots/readme-images.png)
 - **No server to run.** Nothing to install on a box, no container, no sign-in screen. If you have tried **Open WebUI** and wanted the same thing without running a server, this is that: an **alternative to a ChatGPT subscription** in the way that matters, because the key, the endpoint and the files stay yours.
 - **Made for a desktop.** A **small window** that **remembers its size**, **starts with Windows** if you want, **stays above** other windows, and **tucks itself away** 30 seconds after you leave it, unless an answer is still arriving.
-- **Local-first.** **No telemetry** and no backend. Every conversation lives in **one JSON file** you can open, back up or hand-edit.
-- **Small enough to read.** A few thousand lines of **TypeScript** and **CommonJS**, and a **self-test** that drives the **real window** instead of a mock.
+- **Local-first and quiet.** **Lightweight** where it counts: **no telemetry** and no backend. Every conversation lives in **one JSON file** you can open, back up or hand-edit.
+- **Small enough to read.** A few thousand lines of **TypeScript** and **CommonJS**, **powerful** without being heavy, and a **self-test** that drives the **real window** instead of a mock.
 
 ## Common questions
 
 **Is this a ChatGPT alternative?** In the way people usually mean it, yes. It is a **chat app that works like ChatGPT**: streaming answers, a composer, a sidebar, an image mode, tools and agents. What is different is the model behind it, which is **whatever you point it at**, not one company's model behind one company's account. It is **not affiliated with OpenAI** and it does not claim to be ChatGPT.
 
-**Is there a free option?** The app costs nothing and there is no subscription. With no API key at all it will download a **small model** (429 MB) and run it **on your machine**, which is free to use from then on. If you already pay for a model, it uses your **own key** instead, and either way there is no second bill.
+**Is there a free option?** The app costs nothing and there is no subscription. With no API key at all it will download a **lightweight model** (429 MB) and run it **on your machine**, which is free to use from then on. If you already pay for a model, it uses your **own key** instead, and either way there is no second bill.
 
 **Why not just use Open WebUI?** Open WebUI is a web app you install, run and sign into, usually in Docker and usually on a server you maintain. WorkBuro is a **desktop app for Windows**: install it, press **Alt+Space**, get an answer, close it. No server, no browser, no account. If you want a shared web UI for a team, use Open WebUI. If you want a **desktop client** that writes a **real file** into a **real folder**, this is the one.
 
