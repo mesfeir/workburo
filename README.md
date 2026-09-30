@@ -12,46 +12,49 @@
 [![Telemetry](https://img.shields.io/badge/telemetry-none-brightgreen)](#privacy)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-blueviolet)](#contributing)
 
-[Why we made it](#why-we-made-it) · [What it does](#what-it-does) · [Main features](#main-features) · [Install](#install) · [First run](#first-run) · [Keyboard](#keyboard)
+[What it is](#what-it-is) · [Why we made it](#why-we-made-it) · [What it does](#what-it-does) · [Main features](#main-features) · [Install](#install) · [First run](#first-run) · [Keyboard](#keyboard)
 
 </div>
 
+## What it is
+
+**WorkBuro** is a **small Windows app** that answers on **one keystroke**, works with **any OpenAI-compatible endpoint**, and can run a **model on your own machine** with **no account at all**.
+
 ## Why we made it
 
-The best part of a modern AI assistant is the model. The worst part is everything in front of it: finding the tab, signing in, waiting for a page, and watching a model download you never asked for. We wanted the opposite of that. WorkBuro is a key you press. Alt+Space over whatever you are doing, a question, an answer, gone. How long it takes to reach it is the whole point.
-
-We also wanted it to do something, not only talk. Ask for a spreadsheet and you get a real `.xlsx` in a real folder, not a table you have to copy out of a chat window. Ask to see something and a picture comes back. Send a document and the answer comes from what is inside it.
-
-And we did not want another subscription. WorkBuro ships no model and has no account. Point it at the endpoint you already pay for, or at a model on your own machine, and the key stays yours.
-
-If you have used a modern AI chat app, the shape will look familiar: a sidebar of recents, a composer, answers that stream in with tables and code, and a collapsed *Thought for Ns* block when the model reasons. What is missing is the monthly bill, the account, and the queue for whichever model you are allowed to use. Familiar on the surface, and yours underneath.
+- The **best part** of an AI assistant is the **model**, and the **worst part** is everything in front of it: the **tab**, the **sign-in**, the **wait**.
+- A **hotkey** beats a **tab**. **Alt+Space** over whatever you are doing, a question, an answer, gone.
+- It should **do something**, not only talk: ask for a spreadsheet and get a **real .xlsx** in a **real folder**.
+- We wanted **no second subscription**. Point it at the endpoint you **already pay for**, or at a **model on your own machine**.
+- The interface is **familiar**, and everything underneath is **yours**: your **key**, your **endpoint**, your **files**.
+- It should be **honest**. If something does not work, it **says so** rather than quietly failing.
 
 ![WorkBuro answering a question with streamed markdown, a code block with a copy button, a table, and a collapsed thinking block](docs/screenshots/readme-app.png)
 
 ## What it does
 
-- **It is summoned, not opened.** One global hotkey (Alt+Space by default, rebindable) brings a small window over your work and puts it away again. A tray icon means a hidden window is never a lost one.
-- **Answers you can use.** Streamed markdown, tables, syntax-highlighted code with a copy button, and Stop, Regenerate and copy on every reply.
-- **Real files out.** Say "save a CSV of three fruits and their quantities" and you get a real `.csv`, `.xlsx`, `.docx`, `.pdf`, `.md`, `.json` or `.txt` in `Documents\WorkBuro`, shown on the reply with Open and Show in folder.
-- **Documents in.** Attach a PDF, Word, Excel, CSV, Markdown or text file and the model answers from what is inside it. One it cannot read comes back as a reason you can see, not an empty answer.
-- **Pictures both ways.** Ask to see something and it draws it. Send a picture and it can change it from your words, or look at it and answer.
-- **A brief burst of agent work.** Flip Agent on and the model gets shell and file tools inside a folder you can see, then you flip it off again. Nothing installs or schedules in the background.
-- **No key at all?** It will run a small model on your machine. One 429 MB download, then about a second to an answer, with no account and no browser.
+- **It is summoned, not opened.** A **global hotkey** (**Alt+Space** by default, rebindable) brings a **small window** over your work and puts it away again. A **tray icon** means a hidden window is never a lost one.
+- **Answers you can use.** **Streamed markdown**, **tables**, **syntax-highlighted code** with a copy button, and **Stop**, **Regenerate** and **copy** on every reply.
+- **Real files out.** Say "**save a CSV of three fruits and their quantities**" and you get a real **.csv**, **.xlsx**, **.docx**, **.pdf**, **.md**, **.json** or **.txt** in **Documents\WorkBuro**, shown on the reply with **Open** and **Show in folder**.
+- **Documents in.** Attach a **PDF**, **Word**, **Excel**, **CSV**, **Markdown** or **text** file and the model answers from what is inside it. One it cannot read comes back as a **reason you can see**, not an empty answer.
+- **Pictures both ways.** Ask to see something and it **draws it**. Send a picture and it can **change it from your words**, or **look at it and answer**.
+- **A brief burst of agent work.** Flip **Agent** on and the model gets **shell** and **file** tools inside a **folder you can see**, then you flip it off again. Nothing installs or schedules in the background.
+- **No key at all?** It will run a **small model on your machine**. One **429 MB** download, then about a **second to an answer**, with **no account** and **no browser**.
 
 ## Main features
 
-- **Any OpenAI-compatible endpoint.** OpenCode Zen, OpenAI, OpenRouter, Groq, Together, DeepSeek, Mistral, LM Studio, Ollama, vLLM, llama.cpp, LocalAI, or your own gateway. One base URL field, with presets for the common ones.
-- **Model discovery and real capability checks.** It reads `/models` from your endpoint, and the lightning button makes an actual call to find out whether a model takes images, whether it reasons, and which wire protocol it wants. What it learns is remembered, so you stop guessing which of three similarly named models can really see.
-- **It copes with awkward endpoints.** Chat Completions first, and the Responses API by itself when an endpoint refuses the first. Relay quirks such as session headers, a missing User-Agent, or `/v1` pasted twice become readable errors instead of mystery HTML.
-- **Tools the model can call.** Web search through your own SearXNG, read a page, weather, time, make a file, your own connected apps through your own Composio key, and any MCP servers you add.
-- **Images.** fal.ai's live catalogue, each endpoint with its published price, prompts written by the model, progress while it draws, and a gallery in the sidebar of everything you have sent or drawn.
-- **Made for a desktop.** A small window that remembers its size, starts with Windows if you want, stays above other windows, and tucks itself away 30 seconds after you leave it, unless an answer is still arriving.
-- **Local-first.** No telemetry and no backend. Every conversation lives in one JSON file you can open, back up or hand-edit.
-- **Small enough to read.** A few thousand lines of TypeScript and CommonJS, and a self-test that drives the real window instead of a mock.
+- **Any OpenAI-compatible endpoint.** **OpenCode Zen**, **OpenAI**, **OpenRouter**, **Groq**, **Together**, **DeepSeek**, **Mistral**, **LM Studio**, **Ollama**, **vLLM**, **llama.cpp**, **LocalAI**, or **your own gateway**. One **base URL** field, with **presets** for the common ones.
+- **Model discovery and real capability checks.** It reads **/models** from your endpoint, and the **lightning button** makes a **real call** to find out whether a model takes **images**, whether it **reasons**, and which **wire protocol** it wants. What it learns is **remembered**, so you stop guessing which of three similarly named models can really see.
+- **It copes with awkward endpoints.** **Chat Completions** first, and the **Responses API** by itself when an endpoint refuses the first. Relay quirks such as **session headers**, a missing **User-Agent**, or **/v1** pasted twice become **readable errors** instead of mystery HTML.
+- **Tools the model can call.** **Web search** through your own **SearXNG**, **read a page**, **weather**, **time**, **make a file**, your own **connected apps** through your own **Composio** key, and any **MCP servers** you add.
+- **Images.** **fal.ai**'s live catalogue, each endpoint with its **published price**, prompts written by the model, **progress** while it draws, and a **gallery** in the sidebar of everything you have sent or drawn.
+- **Made for a desktop.** A **small window** that **remembers its size**, **starts with Windows** if you want, **stays above** other windows, and **tucks itself away** 30 seconds after you leave it, unless an answer is still arriving.
+- **Local-first.** **No telemetry** and no backend. Every conversation lives in **one JSON file** you can open, back up or hand-edit.
+- **Small enough to read.** A few thousand lines of **TypeScript** and **CommonJS**, and a **self-test** that drives the **real window** instead of a mock.
 
 ## Install
 
-There is no prebuilt binary published yet, so build it:
+There is **no prebuilt binary** published yet, so build it:
 
 ```bash
 git clone git@github.com:mesfeir/workburo.git
@@ -60,15 +63,15 @@ npm install
 npm run dist     # -> release/WorkBuro-Setup-<version>.exe
 ```
 
-`npm run dist` makes an NSIS installer and a portable `.exe`. The installer is unsigned, so SmartScreen will say "unknown publisher" until it is signed.
+`npm run dist` makes an **NSIS installer** and a **portable .exe**. The installer is **unsigned**, so **SmartScreen** will say "unknown publisher" until it is signed.
 
 ## First run
 
-1. Open **Settings** (the gear, bottom-left, or `Ctrl+,`) and go to the connection tab.
-2. No key yet? The first thing on that tab offers to run a small model on this machine. 429 MB, one download, and it answers from then on with no account.
-3. Have a key? Pick a preset, or paste a base URL such as `https://opencode.ai/zen/go/v1`, paste your key, and press **Test connection**. The model list loads on success.
-4. In **Models**, press the lightning button on the models you care about so their real abilities are written down.
-5. For pictures, paste a [fal.ai](https://fal.ai/dashboard/keys) key in **Settings → Images**. That is the whole setup.
+1. Open **Settings** (the gear, bottom-left, or **Ctrl+,**) and go to the **connection tab**.
+2. **No key yet?** The first thing on that tab offers to run a **small model on this machine**. **429 MB**, one download, and it answers from then on with **no account**.
+3. **Have a key?** Pick a **preset**, or paste a **base URL** such as `https://opencode.ai/zen/go/v1`, paste your **key**, and press **Test connection**. The model list loads on success.
+4. In **Models**, press the **lightning button** on the models you care about so their **real abilities** are written down.
+5. For pictures, paste a **[fal.ai](https://fal.ai/dashboard/keys)** key in **Settings → Images**. That is the whole setup.
 
 ![WorkBuro settings, showing endpoint presets, the base URL and a masked API key field](docs/screenshots/readme-settings.png)
 
@@ -76,22 +79,22 @@ npm run dist     # -> release/WorkBuro-Setup-<version>.exe
 
 | Key | Action |
 |---|---|
-| *your summon shortcut* | Show or hide WorkBuro from anywhere in Windows (default `Alt+Space`) |
-| `Ctrl+N` | New chat |
-| `Ctrl+B` | Toggle sidebar |
-| `Ctrl+K` | Search chats |
-| `Ctrl+,` | Settings |
-| `Enter` / `Shift+Enter` | Send / newline |
-| `Esc` | Close the sidebar drawer, or stop generating |
+| *your summon shortcut* | Show or hide WorkBuro from anywhere in Windows (default **Alt+Space**) |
+| **Ctrl+N** | New chat |
+| **Ctrl+B** | Toggle sidebar |
+| **Ctrl+K** | Search chats |
+| **Ctrl+,** | Settings |
+| **Enter** / **Shift+Enter** | Send / newline |
+| **Esc** | Close the sidebar drawer, or stop generating |
 
-If `Alt+Space` is already taken, which happens on plenty of machines, WorkBuro walks a fallback list and shows an amber banner naming the key that is live. It never fails silently, and it never leaves you unable to reach the window.
+If **Alt+Space** is already taken, which happens on plenty of machines, WorkBuro walks a **fallback list** and shows an **amber banner** naming the key that is live. It never fails silently, and it never leaves you unable to reach the window.
 
 ## Privacy
 
-- **No telemetry, no analytics, no backend.** There is nothing to phone home to.
-- **Your key stays on your machine.** It is held in the main process and leaves only as an `Authorization` header to the endpoint you configured. It is never exposed to the page.
-- **Prompts go to your endpoint**, plus your search endpoint and Open-Meteo if you switch those tools on. Nothing else is contacted.
-- **One honest caveat.** The key is stored in plain text in the app's own JSON file at `%APPDATA%\WorkBuro\zen-chat-store.json`. That is a trade for transparency and hand-editability, and it is worth knowing before you file a security issue. Encrypting it with Windows DPAPI is on the list.
+- **No telemetry**, no analytics, no backend. There is nothing to phone home to.
+- **Your key stays on your machine.** It is held in the **main process** and leaves only as an **Authorization header** to the endpoint you configured. It is never exposed to the page.
+- **Prompts go to your endpoint**, plus your **search endpoint** and **Open-Meteo** if you switch those tools on. Nothing else is contacted.
+- **One honest caveat.** The key is stored in **plain text** in the app's own JSON file at **%APPDATA%\WorkBuro\zen-chat-store.json**. That is a trade for transparency and hand-editability, and it is worth knowing before you file a security issue. Encrypting it with **Windows DPAPI** is on the list.
 
 ## Build from source
 
@@ -103,24 +106,24 @@ npm run dist     # full Windows installer and portable exe into release/
 npm test         # the offline suites, including the local model
 ```
 
-There is also an end-to-end harness that drives the real window: typing into the real composer, attaching a real document, switching models, reloading the app, and asserting on what actually rendered. The key goes in the environment, never on a command line where another process could read it.
+There is also an **end-to-end harness** that drives the **real window**: typing into the real composer, attaching a real document, switching models, reloading the app, and asserting on what actually rendered. The key goes in the **environment**, never on a command line where another process could read it.
 
 ## Known limitations
 
-- **The installer is unsigned.** SmartScreen will warn until it is signed.
+- **The installer is unsigned.** **SmartScreen** will warn until it is signed.
 - **Windows only.** The code is written cross-platform, but it is only packaged and tested on Windows.
-- **Image generation is hosted.** It needs a fal.ai key, and your prompts leave the machine when you use it. Local generation was measured on real hardware and the numbers are in [`docs/image-generation.md`](docs/image-generation.md), but it is not wired in yet.
-- **MCP servers are stdio only.** A server is a program run on this machine. Servers reachable only over HTTP are not supported yet.
-- **A very small model is a demo, not a worker.** The 429 MB model that answers in about a second is good for a question and a reply. It is not the model to hand shell tools to.
+- **Image generation is hosted.** It needs a **fal.ai** key, and your prompts leave the machine when you use it. Local generation was measured on real hardware and the numbers are in [`docs/image-generation.md`](docs/image-generation.md), but it is not wired in yet.
+- **MCP servers are stdio only.** A server is a program run on this machine. Servers reachable only over **HTTP** are not supported yet.
+- **A very small model is a demo, not a worker.** The **429 MB** model that answers in about a second is good for a question and a reply. It is not the model to hand **shell tools** to.
 
 ## Contributing
 
 Issues and pull requests are welcome. Two rules this project holds itself to:
 
-1. **Never fake a capability.** If it does not work yet, disable it and label it. Never stub something so it looks finished.
-2. **Never silently degrade.** If a fallback kicks in, say so in the UI.
+1. **Never fake a capability.** If it does not work yet, **disable it and label it**. Never stub something so it looks finished.
+2. **Never silently degrade.** If a fallback kicks in, **say so in the UI**.
 
-Run `npm run build`, which type-checks, before opening a pull request. And never commit a key: `scripts/check-secrets.cjs` scans the tree for key-shaped literals and can install itself as a pre-commit hook.
+Run `npm run build`, which type-checks, before opening a pull request. And never commit a key: `scripts/check-secrets.cjs` scans the tree for **key-shaped literals** and can install itself as a **pre-commit hook**.
 
 ## Licence
 
