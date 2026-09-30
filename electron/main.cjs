@@ -212,10 +212,8 @@ function readStore() {
     // Only a real Windows path is touched: an id like meta-llama/Llama-3-8B has a slash and is
     // perfectly normal, and must be left alone.
     const stored = String(cfg.model || '')
-    if (/^[a-zA-Z]:[\\/]/.test(stored) || stored.startsWith('\\\\')) {
-      const tidy = (stored.split(/[\\/]/).pop() || '').replace(/\.gguf$/i, '')
-      if (tidy) cfg.model = tidy
-    }
+    const tidied = localModel.tidyModelId(stored)
+    if (tidied !== stored) cfg.model = tidied
     return restoreInlineImages({
       config: cfg,
       conversations: Array.isArray(parsed.conversations) ? parsed.conversations : [],

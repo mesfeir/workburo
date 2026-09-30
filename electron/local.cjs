@@ -96,6 +96,22 @@ function entryFor (id = DEFAULT_MODEL) {
   return CATALOGUE.find((m) => m.id === id) || CATALOGUE[0]
 }
 
+/**
+ * A model id that is a path on disk is a leftover: llama.cpp used to report its model as the full
+ * path, and the app saved that path as the selection, so the model control showed a filesystem path
+ * and the server's own name never matched it in the list.
+ *
+ * Only a real Windows path is touched. `meta-llama/Llama-3-8B` has a slash and is an ordinary model
+ * id; tidying that would break a working setup, which is a far worse outcome than a long label.
+ */
+function tidyModelId (id) {
+  const s = String(id || '')
+  const isWindowsPath = /^[a-zA-Z]:[\\/]/.test(s) || s.startsWith('\\\\')
+  if (!isWindowsPath) return s
+  const base = s.split(/[\\/]/).pop() || ''
+  return base.replace(/\.gguf$/i, '') || s
+}
+
 /** "429 MB" rather than 428970080, because that is what a person is deciding about. */
 function humanSize (bytes) {
   const mb = Number(bytes || 0) / 1e6
@@ -405,6 +421,7 @@ module.exports = {
   modelPath,
   entryFor,
   humanSize,
+  tidyModelId,
   status,
   sha256File,
   download,

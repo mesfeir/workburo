@@ -280,6 +280,28 @@ function stubFetch (body, { status = 200, headers = {} } = {}) {
     return true
   })
 
+  check('18b. a saved model path becomes a name, and a normal id is left alone', () => {
+    // What a real store held: the local server reported the path, and the app saved it.
+    assert.strictEqual(
+      local.tidyModelId('C:\\Users\\Mel\\AppData\\Roaming\\WorkBuro\\local\\models\\Qwen3-0.6B-Q4_0.gguf'),
+      'Qwen3-0.6B-Q4_0',
+    )
+    assert.strictEqual(local.tidyModelId('C:/models/x.gguf'), 'x')
+    assert.strictEqual(local.tidyModelId('\\\\server\\share\\m.gguf'), 'm')
+    // These must not be touched: a slash is not a path, and an id is not a file.
+    for (const id of [
+      'meta-llama/Llama-3-8B',
+      'deepseek-v4.1-flash',
+      'fal-ai/flux-2/klein/9b',
+      'Qwen3-0.6B-Q4_0',
+      '',
+      'nvidia/nemotron-3-super-120b-a12b:free',
+    ]) {
+      assert.strictEqual(local.tidyModelId(id), id, `${id} was changed and should not have been`)
+    }
+    return true
+  })
+
   // ---------------------------------------------------------------- the real thing
 
   const seed = process.env.ZEN_LOCAL_SEED
