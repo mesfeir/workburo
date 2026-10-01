@@ -693,6 +693,7 @@ async function runAgentTurn (req) {
     falKey: (cfg.imageGen || {}).falKey || '',
     imagesDir: imagesDir(),
     imageModel: (cfg.imageGen || {}).model || '',
+    imageEditModel: (cfg.imageGen || {}).editModel || '',
     timeoutMs: 15 * 60 * 1000,
     onEvent: ev => {
       const mapped = agentEventFor(requestId, ev)

@@ -590,6 +590,7 @@ function runTurn (opts) {
       WORKBURO_FAL_KEY: opts.falKey || '',
       WORKBURO_IMAGES_DIR: opts.imagesDir || '',
       WORKBURO_IMAGE_MODEL: opts.imageModel || '',
+      WORKBURO_IMAGE_EDIT_MODEL: opts.imageEditModel || '',
       WORKBURO_WORKSPACE: opts.workspace || ''
     }
   })

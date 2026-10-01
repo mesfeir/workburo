@@ -17,6 +17,7 @@ const QUEUE = process.env.WORKBURO_FAL_QUEUE || 'https://queue.fal.run'
 const SCHEMA = process.env.WORKBURO_FAL_SCHEMA || 'https://fal.ai/api/openapi/queue/openapi.json'
 const KEY = process.env.WORKBURO_FAL_KEY || ''
 const MODEL = process.env.WORKBURO_IMAGE_MODEL || 'fal-ai/flux-2/klein/9b'
+const EDIT_MODEL = process.env.WORKBURO_IMAGE_EDIT_MODEL || MODEL
 const IMAGES = process.env.WORKBURO_IMAGES_DIR || ''
 const WORKSPACE = process.env.WORKBURO_WORKSPACE || ''
 
@@ -46,35 +47,40 @@ const IMAGE_INPUT_KEYS = [
 const MAX_REFERENCE_BYTES = 8 * 1024 * 1024
 
 /**
- * Which of the model's own parameters takes the reference picture, if any. The app does this the same
- * way, from fal's OpenAPI schema, so `image_url` is only sent to a model that declares it instead of
- * guessing and eating a 422. Reading a public schema needs no key.
+ * Which of the model's own parameters takes the reference picture, if any. The app decides this the
+ * same way, from fal's OpenAPI schema, so `image_url` is only sent to a model that declares it
+ * instead of guessing and eating a 422. Reading a public schema needs no key.
+ *
+ * This mirrors electron/images.cjs rather than importing it on purpose: the app runs from an asar
+ * archive, and a separate process cannot load a module out of one.
  */
-async function imageParamFor (model) {
+async function schemaPropsFor (model) {
   try {
     const res = await fetch(`${SCHEMA}?endpoint_id=${encodeURIComponent(model)}`)
     if (!res.ok) return null
     const doc = await res.json()
     const comps = doc.components?.schemas || {}
-    let props = null
     for (const [name, schema] of Object.entries(comps)) {
-      if (/Input$/.test(name) && schema?.properties) {
-        props = schema.properties
-        break
-      }
+      if (/Input$/.test(name) && schema?.properties) return schema.properties
     }
-    if (!props) return null
-    for (const key of IMAGE_INPUT_KEYS) {
-      if (props[key]) return { key, isArray: props[key].type === 'array' || Boolean(props[key].items) }
-    }
-    const match = Object.keys(props).find(
-      (k) => /(^|_)images?(_|$)/.test(k) && !/num|count|size|format|strength|checker|per/.test(k)
-    )
-    if (match) return { key: match, isArray: props[match]?.type === 'array' || Boolean(props[match]?.items) }
     return null
   } catch {
     return null
   }
+}
+
+function imageParamFor (props) {
+  for (const key of IMAGE_INPUT_KEYS) {
+    const prop = props?.[key]
+    if (!prop) continue
+    return { key, isArray: prop.type === 'array' || Boolean(prop.items) }
+  }
+  const match = Object.keys(props || {}).find(
+    (k) => /(^|_)images?(_|$)/.test(k) && !/num|count|size|format|strength|checker|per/.test(k)
+  )
+  if (!match) return null
+  const prop = props[match]
+  return { key: match, isArray: prop?.type === 'array' || Boolean(prop?.items) }
 }
 
 async function json (url, init) {
@@ -88,8 +94,18 @@ async function json (url, init) {
   }
 }
 
+/** the extension a result should be saved with, from what fal says it is */
+function extFor (contentType, url) {
+  const ct = String(contentType || '').toLowerCase()
+  if (ct.includes('png')) return 'png'
+  if (ct.includes('webp')) return 'webp'
+  if (ct.includes('jpeg') || ct.includes('jpg')) return 'jpg'
+  const m = /\.(png|jpe?g|webp)/i.exec(String(url || ''))
+  return m ? m[1].toLowerCase().replace('jpeg', 'jpg') : 'png'
+}
+
 /** a name that says what the picture is, and stays a name a file system can hold */
-function nameFor (prompt, index, total) {
+function nameFor (prompt, index, total, ext) {
   const words = String(prompt || '')
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, ' ')
@@ -99,7 +115,7 @@ function nameFor (prompt, index, total) {
     .join('-')
     .slice(0, 48)
   const tail = total > 1 ? `-${index + 1}` : ''
-  return `${words || 'picture'}-${Date.now()}${tail}.png`
+  return `${words || 'picture'}-${Date.now()}${tail}.${ext || 'png'}`
 }
 
 export default function (pi) {
@@ -145,12 +161,16 @@ export default function (pi) {
         }
       }
 
-      const count = Math.max(1, Math.min(Math.round(Number(params.count) || 1), 4))
-      const body = {
-        prompt: params.prompt,
-        num_images: count,
-        image_size: SIZES[params.size] || SIZES.square_hd
-      }
+      const model = params.image_path ? EDIT_MODEL || MODEL : MODEL
+      const props = (await schemaPropsFor(model)) || {}
+      const max = Number(props.num_images?.maximum) || 4
+      const count = Math.max(1, Math.min(Math.round(Number(params.count) || 1), max))
+      const body = { prompt: params.prompt }
+      // Send the classic fields when the schema says the model takes them, or when it could not be
+      // read at all. Never invent a field a model has not declared: that is a 422, not a picture.
+      const declared = Object.keys(props).length > 0
+      if (props.num_images || !declared) body.num_images = count
+      if (props.image_size || !declared) body.image_size = SIZES[params.size] || SIZES.square_hd
 
       if (params.image_path) {
         const fs = await import('node:fs')
@@ -170,27 +190,32 @@ export default function (pi) {
         }
         const ext = path.extname(abs).slice(1).toLowerCase()
         const mime = ext === 'png' ? 'png' : ext === 'webp' ? 'webp' : ext === 'gif' ? 'gif' : 'jpeg'
-        const param = await imageParamFor(MODEL)
+        const param = imageParamFor(props)
         if (!param) {
           throw new Error(
-            `${MODEL} cannot take a picture to change. Ask for the change in words, or choose an image model in settings that accepts a reference.`
+            `${model} cannot take a picture to change. Ask for the change in words, or set an edit model in settings.`
           )
         }
         const uri = `data:image/${mime};base64,${buf.toString('base64')}`
         body[param.key] = param.isArray ? [uri] : uri
-        onUpdate?.({ content: [{ type: 'text', text: `Changing ${path.basename(abs)}…` }] })
+        // FLUX-style image-to-image re-draws from the prompt and only guides itself with the
+        // reference; at fal's default the picture you sent comes back looking like a new one drawn
+        // from your words, which is exactly what "it ignored my image" means. Instruction editors
+        // such as nano-banana have no strength and need none.
+        if (props.strength) body.strength = 0.85
+        onUpdate?.({ content: [{ type: 'text', text: `Changing ${path.basename(abs)} with ${model}…` }] })
       } else {
         onUpdate?.({ content: [{ type: 'text', text: 'Asking fal.ai for the picture…' }] })
       }
 
-      const submit = await json(`${QUEUE}/${MODEL}`, {
+      const submit = await json(`${QUEUE}/${model}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Key ${KEY}` },
         body: JSON.stringify(body)
       })
 
-      const statusUrl = submit.status_url || `${QUEUE}/${MODEL}/requests/${submit.request_id}/status`
-      const responseUrl = submit.response_url || `${QUEUE}/${MODEL}/requests/${submit.request_id}`
+      const statusUrl = submit.status_url || `${QUEUE}/${model}/requests/${submit.request_id}/status`
+      const responseUrl = submit.response_url || `${QUEUE}/${model}/requests/${submit.request_id}`
       if (!submit.request_id) {
         throw new Error(`fal.ai did not accept the request: ${JSON.stringify(submit).slice(0, 200)}`)
       }
@@ -218,8 +243,12 @@ export default function (pi) {
       const path = await import('node:path')
       const written = []
       for (let i = 0; i < came.length; i++) {
-        const bytes = Buffer.from(await (await fetch(came[i].url)).arrayBuffer())
-        const file = nameFor(params.prompt, i, came.length)
+        // an instruction editor answers with a jpeg, and naming that ".png" is a lie the viewer has
+        // to guess its way out of, so the extension comes from what fal says it sent
+        const res = await fetch(came[i].url)
+        const bytes = Buffer.from(await res.arrayBuffer())
+        const ext = extFor(came[i].content_type || res.headers?.get?.('content-type'), came[i].url)
+        const file = nameFor(params.prompt, i, came.length, ext)
         for (const dir of [IMAGES, WORKSPACE].filter(Boolean)) {
           try {
             fs.mkdirSync(dir, { recursive: true })
@@ -232,6 +261,9 @@ export default function (pi) {
         }
       }
       if (!written.length) throw new Error('The picture came back but could not be saved anywhere.')
+
+      const first = came[0]
+      const list = written.map((w) => `- ${w}`).join('\n')
       return {
         content: [
           {
