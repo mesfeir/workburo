@@ -37,10 +37,16 @@ const cfg = {
   ],
 }
 
-check('1. the endpoint in use is asked first, and named as such', () => {
+check('1. the endpoint in use is headed with the provider it came from', () => {
   const s = sources.sourcesFor(cfg, 0)
-  assert.strictEqual(s[0].provider, 'In use')
+  assert.strictEqual(s[0].provider, 'OpenCode Zen (Go)')
   assert.strictEqual(s[0].baseUrl, 'https://opencode.ai/zen/go/v1')
+})
+
+check('1b. an endpoint that matches no profile is still named, not left blank', () => {
+  const s = sources.sourcesFor({ baseUrl: 'https://api.mystery.example/v1' }, 0)
+  assert.strictEqual(s.length, 1)
+  assert.strictEqual(s[0].provider, 'This endpoint')
 })
 
 check('2. a profile repeating the endpoint in use is not asked twice', () => {
@@ -69,6 +75,11 @@ check('5. the local server is asked when it is running, and not when it is not',
   const local = sources.sourcesFor(cfg, 8080).find((x) => x.provider === 'On this machine')
   assert.ok(local, 'the running local server was not asked')
   assert.strictEqual(local.baseUrl, 'http://127.0.0.1:8080/v1')
+})
+
+check('5b. the same profile is not listed twice when it is the one in use', () => {
+  const names = sources.sourcesFor(cfg, 0).map((x) => x.provider)
+  assert.strictEqual(names.filter((n) => n === 'OpenCode Zen (Go)').length, 1, names.join(','))
 })
 
 check('6. the local server is asked with no key, because it has none', () => {

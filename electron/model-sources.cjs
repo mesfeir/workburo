@@ -19,14 +19,19 @@ function normalize (url) {
 function sourcesFor (cfg, localPort) {
   const out = []
   const seen = new Set()
+  const profiles = (cfg && cfg.profiles) || []
+  // The endpoint in use is headed with the profile it came from, so the list reads like the
+  // providers a person recognises instead of saying "In use" above something already selected.
+  const current = normalize(cfg && cfg.baseUrl)
+  const match = profiles.find((p) => p && normalize(p.baseUrl) === current && current)
   const add = (provider, baseUrl, key) => {
     const norm = normalize(baseUrl)
     if (!norm || seen.has(norm)) return
     seen.add(norm)
     out.push({ provider: String(provider || '').trim() || 'Endpoint', baseUrl: norm, key: key || '' })
   }
-  add('In use', cfg && cfg.baseUrl, cfg && cfg.apiKey)
-  for (const p of (cfg && cfg.profiles) || []) add(p && p.name, p && p.baseUrl, cfg && cfg.apiKey)
+  add(match ? match.name : 'This endpoint', cfg && cfg.baseUrl, cfg && cfg.apiKey)
+  for (const p of profiles) add(p && p.name, p && p.baseUrl, cfg && cfg.apiKey)
   if (localPort) add('On this machine', `http://127.0.0.1:${localPort}/v1`, '')
   return out
 }
