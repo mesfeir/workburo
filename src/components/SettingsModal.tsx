@@ -212,22 +212,22 @@ export default function SettingsModal({
     {
       id: 'searxng',
       title: 'Your own search service',
-      body: 'A SearXNG instance you run. Searches the whole web, with no key and no query limit.',
+      body: 'A SearXNG instance you run. The whole web, no key, no query limit.',
     },
     {
       id: 'key',
       title: 'A search API key',
-      body: 'Brave or Tavily. Real web results without running anything yourself.',
+      body: 'Brave or Tavily. The whole web, without running anything yourself.',
     },
     {
       id: 'provider',
       title: "The model provider's own search",
-      body: 'Nothing to set up. Used where your provider offers search; the reference sources answer otherwise.',
+      body: 'Nothing to set up. Used where your provider has search.',
     },
     {
       id: 'reference',
       title: 'Reference sources only',
-      body: 'Wikipedia, Stack Overflow, Hacker News and Open Library. No setup and no key, but they are reference material rather than the whole web.',
+      body: 'Wikipedia, Stack Overflow, Hacker News, Open Library. Reference material, not the whole web.',
     },
   ] as const
 
@@ -1558,7 +1558,7 @@ export default function SettingsModal({
 
                 <Field
                   label="Search"
-                  hint="Three ways to search, and reference sources underneath all of them. Whatever you choose falls back to those when it is not available, and the answer always says which source it came from."
+                  hint="Three ways to search. Each falls back to the reference sources when it is not available, and the answer always says which source it came from."
                 >
                   <div className="space-y-3">
                     <div className="space-y-2.5">
