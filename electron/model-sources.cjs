@@ -54,16 +54,34 @@ function sourcesFor (cfg, localPort) {
   const current = normalize(cfg && cfg.baseUrl)
   const match = profiles.find((p) => p && normalize(p.baseUrl) === current && current)
   const host = current ? current.replace(/^https?:\/\//i, '').replace(/\/.*$/, '') : ''
+  const localUrl = localPort ? normalize(`http://127.0.0.1:${localPort}/v1`) : ''
+  // A model list you cannot use is not a choice. A provider appears only once it has a key of its
+  // own: OpenRouter and the OpenCode relay both hand out a catalogue to anyone who asks, so
+  // listing them before a key exists filled the picker with models that could only ever fail. A
+  // server on this machine is the exception, because it has no key to give and needs none.
+  const onThisMachine = (url) => {
+    const n = normalize(url)
+    if (!n) return false
+    if (localUrl && n === localUrl) return true
+    return /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/i.test(n)
+  }
   const add = (provider, baseUrl, key) => {
     const norm = normalize(baseUrl)
     if (!norm || seen.has(norm)) return
     seen.add(norm)
     out.push({ provider: String(provider || '').trim() || 'Endpoint', baseUrl: norm, key: key || '' })
   }
-  add(match ? match.name : host, cfg && cfg.baseUrl, keyFor(cfg))
-  // Each provider is asked with its own key when it has one. That is the whole point of keeping a
-  // key per profile: a second paid provider cannot list its models off someone else's key.
-  for (const p of profiles) add(p && p.name, p && p.baseUrl, (p && p.apiKey) || (cfg && cfg.apiKey))
+  if (!match && current && !onThisMachine(current)) {
+    // the endpoint in use with no profile behind it: it still needs a key to be worth listing
+    const key = keyFor(cfg)
+    if (key) add(host, cfg && cfg.baseUrl, key)
+  }
+  // Each provider is asked with its own key, and only when it has one. A second paid provider
+  // cannot list its models off someone else's key, so the app's own key is not a substitute.
+  for (const p of profiles) {
+    const key = String((p && p.apiKey) || '').trim()
+    if (key || onThisMachine(p && p.baseUrl)) add(p && p.name, p && p.baseUrl, key)
+  }
   if (localPort) add('On this machine', `http://127.0.0.1:${localPort}/v1`, '')
   return out
 }

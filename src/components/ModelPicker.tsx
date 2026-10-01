@@ -5,7 +5,7 @@ import type { Config, ModelGroup, ModelInfo } from '../types'
 /**
  * The model chooser. Every model this machine can actually reach, grouped under the provider it
  * came from, with one search box that spans all of them. Nothing is pre-selected: until you pick,
- * it says so in italics rather than showing a name you never agreed to.
+ * it says so rather than showing a name you never agreed to.
  */
 export default function ModelPicker({
   models,
@@ -58,14 +58,14 @@ export default function ModelPicker({
     <div className="relative no-drag" ref={box}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[15px] font-medium transition hover:bg-[var(--raised-2)]"
+        className="flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1.5 text-[13.5px] transition hover:bg-[var(--raised-2)]"
       >
         {current ? (
           <span className="max-w-[280px] truncate text-[var(--text-mid)]">{current}</span>
         ) : (
-          <span className="text-faint italic">Select a model</span>
+          <span className="text-faint">Select a model</span>
         )}
-        <ChevronDown size={15} className="text-faint" />
+        <ChevronDown size={14} className="text-faint" />
       </button>
 
       {open && (
@@ -92,9 +92,14 @@ export default function ModelPicker({
             {total === 0 && (
               <div className="px-3 py-3 text-[13px] text-faint">
                 {models.length === 0 ? (
-                  <button onClick={onConfigure} className="text-[var(--accent-bright)] hover:underline">
-                    No models loaded. Open Settings to test your API
-                  </button>
+                  // An empty list has a reason, and saying it is the difference between a feature
+                  // that is waiting for a key and one that looks broken.
+                  <span>
+                    No models yet. A provider appears here once it has an API key.{' '}
+                    <button onClick={onConfigure} className="text-[var(--accent-bright)] hover:underline">
+                      Open Settings
+                    </button>
+                  </span>
                 ) : (
                   'No match.'
                 )}

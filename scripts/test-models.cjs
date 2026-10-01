@@ -29,10 +29,10 @@ function check (name, fn) {
 
 const cfg = {
   baseUrl: 'https://opencode.ai/zen/go/v1',
-  apiKey: 'placeholder-key',
+  apiKey: 'app-key-not-a-real-one',
   profiles: [
-    { name: 'OpenCode Zen (Go)', baseUrl: 'https://opencode.ai/zen/go/v1' },
-    { name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1' },
+    { name: 'OpenCode Zen (Go)', baseUrl: 'https://opencode.ai/zen/go/v1', apiKey: 'oc-key' },
+    { name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', apiKey: 'or-key' },
     { name: 'LM Studio (local)', baseUrl: 'http://127.0.0.1:1234/v1' },
   ],
 }
@@ -44,7 +44,7 @@ check('1. the endpoint in use is headed with the provider it came from', () => {
 })
 
 check('1b. an endpoint that matches no profile is named by its host, not left blank', () => {
-  const s = sources.sourcesFor({ baseUrl: 'https://api.mystery.example/v1' }, 0)
+  const s = sources.sourcesFor({ baseUrl: 'https://api.mystery.example/v1', apiKey: 'mystery-key' }, 0)
   assert.strictEqual(s.length, 1)
   assert.strictEqual(s[0].provider, 'api.mystery.example')
 })
@@ -63,7 +63,11 @@ check('3. every other saved profile is asked', () => {
 
 check('4. a trailing slash does not make a second entry for the same place', () => {
   const s = sources.sourcesFor(
-    { baseUrl: 'https://openrouter.ai/api/v1', profiles: [{ name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1/' }] },
+    {
+      baseUrl: 'https://openrouter.ai/api/v1',
+      apiKey: 'or-key',
+      profiles: [{ name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1/', apiKey: 'or-key' }],
+    },
     0,
   )
   assert.strictEqual(s.length, 1, JSON.stringify(s))
@@ -132,12 +136,39 @@ check('12. a provider with its own key is asked with that key', () => {
   assert.strictEqual(s.find((x) => x.provider === 'B').key, 'b-key')
 })
 
-check('13. a provider with no key of its own falls back to the main key', () => {
+check('13. a hosted provider with no key of its own is not listed, and the app key is no substitute', () => {
   const s = sources.sourcesFor(
     { baseUrl: 'https://a.example/v1', apiKey: 'app-key', profiles: [{ name: 'B', baseUrl: 'https://b.example/v1' }] },
     0,
   )
-  assert.strictEqual(s.find((x) => x.provider === 'B').key, 'app-key')
+  assert.ok(!s.some((x) => x.provider === 'B'), 'a provider with no key was listed anyway')
+})
+
+check('13b. a server on this machine is listed with no key, because it needs none', () => {
+  const s = sources.sourcesFor({
+    baseUrl: 'http://127.0.0.1:1234/v1',
+    profiles: [
+      { name: 'LM Studio (local)', baseUrl: 'http://127.0.0.1:1234/v1' },
+      { name: 'Ollama (local)', baseUrl: 'http://localhost:11434/v1' },
+      { name: 'Hosted', baseUrl: 'https://c.example/v1' },
+    ],
+  }, 0)
+  const names = s.map((x) => x.provider)
+  assert.ok(names.includes('LM Studio (local)'), names.join(','))
+  assert.ok(names.includes('Ollama (local)'), names.join(','))
+  assert.ok(!names.includes('Hosted'), names.join(','))
+  assert.strictEqual(s.find((x) => x.provider === 'LM Studio (local)').key, '')
+})
+
+check('13c. nothing is listed at all until a key exists', () => {
+  const s = sources.sourcesFor({
+    baseUrl: 'https://opencode.ai/zen/go/v1',
+    profiles: [
+      { name: 'OpenCode Zen (Go)', baseUrl: 'https://opencode.ai/zen/go/v1' },
+      { name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1' },
+    ],
+  }, 0)
+  assert.deepStrictEqual(s, [], JSON.stringify(s))
 })
 
 check('14. the endpoint in use uses its own profile key, not the main one', () => {

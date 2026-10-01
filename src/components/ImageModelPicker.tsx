@@ -117,16 +117,20 @@ export default function ImageModelPicker({
   const short = (id: string) => id.replace(/^fal-ai\//, '')
   const priceOf = (id: string) => prices[id]?.text || ''
 
+  // Nothing at all until there is a key: an image model you cannot use is not a choice, and a
+  // control that is always there asking for a key is noise in a bar this small.
+  if (!key) return null
+
   if (!enabled) {
     return (
       <button
         onClick={onConfigure}
         data-image-model-off
         title="Image generation is switched off — turn it on in Settings → Images"
-        className="flex cursor-default items-center gap-1.5 rounded-lg px-2 py-1.5 text-[15px] text-[var(--text-faint)]"
+        className="flex cursor-default items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1.5 text-[13.5px] text-[var(--text-faint)]"
       >
-        <ImageIcon size={15} />
-        <span>No image model</span>
+        <ImageIcon size={14} />
+        <span>Images off</span>
       </button>
     )
   }
@@ -141,16 +145,16 @@ export default function ImageModelPicker({
             ? `Image model: ${current}${priceOf(current) ? ` · ${priceOf(current)}` : ''}`
             : 'Choose the model that draws pictures'
         }
-        className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[15px] text-[var(--text-mid)] transition hover:bg-[var(--raised-2)]"
+        className="flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1.5 text-[13.5px] text-[var(--text-mid)] transition hover:bg-[var(--raised-2)]"
       >
-        <ImageIcon size={15} className="shrink-0 text-faint" />
+        <ImageIcon size={14} className="shrink-0 text-faint" />
         <span className="max-w-[210px] truncate">{current ? short(current) : 'Choose image model'}</span>
         {current && priceOf(current) ? (
-          <span data-image-model-price className="shrink-0 text-[11.5px] text-faint">
+          <span data-image-model-price className="shrink-0 text-[11px] text-faint">
             {priceOf(current)}
           </span>
         ) : null}
-        <ChevronDown size={15} className="shrink-0 text-faint" />
+        <ChevronDown size={14} className="shrink-0 text-faint" />
       </button>
 
       {open && (
@@ -175,30 +179,39 @@ export default function ImageModelPicker({
                 {loading ? 'Loading fal’s catalogue…' : 'No image models matched.'}
               </div>
             ) : (
-              list.map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => {
-                    onChange(m.id)
-                    setOpen(false)
-                  }}
-                  className="flex w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-[var(--raised)]"
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13.5px] text-ink">{short(m.id)}</span>
-                    {m.name !== m.id ? (
-                      <span className="block truncate text-[11.5px] text-faint">{m.name}</span>
-                    ) : null}
-                  </span>
-                  <span
-                    data-price={priceOf(m.id) ? 'yes' : 'no'}
-                    className="shrink-0 text-right text-[11.5px] text-faint tabular-nums"
+              <>
+                {/* One heading per provider, the same shape the chat model list uses. fal.ai is the
+                    only one today; grouping now means a second provider is a new entry in a list
+                    rather than a rewrite of the rows. */}
+                <div className="px-3 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-faint">
+                  fal.ai
+                  <span className="ml-1.5 font-normal normal-case tracking-normal opacity-60">{list.length}</span>
+                </div>
+                {list.map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => {
+                      onChange(m.id)
+                      setOpen(false)
+                    }}
+                    className="flex w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-[var(--raised)]"
                   >
-                    {priceOf(m.id) || 'no published price'}
-                  </span>
-                  {m.id === current ? <span className="shrink-0 text-[11.5px] text-accent">current</span> : null}
-                </button>
-              ))
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13.5px] text-ink">{short(m.id)}</span>
+                      {m.name !== m.id ? (
+                        <span className="block truncate text-[11px] text-faint">{m.name}</span>
+                      ) : null}
+                    </span>
+                    <span
+                      data-price={priceOf(m.id) ? 'yes' : 'no'}
+                      className="shrink-0 text-right text-[11px] text-faint tabular-nums"
+                    >
+                      {priceOf(m.id) || 'no published price'}
+                    </span>
+                    {m.id === current ? <span className="shrink-0 text-[11px] text-accent">current</span> : null}
+                  </button>
+                ))}
+              </>
             )}
           </div>
 
