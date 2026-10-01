@@ -23,6 +23,7 @@ const os = require('node:os')
 const path = require('node:path')
 
 const local = require('../electron/local.cjs')
+const piModule = require('../electron/pi.cjs')
 
 let passed = 0
 const failures = []
@@ -401,6 +402,29 @@ function stubFetch (body, { status = 200, headers = {} } = {}) {
   } else {
     console.log('\n=== the real thing was skipped (set ZEN_LOCAL_SEED to run it) ===')
   }
+
+  await checkAsync('a downloaded program is made runnable before anything tries to run it', async () => {
+    // A .zip carries no permission bits at all and a .tar.gz only restores the modes it was built
+    // with, so an unpacked program can arrive with no execute bit. Spawning that fails with EACCES:
+    // on a Mac it was reported as "could not start Pi: spawn .../pi EACCES", and the same cause in
+    // the local runtime surfaced as "the runtime would not run", which sends you after the wrong bug
+    // entirely. There is no execute bit on Windows, so there this only proves the call is harmless.
+    assert.strictEqual(typeof local.makeExecutable, 'function', 'the local installer does not expose one')
+    assert.strictEqual(typeof piModule.makeExecutable, 'function', 'the Pi installer does not expose one')
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zen-exec-'))
+    const file = path.join(dir, 'prog')
+    fs.writeFileSync(file, '#!/bin/sh\necho ok\n')
+    fs.chmodSync(file, 0o644)
+    const before = fs.statSync(file).mode & 0o777
+    local.makeExecutable(file)
+    const after = fs.statSync(file).mode & 0o777
+    if (process.platform !== 'win32') {
+      assert.strictEqual(before.toString(8), '644', 'the fixture was not what this check assumes')
+      assert.strictEqual((after & 0o111).toString(8), '111', `still not executable: ${after.toString(8)}`)
+    }
+    assert.ok(fs.existsSync(file), 'the file went missing')
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
 
   console.log(`\n=== summary ===`)
   console.log(`  ${passed} passed, ${failures.length} failed`)

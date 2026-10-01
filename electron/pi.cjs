@@ -393,6 +393,23 @@ async function extract (file, dest) {
 }
 
 /**
+ * Make a downloaded program runnable.
+ *
+ * The Windows archive is a .zip, which carries no permission bits at all, and a .tar.gz only
+ * restores the modes it was built with. Spawning a file that is missing its execute bit fails with
+ * EACCES, which is exactly what a Mac reported: "could not start Pi: spawn .../pi EACCES". Nothing
+ * on Windows can catch this, because there is no such bit there.
+ */
+function makeExecutable (file) {
+  if (process.platform === 'win32') return
+  try {
+    fs.chmodSync(file, 0o755)
+  } catch {
+    /* the spawn that follows names the path and the reason */
+  }
+}
+
+/**
  * Install Pi. Verified download, extract to a staging directory, and only then swap it into
  * place — an interrupted install never leaves something that looks installed.
  */
@@ -424,9 +441,12 @@ async function install (piRoot, opts = {}) {
   fs.mkdirSync(staging, { recursive: true })
   try {
     await extract(L.download, staging)
-    if (!fs.existsSync(path.join(staging, path.basename(L.exe)))) {
+    const staged = path.join(staging, path.basename(L.exe))
+    if (!fs.existsSync(staged)) {
       throw new Error('the release did not contain the expected program')
     }
+    // before it is moved into place: a program with no execute bit cannot be started at all
+    makeExecutable(staged)
     fs.rmSync(L.versionDir, { recursive: true, force: true })
     fs.renameSync(staging, L.versionDir)
   } catch (err) {
@@ -720,5 +740,6 @@ module.exports = { ensureImageExtension,
   outputsFromTool,
   runTurn,
   modelsFor,
-  shaFor
+  shaFor,
+  makeExecutable
 }

@@ -282,6 +282,23 @@ function extractArchive (archive, dest) {
   }
 }
 
+/**
+ * Make a downloaded program runnable.
+ *
+ * The Windows archive is a .zip, which carries no permission bits at all, and a .tar.gz only
+ * restores the modes it was built with. Spawning a file that is missing its execute bit fails with
+ * EACCES. Nothing on Windows can catch this, because there is no such bit there, and the check
+ * below would have reported it as "the runtime would not run", sending someone after the wrong bug.
+ */
+function makeExecutable (file) {
+  if (process.platform === 'win32') return
+  try {
+    fs.chmodSync(file, 0o755)
+  } catch {
+    /* the check that follows names the path and the reason */
+  }
+}
+
 /** Ask the binary what it is. Proves the unpack really produced something that runs. */
 function binaryVersion (exe, timeoutMs = 60000, attempts = 2) {
   let last = null
@@ -339,6 +356,9 @@ async function install (opts = {}) {
       fs.rmSync(staging, { recursive: true, force: true })
       extractArchive(L.archive, staging)
       const exe = path.join(staging, path.basename(L.exe))
+      // before it is asked to run: without the execute bit the check below fails with EACCES and
+      // reports it as a runtime that would not run
+      makeExecutable(exe)
       const version = binaryVersion(exe)
       if (!version.ok) {
         // Keep the staging directory and the archive. Removing them made the failure invisible and
@@ -492,6 +512,7 @@ module.exports = {
   llamaAsset,
   llamaUrl,
   layout,
+  makeExecutable,
   modelPath,
   entryFor,
   humanSize,
