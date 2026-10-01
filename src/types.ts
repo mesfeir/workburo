@@ -128,6 +128,15 @@ export interface ModelInfo {
   created?: number
   ownedBy?: string
   contextLength?: number | null
+  provider?: string
+}
+
+/** Models that came from one provider, shown under their own small heading in the picker. */
+export interface ModelGroup {
+  provider: string
+  baseUrl: string
+  models: ModelInfo[]
+  error?: string
 }
 
 export interface ModelPref {

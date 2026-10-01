@@ -18,6 +18,7 @@ const path = require('node:path')
 const fs = require('node:fs')
 const falImages = require('./images.cjs')
 const localModel = require('./local.cjs')
+const modelSources = require('./model-sources.cjs')
 const titles = require('./title.cjs')
 
 const DEV_URL = 'http://localhost:5173'
@@ -137,7 +138,7 @@ function defaultStore() {
     config: {
       baseUrl: 'https://opencode.ai/zen/go/v1',
       apiKey: '',
-      model: 'deepseek-v4.1-flash',
+      model: '',
       systemPrompt: '',
       temperature: 1,
       maxTokens: 8192,
@@ -174,8 +175,10 @@ function defaultStore() {
       },
       profiles: [
         { name: 'OpenCode Zen (Go)', baseUrl: 'https://opencode.ai/zen/go/v1', affinity: true },
+        { name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', affinity: false },
         { name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', affinity: false },
         { name: 'LM Studio (local)', baseUrl: 'http://127.0.0.1:1234/v1', affinity: false },
+        { name: 'Ollama (local)', baseUrl: 'http://127.0.0.1:11434/v1', affinity: false },
       ],
       // window behaviour: above other windows by default, and out of the way after a delay
       alwaysOnTop: true,
@@ -2198,6 +2201,45 @@ ipcMain.handle('models:list', async (_e, { cfg, label }) => {
   } catch (err) {
     return { ok: false, error: `Could not list models: ${err.message}` }
   }
+})
+
+// Every model this machine can actually reach: the endpoint in use, each saved profile, and the
+// local server this app can start itself. A provider that needs a key, or is simply not running,
+// must not hide the others, so each source is asked on its own and reports its own problem.
+ipcMain.handle('models:all', async (_e, { cfg } = {}) => {
+  const c = cfg || {}
+  const sources = modelSources.sourcesFor(c, localServed ? localServed.port : 0)
+  console.log(`[models:all] asking ${sources.length}: ${sources.map((s) => s.provider).join(', ')}`)
+  const asked = await Promise.all(
+    sources.map(async (s) => {
+      const g = { provider: s.provider, baseUrl: s.baseUrl, models: [], error: '' }
+      try {
+        const res = await fetch(`${s.baseUrl}/models`, {
+          headers: headersFor({ ...c, baseUrl: s.baseUrl, apiKey: s.key }),
+        })
+        const text = await res.text()
+        if (!res.ok) {
+          const e = extractError(res.status, text)
+          g.error = modelSources.tidyError(res.status, e.message)
+          console.log(`[models:all] ${s.provider}: HTTP ${res.status} — ${g.error}`)
+          return g
+        }
+        g.models = modelSources.parseModels(JSON.parse(text))
+        console.log(`[models:all] ${s.provider}: ${g.models.length} models`)
+      } catch (err) {
+        g.error = modelSources.tidyError(0, (err && err.message) || err)
+        console.log(`[models:all] ${s.provider}: ${g.error}`)
+      }
+      return g
+    }),
+  )
+  // Only what is really there gets shown. The rest is reported separately, quietly, so a profile
+  // that has no key yet does not look like a broken app.
+  const groups = asked.filter((g) => g.models.length)
+  const unavailable = asked.filter((g) => !g.models.length)
+  const models = groups.flatMap((g) => g.models.map((m) => ({ ...m, provider: g.provider })))
+  console.log(`[models:all] ${models.length} models from ${groups.length} source(s)`)
+  return { ok: true, groups, unavailable, models, count: models.length }
 })
 
 // Cheap liveness + capability probe for one model.

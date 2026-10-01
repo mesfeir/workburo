@@ -1,9 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Brain, Check, ChevronDown, Eye, EyeOff, RefreshCw, Search, Zap } from 'lucide-react'
-import type { Config, ModelInfo } from '../types'
+import type { Config, ModelGroup, ModelInfo } from '../types'
 
+/**
+ * The model chooser. Every model this machine can actually reach, grouped under the provider it
+ * came from, with one search box that spans all of them. Nothing is pre-selected: until you pick,
+ * it says so in italics rather than showing a name you never agreed to.
+ */
 export default function ModelPicker({
   models,
+  groups,
+  unavailable,
   current,
   config,
   onSelect,
@@ -13,6 +20,8 @@ export default function ModelPicker({
   onConfigure,
 }: {
   models: ModelInfo[]
+  groups?: ModelGroup[]
+  unavailable?: { provider: string; error?: string }[]
   current: string
   config: Config
   onSelect: (id: string) => void
@@ -33,18 +42,29 @@ export default function ModelPicker({
     return () => document.removeEventListener('mousedown', h)
   }, [open])
 
-  const list = useMemo(() => {
+  // What to draw. A caller with no grouping still gets one heading, so the shape of the list never
+  // changes under the mouse and there is always somewhere to put the count.
+  const shown = useMemo(() => {
     const s = q.trim().toLowerCase()
-    return s ? models.filter((m) => m.id.toLowerCase().includes(s)) : models
-  }, [models, q])
+    const hit = (m: ModelInfo) =>
+      !s || m.id.toLowerCase().includes(s) || String(m.provider || '').toLowerCase().includes(s)
+    const src: ModelGroup[] = groups && groups.length ? groups : [{ provider: 'This endpoint', baseUrl: '', models }]
+    return src.map((g) => ({ ...g, models: g.models.filter(hit) })).filter((g) => g.models.length)
+  }, [groups, models, q])
+
+  const total = shown.reduce((n, g) => n + g.models.length, 0)
 
   return (
     <div className="relative no-drag" ref={box}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[15px] font-medium text-[var(--text-mid)] transition hover:bg-[var(--raised-2)]"
+        className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[15px] font-medium transition hover:bg-[var(--raised-2)]"
       >
-        <span className="max-w-[280px] truncate">{current || 'Select a model'}</span>
+        {current ? (
+          <span className="max-w-[280px] truncate text-[var(--text-mid)]">{current}</span>
+        ) : (
+          <span className="text-faint italic">Select a model</span>
+        )}
         <ChevronDown size={15} className="text-faint" />
       </button>
 
@@ -56,31 +76,39 @@ export default function ModelPicker({
               autoFocus
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search models"
+              placeholder="Search every model"
               className="w-full bg-transparent text-[13.5px] placeholder:text-faint"
             />
             <button
               onClick={onRefresh}
-              title="Refresh model list from the API"
+              title="Look for models again on every endpoint"
               className="grid h-7 w-7 place-items-center rounded-md text-muted transition hover:bg-[var(--raised-2)] hover:text-ink"
             >
               <RefreshCw size={13} />
             </button>
           </div>
 
-          <div className="max-h-[340px] overflow-y-auto py-1">
-            {list.length === 0 && (
+          <div className="max-h-[360px] overflow-y-auto pb-1">
+            {total === 0 && (
               <div className="px-3 py-3 text-[13px] text-faint">
                 {models.length === 0 ? (
                   <button onClick={onConfigure} className="text-[var(--accent-bright)] hover:underline">
-                    No models loaded — open Settings to test your API
+                    No models loaded. Open Settings to test your API
                   </button>
                 ) : (
                   'No match.'
                 )}
               </div>
             )}
-            {list.map((m) => {
+
+            {shown.map((g, i) => (
+              // One heading per provider, with empty space above it, so builds never run together.
+              <div key={`${g.provider}|${g.baseUrl}`} className={i ? 'mt-3' : ''}>
+                <div className="px-3 pb-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-faint">
+                  {g.provider}
+                  <span className="ml-1.5 font-normal normal-case tracking-normal opacity-60">{g.models.length}</span>
+                </div>
+                {g.models.map((m) => {
               const pref = config.modelPrefs?.[m.id] || {}
               const vision = pref.vision === 'yes'
               const novision = pref.vision === 'no'
@@ -133,7 +161,17 @@ export default function ModelPicker({
                   </button>
                 </div>
               )
-            })}
+                })}
+              </div>
+            ))}
+
+            {/* Sources with nothing to offer are named once, quietly, so an empty profile reads as an
+                empty profile instead of a missing feature. */}
+            {unavailable && unavailable.length > 0 && (
+              <div className="mt-3 border-t border-[var(--rule)] px-3 py-2 text-[11px] leading-relaxed text-faint">
+                {unavailable.map((u) => `${u.provider}: ${u.error || 'no models'}`).join(' · ')}
+              </div>
+            )}
           </div>
 
           <button

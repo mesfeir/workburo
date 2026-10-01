@@ -87,6 +87,7 @@ export interface ZenApi {
   }
   models: {
     list: (cfg: any, label?: string) => Promise<{ ok: boolean; models?: any[]; error?: string; base?: string }>
+    all: (cfg: any) => Promise<{ ok: boolean; groups?: any[]; unavailable?: any[]; models?: any[]; count?: number }>
     probe: (cfg: any, model: string, testImage?: string) => Promise<any>
   }
   files: {

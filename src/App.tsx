@@ -47,7 +47,9 @@ const DEFAULTS: Config = {
   theme: 'dark',
   baseUrl: 'https://opencode.ai/zen/go/v1',
   apiKey: '',
-  model: 'deepseek-v4.1-flash',
+  // No model is chosen for you. Until you pick one the window says so, in italics, rather than
+  // showing a name you never agreed to.
+  model: '',
   systemPrompt: '',
   temperature: 1,
   maxTokens: 8192,
@@ -139,6 +141,10 @@ export default function App() {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [models, setModels] = useState<ModelInfo[]>([])
+  // The same models, kept in the shape they arrived in: one group per provider, so the picker can
+  // put a heading over each and search across all of them at once.
+  const [modelGroups, setModelGroups] = useState<any[]>([])
+  const [modelsUnavailable, setModelsUnavailable] = useState<any[]>([])
   const [ready, setReady] = useState(false)
 
   const [input, setInput] = useState('')
@@ -480,6 +486,13 @@ export default function App() {
   const runRequest = useCallback(
     (convId: string, history: ChatMessage[]) => {
       const cfg = configRef.current
+      // Nothing is chosen on your behalf any more, so say what is missing rather than sending an
+      // empty model name and letting the endpoint explain it in its own words.
+      if (!String(cfg.model || '').trim()) {
+        setToast('Pick a model first. The box at the top of the window.')
+        setTimeout(() => setToast(null), 4000)
+        return
+      }
       const requestId = uid()
       const asstId = uid()
 
@@ -1026,13 +1039,19 @@ export default function App() {
     // A caller that has just changed the endpoint passes it in: the ref this reads is only updated
     // on the next render, so asking the server we just switched away from would come back empty.
     const cfg = { ...configRef.current, ...(override || {}) }
-    setToast('Loading models…')
-    const res = await window.zen.models.list(cfg)
-    if (res.ok) {
+    setToast('Looking for models…')
+    // Ask every endpoint this machine has, not only the one in use, so a second provider and a
+    // model server on the desktop both turn up in the same list.
+    const res = await window.zen.models.all(cfg)
+    if (res && res.ok) {
+      setModelGroups(res.groups || [])
+      setModelsUnavailable(res.unavailable || [])
       setModels(res.models || [])
-      setToast(`${res.models?.length || 0} models`)
+      const n = res.count || 0
+      const from = res.groups?.length || 0
+      setToast(from > 1 ? `${n} models from ${from} providers` : `${n} models`)
     } else {
-      setToast(res.error || 'Could not load models')
+      setToast('Could not load models')
     }
     setTimeout(() => setToast(null), 3500)
   }, [])
@@ -1271,6 +1290,8 @@ export default function App() {
           )}
           <ModelPicker
             models={models}
+            groups={modelGroups}
+            unavailable={modelsUnavailable}
             current={config.model}
             config={config}
             onSelect={(id) => patchConfig({ model: id })}

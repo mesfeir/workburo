@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('zen', {
   },
   models: {
     list: (cfg, label) => ipcRenderer.invoke('models:list', { cfg, label }),
+    all: (cfg) => ipcRenderer.invoke('models:all', { cfg }),
     probe: (cfg, model, testImage) => ipcRenderer.invoke('models:probe', { cfg, model, testImage }),
   },
   files: {
