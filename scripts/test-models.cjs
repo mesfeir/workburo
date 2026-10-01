@@ -43,10 +43,10 @@ check('1. the endpoint in use is headed with the provider it came from', () => {
   assert.strictEqual(s[0].baseUrl, 'https://opencode.ai/zen/go/v1')
 })
 
-check('1b. an endpoint that matches no profile is still named, not left blank', () => {
+check('1b. an endpoint that matches no profile is named by its host, not left blank', () => {
   const s = sources.sourcesFor({ baseUrl: 'https://api.mystery.example/v1' }, 0)
   assert.strictEqual(s.length, 1)
-  assert.strictEqual(s[0].provider, 'This endpoint')
+  assert.strictEqual(s[0].provider, 'api.mystery.example')
 })
 
 check('2. a profile repeating the endpoint in use is not asked twice', () => {

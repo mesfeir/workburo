@@ -167,7 +167,27 @@ export default function SettingsModal({
   initialTab?: Tab
 }) {
   const [tab, setTab] = useState<Tab>(initialTab || 'api')
-  const [showKey, setShowKey] = useState(false)
+  // Per-provider test results and key reveals, keyed by endpoint so they survive a re-render. The
+  // single API key field at the bottom is gone: every provider keeps its own key, and each row can
+  // check its own.
+  const [reveal, setReveal] = useState<Record<string, boolean>>({})
+  const [providerTest, setProviderTest] = useState<
+    Record<string, { ok: boolean; note: string; busy: boolean }>
+  >({})
+
+  // Ask one provider for its model list, and say plainly whether it answered.
+  const testProvider = async (p: Config['profiles'][number]) => {
+    const key = p.apiKey || config.apiKey
+    setProviderTest((t) => ({ ...t, [p.baseUrl]: { ok: false, note: '', busy: true } }))
+    const res = await window.zen.models.list({ ...config, baseUrl: p.baseUrl, apiKey: key, sendAffinity: p.affinity })
+    const n = res.models?.length || 0
+    setProviderTest((t) => ({
+      ...t,
+      [p.baseUrl]: res.ok
+        ? { ok: true, note: `${n} model${n === 1 ? '' : 's'}`, busy: false }
+        : { ok: false, note: res.error || 'no answer', busy: false },
+    }))
+  }
   const [status, setStatus] = useState<{ kind: 'idle' | 'busy' | 'ok' | 'err'; msg: string }>({
     kind: 'idle',
     msg: '',
@@ -1041,50 +1061,94 @@ export default function SettingsModal({
                 <div>
                   <div className="mb-1.5 text-[12.5px] font-medium text-[var(--text-mid)]">Providers</div>
                   <div className="space-y-1.5">
-                    {config.profiles.map((p, i) => (
-                      <div key={`${p.name}-${i}`} className="flex items-center gap-2">
-                        <button
-                          onClick={() =>
-                            // Switching to a provider switches to its key as well, because two paid
-                            // providers cannot both work off the one key.
-                            onConfig({
-                              baseUrl: p.baseUrl,
-                              sendAffinity: p.affinity,
-                              ...(p.apiKey ? { apiKey: p.apiKey } : {}),
-                            })
-                          }
-                          className={`flex w-[168px] shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12.5px] transition ${
-                            config.baseUrl === p.baseUrl
-                              ? 'border-[var(--accent-rule)] bg-[var(--raised)] text-ink'
-                              : 'border-[var(--rule)] text-muted hover:bg-[var(--raised)] hover:text-ink'
-                          }`}
-                        >
-                          <Globe size={12} className="shrink-0" />
-                          <span className="truncate">{p.name}</span>
-                        </button>
-                        <div className="relative min-w-0 flex-1">
-                          <KeyRound
-                            size={13}
-                            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint"
-                          />
-                          <input
-                            className={inputCls + ' pl-8'}
-                            type="password"
-                            value={p.apiKey || ''}
-                            spellCheck={false}
-                            placeholder="key for this provider (optional)"
-                            onChange={(e) => {
-                              const next = config.profiles.map((x, j) => (j === i ? { ...x, apiKey: e.target.value } : x))
-                              onConfig({ profiles: next })
-                            }}
-                          />
+                    {config.profiles.map((p, i) => {
+                      const at = providerTest[p.baseUrl]
+                      const active = config.baseUrl === p.baseUrl
+                      const shown = reveal[p.baseUrl]
+                      return (
+                        <div key={`${p.name}-${i}`} className="flex items-center gap-2">
+                          <button
+                            onClick={() =>
+                              // Choosing a provider chooses its key as well, because two paid providers
+                              // cannot both work off the one key.
+                              onConfig({
+                                baseUrl: p.baseUrl,
+                                sendAffinity: p.affinity,
+                                ...(p.apiKey ? { apiKey: p.apiKey } : {}),
+                              })
+                            }
+                            className={`flex w-[168px] shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12.5px] transition ${
+                              active
+                                ? 'border-[var(--accent-rule)] bg-[var(--raised)] text-ink'
+                                : 'border-[var(--rule)] text-muted hover:bg-[var(--raised)] hover:text-ink'
+                            }`}
+                          >
+                            <Globe size={12} className="shrink-0" />
+                            <span className="truncate">{p.name}</span>
+                          </button>
+
+                          <div className="relative min-w-0 flex-1">
+                            <KeyRound
+                              size={13}
+                              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint"
+                            />
+                            <input
+                              className={inputCls + ' pl-8 pr-9'}
+                              type={shown ? 'text' : 'password'}
+                              value={p.apiKey || ''}
+                              spellCheck={false}
+                              placeholder="key for this provider (optional)"
+                              onChange={(e) => {
+                                const v = e.target.value
+                                const next = config.profiles.map((x, j) => (j === i ? { ...x, apiKey: v } : x))
+                                // Keep the app's working key in step when this is the provider in use,
+                                // or chatting would carry on with whatever was there before.
+                                onConfig(active ? { profiles: next, apiKey: v } : { profiles: next })
+                                setProviderTest((t) => {
+                                  const c = { ...t }
+                                  delete c[p.baseUrl]
+                                  return c
+                                })
+                              }}
+                            />
+                            <button
+                              onClick={() => setReveal((r) => ({ ...r, [p.baseUrl]: !r[p.baseUrl] }))}
+                              title={shown ? 'Hide this key' : 'Show this key'}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-faint hover:text-ink"
+                            >
+                              {shown ? <EyeOff size={14} /> : <Eye size={14} />}
+                            </button>
+                          </div>
+
+                          <button
+                            onClick={() => void testProvider(p)}
+                            disabled={at?.busy}
+                            title="Ask this provider for its model list"
+                            className="flex h-[34px] shrink-0 items-center rounded-lg border border-[var(--rule)] px-3 text-[12px] text-muted transition hover:bg-[var(--raised)] hover:text-ink disabled:opacity-50"
+                          >
+                            {at?.busy ? 'Testing…' : 'Test'}
+                          </button>
+
+                          {/* A tick when it answered, a cross and the reason when it did not. */}
+                          {at && !at.busy ? (
+                            <span
+                              title={at.note}
+                              className={`grid h-6 w-6 shrink-0 place-items-center ${
+                                at.ok ? 'text-[var(--ok)]' : 'text-[var(--err)]'
+                              }`}
+                            >
+                              {at.ok ? <Check size={15} /> : <X size={15} />}
+                            </span>
+                          ) : (
+                            <span className="h-6 w-6 shrink-0" />
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                   <div className="mt-1.5 text-[11.5px] leading-snug text-faint">
                     Each provider is asked with its own key when it has one, so two accounts can both list their
-                    models. Leave one empty to try the key above.
+                    models. Test asks it for its model list now; the tick is for this session.
                   </div>
                 </div>
 
@@ -1098,28 +1162,6 @@ export default function SettingsModal({
                     spellCheck={false}
                     onChange={(e) => onConfig({ baseUrl: e.target.value })}
                   />
-                </Field>
-
-                <Field label="API key">
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <KeyRound size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
-                      <input
-                        className={inputCls + ' pl-8 pr-9'}
-                        type={showKey ? 'text' : 'password'}
-                        value={config.apiKey}
-                        spellCheck={false}
-                        placeholder="sk-… / oc_sk_…"
-                        onChange={(e) => onConfig({ apiKey: e.target.value })}
-                      />
-                      <button
-                        onClick={() => setShowKey((s) => !s)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-faint hover:text-ink"
-                      >
-                        {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
-                      </button>
-                    </div>
-                  </div>
                 </Field>
 
                 <div className="rounded-xl border border-[var(--rule)] bg-[var(--app)] p-3">

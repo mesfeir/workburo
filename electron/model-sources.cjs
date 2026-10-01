@@ -21,16 +21,18 @@ function sourcesFor (cfg, localPort) {
   const seen = new Set()
   const profiles = (cfg && cfg.profiles) || []
   // The endpoint in use is headed with the profile it came from, so the list reads like the
-  // providers a person recognises instead of saying "In use" above something already selected.
+  // providers a person recognises. If it matches no profile, name it by its host rather than
+  // saying "This endpoint", which told you nothing about where the models came from.
   const current = normalize(cfg && cfg.baseUrl)
   const match = profiles.find((p) => p && normalize(p.baseUrl) === current && current)
+  const host = current ? current.replace(/^https?:\/\//i, '').replace(/\/.*$/, '') : ''
   const add = (provider, baseUrl, key) => {
     const norm = normalize(baseUrl)
     if (!norm || seen.has(norm)) return
     seen.add(norm)
     out.push({ provider: String(provider || '').trim() || 'Endpoint', baseUrl: norm, key: key || '' })
   }
-  add(match ? match.name : 'This endpoint', cfg && cfg.baseUrl, (match && match.apiKey) || (cfg && cfg.apiKey))
+  add(match ? match.name : host, cfg && cfg.baseUrl, (match && match.apiKey) || (cfg && cfg.apiKey))
   // Each provider is asked with its own key when it has one. That is the whole point of keeping a
   // key per profile: a second paid provider cannot list its models off someone else's key.
   for (const p of profiles) add(p && p.name, p && p.baseUrl, (p && p.apiKey) || (cfg && cfg.apiKey))

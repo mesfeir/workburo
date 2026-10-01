@@ -247,7 +247,9 @@ export default function App() {
       setConfig({ ...DEFAULTS, ...s.config })
       setConversations(s.conversations)
       setActiveId(s.activeId)
-      setModels(s.models || [])
+      // The model list is deliberately not restored from the store. It was written by an older
+      // single-endpoint lookup, so it came back as one provider's models with no idea whose they
+      // were, and the picker showed "This endpoint" for ever. It is looked up fresh, below.
       setReady(true)
     })
   }, [])
@@ -256,26 +258,12 @@ export default function App() {
 
   useEffect(() => {
     if (!ready) return
-    window.zen.store.save({ config, conversations, activeId, models })
+    window.zen.store.save({ config, conversations, activeId, models: [] })
   }, [ready, config, conversations, activeId, models])
 
   /* ------------------------------------------------------------- stream */
 
   /* ------------------------------------------------------------- models */
-
-  // first run on a fresh profile: pull the model list so the picker isn't empty
-  useEffect(() => {
-    if (!ready || models.length > 0 || !config.apiKey) return
-    let cancelled = false
-    ;(async () => {
-      const res = await window.zen.models.list(configRef.current, 'auto-load')
-      console.log('[auto-load] result', JSON.stringify({ ok: res.ok, n: res.models?.length, err: res.error }))
-      if (!cancelled && res.ok && res.models?.length) setModels(res.models)
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [ready, models.length, config.apiKey])
 
   const flush = useCallback((s: StreamState) => {
     if (s.raf) return
@@ -1055,6 +1043,15 @@ export default function App() {
     }
     setTimeout(() => setToast(null), 3500)
   }, [])
+
+  // Ask every provider for its models as soon as the app is ready, and again whenever a key, an
+  // endpoint or the provider list changes. This has to run on a normal start: it used to run only
+  // when the list was empty, so a list left in the store by an older single-endpoint lookup was
+  // never replaced.
+  useEffect(() => {
+    if (!ready) return
+    void refreshModels()
+  }, [ready, config.baseUrl, config.apiKey, config.profiles, refreshModels])
 
   const probeModel = useCallback(async (id: string) => {
     const cfg = configRef.current
