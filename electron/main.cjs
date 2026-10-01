@@ -1048,6 +1048,33 @@ app.on('will-quit', () => {
   }
 })
 
+/**
+ * Nothing this app does should be able to end it. Node exits on an unhandled error, and on macOS
+ * that leaves no crash report at all: the window simply disappears and there is nothing to look at.
+ * Report the failure in the conversation that was running, and stay up.
+ */
+let lastRequestId = null
+const reportFailure = (label, err) => {
+  const why = (err && err.stack) || String(err)
+  console.error(`[${label}]`, why)
+  const target = lastRequestId
+  if (!target) return
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (w.isDestroyed()) continue
+    try {
+      w.webContents.send('chat:event', {
+        requestId: target,
+        type: 'error',
+        value: `The app hit an unexpected error: ${(err && err.message) || why}`,
+      })
+    } catch {
+      /* the window went away while this was being reported */
+    }
+  }
+}
+process.on('uncaughtException', (err) => reportFailure('uncaught', err))
+process.on('unhandledRejection', (reason) => reportFailure('unhandled rejection', reason))
+
 app.on('window-all-closed', () => {
   if (globalThis.process.platform !== 'darwin') app.quit()
 })
@@ -1615,6 +1642,11 @@ function readPlainResponse(protocol, json, out) {
  * delta keyed by index, while the Responses API emits function_call items plus
  * argument deltas keyed by item id. Both are funnelled here and reassembled.
  */
+/** Arguments arrive as a JSON string, and always become one, whatever a server sends. */
+function asArgs(value) {
+  return typeof value === 'string' ? value : JSON.stringify(value)
+}
+
 function makeToolAccumulator() {
   const map = new Map()
   const order = []
@@ -1633,7 +1665,10 @@ function makeToolAccumulator() {
         if (d.id) e.id = d.id
         const f = d.function || {}
         if (f.name) e.name = f.name
-        if (f.arguments) e.args += f.arguments
+        // Some OpenAI-compatible servers send arguments already parsed as an object. Appending one
+        // with += produced the string "[object Object]", which then failed JSON.parse and called the
+        // tool with no arguments at all, so the tool reported a bad request it never made.
+        if (f.arguments) e.args += asArgs(f.arguments)
       }
     },
     item(it) {
@@ -1642,11 +1677,11 @@ function makeToolAccumulator() {
       if (it.call_id) e.id = it.call_id
       if (it.name) e.name = it.name
       // the completed item carries the whole argument string — prefer it
-      if (it.arguments) e.args = it.arguments
+      if (it.arguments) e.args = asArgs(it.arguments)
     },
     argsDelta(id, frag) {
       if (!frag) return
-      ensure(`id:${id}`).args += frag
+      ensure(`id:${id}`).args += asArgs(frag)
     },
     calls() {
       return order
@@ -1868,6 +1903,8 @@ ipcMain.handle('chat:start', async (event, req) => {
 
   const ac = new AbortController()
   inflight.set(requestId, ac)
+  // kept so a failure raised outside this handler can still be shown in the conversation it belongs to
+  lastRequestId = requestId
 
   let base
   try {
@@ -2006,18 +2043,22 @@ ipcMain.handle('chat:start', async (event, req) => {
       for (const tc of calls) {
         if (ac.signal.aborted) break
         const meta = REGISTRY[tc.name] || {}
+        // arguments are a JSON string by the time they get here, but a server that sent an object
+        // used to make this .trim() throw in the middle of a tool round
+        const rawArgs =
+          typeof tc.arguments === 'string' ? tc.arguments : tc.arguments == null ? '' : JSON.stringify(tc.arguments)
         let args = {}
         try {
-          args = tc.arguments && tc.arguments.trim() ? JSON.parse(tc.arguments) : {}
+          args = rawArgs.trim() ? JSON.parse(rawArgs) : {}
         } catch {
-          args = { _raw: tc.arguments }
+          args = { _raw: rawArgs }
         }
         send({
           type: 'tool',
           value: { phase: 'start', id: tc.id, name: tc.name, label: meta.label || tc.name, args },
         })
 
-        const r = await executeTool(tc.name, tc.arguments, {
+        const r = await executeTool(tc.name, rawArgs, {
           searchUrl: cfg.searchUrl,
           signal: ac.signal,
           // A tool discovered on an MCP server runs over the protocol, through here: the page never
