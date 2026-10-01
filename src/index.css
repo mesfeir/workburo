@@ -185,10 +185,16 @@
     /* keep clear of the native window buttons drawn by titleBarOverlay */
     padding-right: 148px;
   }
+  /* macOS draws close, minimise and zoom at the top LEFT of the window. On Windows the reserved
+     space belongs on the right, which is what titlebar-space does above, so this only fires where
+     the buttons really are on the left. Anything at the top left of the page that must not sit
+     under them carries this class. */
+  [data-platform='darwin'] .traffic-clear {
+    padding-left: 80px;
+  }
   [data-platform='darwin'] .titlebar-space {
-    /* macOS draws close, minimise and zoom on the LEFT, so the space goes there instead */
+    /* no buttons on the right on macOS, so the right-hand reservation is wrong there */
     padding-right: 0;
-    padding-left: 78px;
   }
 }
 

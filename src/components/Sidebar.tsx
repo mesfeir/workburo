@@ -109,7 +109,7 @@ export default function Sidebar({
   return (
     <aside className="flex h-full w-[264px] shrink-0 flex-col border-r border-[var(--rule)] bg-sidebar">
       {/* title bar */}
-      <div className="drag-region flex h-11 items-center justify-between pl-4 pr-2">
+      <div className="drag-region traffic-clear flex h-11 items-center justify-between pl-4 pr-2">
         <span className="flex select-none items-center gap-2 pl-0.5 font-mono text-[13px] font-bold uppercase tracking-[0.18em] text-[var(--text-solid)]">
           <Brain size={16} strokeWidth={1.75} aria-hidden className="shrink-0" />
           WorkBuro

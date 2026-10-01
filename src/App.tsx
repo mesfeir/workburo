@@ -1279,7 +1279,7 @@ export default function App() {
       )}
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="drag-region titlebar-space flex h-11 shrink-0 items-center gap-1 pl-2">
+        <header className={`drag-region titlebar-space flex h-11 shrink-0 items-center gap-1 pl-2${sidebarOpen ? '' : ' traffic-clear'}`}>
           {!sidebarOpen && (
             <button
               onClick={() => setSidebarOpen(true)}

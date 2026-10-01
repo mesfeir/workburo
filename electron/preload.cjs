@@ -1,11 +1,19 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron')
 
-// The title bar has to know which side the native window buttons are on before it paints. macOS
-// puts them on the left, so the bar reserves space there instead of on the right.
+// The title bar has to know which side the native window buttons are on before it paints, so this
+// is set as early as the document allows: macOS puts them on the left, so anything at the top left
+// reserves space there instead of on the right. Set twice because the element may or may not exist
+// yet when a preload runs, and a missing attribute means a logo sitting under the traffic lights.
 if (process.platform === 'darwin') {
-  const mark = () => document.documentElement.setAttribute('data-platform', 'darwin')
+  const mark = () => {
+    try {
+      document.documentElement?.setAttribute('data-platform', 'darwin')
+    } catch {
+      /* too early: the DOMContentLoaded pass will catch it */
+    }
+  }
+  mark()
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mark)
-  else mark()
 }
 
 // One narrow, explicit surface for the renderer. No node, no fs, no keys in the page.
