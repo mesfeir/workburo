@@ -127,6 +127,10 @@ export default function ModelPicker({
                     className="flex min-w-0 flex-1 items-center gap-2 px-1 py-2 text-left"
                   >
                     <span className="min-w-0 flex-1 truncate text-[13.5px] text-[var(--text-mid)]">{m.id}</span>
+                    {/* Who it belongs to, in small text to the right of the name: with several
+                        providers in one list, and a search that spans them, the heading above
+                        is not always the one you are looking at. */}
+                    <span className="shrink-0 text-[10.5px] text-faint">{m.provider || g.provider}</span>
                     {vision && (
                       <span title="Takes image input">
                         <Eye size={13} className="text-[var(--ok)]" />
