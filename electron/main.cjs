@@ -1011,7 +1011,10 @@ function headersFor(cfg, accept) {
     'User-Agent': 'WorkBuro/1.0 (Windows; Electron)',
     Accept: accept || 'application/json',
   }
-  if (cfg.apiKey) h.Authorization = `Bearer ${cfg.apiKey}`
+  // The key for the provider in use, not blindly the app's stored key. Those two drifted apart,
+  // which is why a Test in Settings could pass while every chat came back "incorrect API key".
+  const key = modelSources.keyFor(cfg)
+  if (key) h.Authorization = `Bearer ${key}`
   let host = ''
   try {
     host = new URL(normalizeBaseUrl(cfg.baseUrl)).hostname
@@ -1045,7 +1048,7 @@ function extractError(status, text) {
   if (looksLikeHtml(text)) {
     msg = 'The server returned an HTML page, not JSON. The base URL is likely wrong (a duplicated /v1 is the usual cause).'
   }
-  return { status, kind, message: msg || `HTTP ${status}` }
+  return { status, kind, message: modelSources.scrubMessage(msg) || `HTTP ${status}` }
 }
 
 const PROTOCOL_HINTS =

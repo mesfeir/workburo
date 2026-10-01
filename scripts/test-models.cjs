@@ -153,6 +153,46 @@ check('14. the endpoint in use uses its own profile key, not the main one', () =
   assert.strictEqual(s[0].key, 'b-key')
 })
 
+check('15. every request leaves with the key of the provider in use', () => {
+  const cfg = {
+    baseUrl: 'https://b.example/v1',
+    apiKey: 'stale-app-key',
+    profiles: [{ name: 'B', baseUrl: 'https://b.example/v1', apiKey: 'b-key' }],
+  }
+  assert.strictEqual(sources.keyFor(cfg), 'b-key')
+})
+
+check('16. with no key on the profile, the app key is used, and nothing is invented', () => {
+  assert.strictEqual(sources.keyFor({ baseUrl: 'https://b.example/v1', apiKey: 'app-key' }), 'app-key')
+  assert.strictEqual(sources.keyFor({ baseUrl: 'https://b.example/v1' }), '')
+  assert.strictEqual(sources.keyFor(null), '')
+})
+
+check('17. a trailing slash does not hide the provider in use, so its key still wins', () => {
+  const cfg = {
+    baseUrl: 'https://b.example/v1/',
+    apiKey: 'stale-app-key',
+    profiles: [{ name: 'B', baseUrl: 'https://b.example/v1', apiKey: 'b-key' }],
+  }
+  assert.strictEqual(sources.keyFor(cfg), 'b-key', 'the stale key would have been sent')
+})
+
+check('18. the openai sales pitch and the credential are stripped from an error', () => {
+  const raw =
+    'Incorrect API key provided: sk-abc123456789012345. You can find your API key at https://platform.openai.com/account/api-keys.'
+  const out = sources.scrubMessage(raw)
+  assert.ok(/Incorrect API key provided/.test(out), `the useful part was lost: ${out}`)
+  assert.ok(!/platform\.openai\.com/.test(out), `a url survived: ${out}`)
+  assert.ok(!/find your api key/i.test(out), `the pitch survived: ${out}`)
+  assert.ok(!/sk-abc123456789012345/.test(out), `half a key survived: ${out}`)
+})
+
+check('19. a bare url is removed, and an empty error stays empty', () => {
+  assert.ok(!/https?:\/\//.test(sources.scrubMessage('Quota exceeded. See https://example.com/docs for details')))
+  assert.strictEqual(sources.scrubMessage(''), '')
+  assert.strictEqual(sources.scrubMessage(null), '')
+})
+
 console.log('')
 if (failures.length) {
   for (const f of failures) console.log(`  ${f.name}\n     ${f.err && f.err.stack}`)
