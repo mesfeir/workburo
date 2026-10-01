@@ -1285,16 +1285,32 @@ export default function App() {
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-canvas paper-grid">
-      {sidebarOpen && (
-        <>
-          {compact && (
-            <div
-              className="fixed inset-0 z-20 bg-[var(--scrim)]"
-              onClick={() => setSidebarOpen(false)}
-            />
-          )}
-          <div className={compact ? 'fixed left-0 top-0 z-30 h-full shadow-2xl' : 'relative z-10 shrink-0'}>
-            <Sidebar
+      {/* The panel stays mounted and slides: unmounting it is a jump cut, because there is nothing
+          left to animate. A compact window gets a drawer over the chat with a scrim that fades with
+          it; a wider one gets a panel that pushes the chat across as it opens.
+
+          It does not slide by transform, deliberately. A transform here would make this element the
+          containing block for `fixed` descendants, and the sidebar renders exactly one: the full
+          window click-away layer behind a conversation's menu. That layer would shrink to this panel
+          and stop closing the menu. Animating left and width slides it just the same. */}
+      {compact && (
+        <div
+          className={`fixed inset-0 z-20 bg-[var(--scrim)] transition-opacity duration-200 ease-out ${
+            sidebarOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
+          }`}
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+      <div
+        inert={!sidebarOpen}
+        aria-hidden={!sidebarOpen}
+        className={`h-full transition-[left,width] duration-200 ease-out ${
+          compact
+            ? `fixed top-0 z-30 shadow-2xl ${sidebarOpen ? 'left-0' : 'left-[-264px]'}`
+            : `relative z-10 shrink-0 overflow-hidden ${sidebarOpen ? 'w-[264px]' : 'w-0'}`
+        }`}
+      >
+        <Sidebar
             agentSessions={agentSessions}
             onStopAgent={stopAgentSession}
               conversations={conversations}
@@ -1315,9 +1331,7 @@ export default function App() {
               onOpenImages={() => setGalleryOpen(true)}
               onCollapse={() => setSidebarOpen(false)}
             />
-          </div>
-        </>
-      )}
+      </div>
 
       <main className="flex min-w-0 flex-1 flex-col">
         <header className={`drag-region titlebar-space flex h-11 shrink-0 items-center gap-1 pl-2${sidebarOpen ? '' : ' traffic-clear'}`}>
