@@ -665,7 +665,9 @@ async function runAgentTurn (req) {
   const imageNote = String(((cfg.imageGen || {}).falKey) || '').trim()
     ? 'You can create pictures with the generate_image tool. When the user asks to see something, to ' +
       'draw or change a picture, call generate_image with a detailed prompt instead of describing the ' +
-      'scene in words. The picture is saved as a file and its path is in the result.'
+      'scene in words. Set count to make more than one. To change a picture that already exists, pass ' +
+      'its path as image_path so the model works from that picture rather than redrawing it from the ' +
+      'words alone. The pictures are saved as files and their paths are in the result.'
     : ''
   const prompt = [seed, pictures, imageNote, req.prompt].filter(Boolean).join('\n\n---\n\n')
 
