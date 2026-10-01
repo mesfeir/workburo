@@ -11,6 +11,39 @@ const REPO = 'mesfeir/workburo'
 const TAG = process.argv[2] || 'v1.0.9'
 const VERSION = TAG.replace(/^v/, '')
 
+/** Delete releases by tag. Their git tags go with them, so a mistake is re-publishable. */
+async function remove (tags) {
+  for (const tag of tags) {
+    const found = await fetch(`https://api.github.com/repos/${REPO}/releases/tags/${tag}`, {
+      headers: { Authorization: `Bearer ${AUTH}`, Accept: 'application/vnd.github+json' }
+    })
+    if (found.status === 404) {
+      console.log(`   ${tag}: not published, nothing to remove`)
+      continue
+    }
+    const rel = await found.json()
+    const del = await fetch(`https://api.github.com/repos/${REPO}/releases/${rel.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${AUTH}`, Accept: 'application/vnd.github+json' }
+    })
+    console.log(`   ${tag}: HTTP ${del.status}${del.status === 204 ? ' removed' : ` ${(await del.text()).slice(0, 120)}`}`)
+
+    // the tag itself is separate, and leaving it behind blocks re-publishing the same version
+    const tagDel = await fetch(`https://api.github.com/repos/${REPO}/git/refs/tags/${tag}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${AUTH}`, Accept: 'application/vnd.github+json' }
+    })
+    if (tagDel.status === 204) console.log(`   ${tag}: tag removed too`)
+    else if (tagDel.status !== 404) console.log(`   ${tag}: tag left behind (HTTP ${tagDel.status})`)
+  }
+  const left = await fetch(`https://api.github.com/repos/${REPO}/releases?per_page=30`, {
+    headers: { Authorization: `Bearer ${AUTH}`, Accept: 'application/vnd.github+json' }
+  })
+  const all = await left.json()
+  console.log(`=== published now (${all.length}) ===`)
+  for (const r of all) console.log(`   ${r.tag_name}  ${(r.assets || []).length} assets  ${r.published_at || ''}`)
+}
+
 const token = execFileSync(
   'git',
   ['credential', 'fill'],
@@ -125,7 +158,15 @@ async function main () {
   console.log(`   assets: ${(final.assets || []).length} of ${assets.length}`)
 }
 
-main().catch((e) => {
-  console.error(`failed: ${e && e.message ? e.message : e}`)
-  process.exit(1)
-})
+// Publish by default; --delete removes releases and their tags instead, so a mistake is fixable.
+if (process.argv[2] === '--delete') {
+  remove(process.argv.slice(3)).catch((e) => {
+    console.error(`failed: ${e && e.message ? e.message : e}`)
+    process.exit(1)
+  })
+} else {
+  main().catch((e) => {
+    console.error(`failed: ${e && e.message ? e.message : e}`)
+    process.exit(1)
+  })
+}
