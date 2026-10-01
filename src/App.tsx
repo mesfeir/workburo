@@ -360,6 +360,10 @@ export default function App() {
           for (const img of v.images || []) {
             if (img?.path && !s.genImages.some((x) => x.path === img.path)) s.genImages.push(img)
           }
+          // The agent's picture tool runs inside the harness, so it cannot report fal's progress the
+          // way the built-in tool does. Show the drawing state for as long as it is running anyway:
+          // an agent picture that appears from nowhere with no sign of work is the whole complaint.
+          if (v.name === 'generate_image' && v.phase === 'start') s.drawing = true
           // a tool that made a file hands that back too — a spreadsheet the user asked for
           for (const f of v.files || []) {
             if (f?.path && !s.genFiles.some((x) => x.path === f.path)) s.genFiles.push(f)

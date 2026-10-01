@@ -493,6 +493,25 @@ const sessionList = () => [...agentSessions.values()].map(m => sessionSummary(m)
 const broadcastSessions = () => sendToRenderer('agent:sessions', sessionList())
 let agentInstalling = false
 
+/**
+ * Pictures the agent produced arrive as paths on disk. The chat renders pictures, not paths, so the
+ * bytes are read here. Without this the row and the reply had an image entry with no url, and the
+ * chat showed "Image file missing" for a picture that had just been written.
+ */
+function withImageUrls (list) {
+  return (list || []).map((im) => {
+    if (!im || !im.path || im.url) return im
+    try {
+      const buf = fs.readFileSync(im.path)
+      const ext = path.extname(im.path).slice(1).toLowerCase()
+      const mime = ext === 'png' ? 'png' : ext === 'webp' ? 'webp' : ext === 'gif' ? 'gif' : 'jpeg'
+      return { ...im, url: `data:image/${mime};base64,${buf.toString('base64')}` }
+    } catch {
+      return { ...im, missing: true }
+    }
+  })
+}
+
 /** Pi's events, in the words the chat already knows how to render. */
 function agentEventFor (requestId, ev) {
   switch (ev.kind) {
@@ -532,7 +551,7 @@ function agentEventFor (requestId, ev) {
           // renderer already renders both (it is the built-in tools' own shape), so a document or
           // a picture the agent produced arrives the same way a picture from generate_image does.
           ...(ev.files && ev.files.length ? { files: ev.files } : {}),
-          ...(ev.images && ev.images.length ? { images: ev.images } : {})
+          ...(ev.images && ev.images.length ? { images: withImageUrls(ev.images) } : {})
         }
       }
     }

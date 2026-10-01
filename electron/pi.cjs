@@ -52,6 +52,7 @@ const TOOL_LABELS = {
   todo_read: 'Read plan',
   web_search: 'Web search',
   fetch_url: 'Fetch page',
+  generate_image: 'Generate image',
   task: 'Sub-agent',
   notebook_edit: 'Edit notebook'
 }
@@ -91,6 +92,13 @@ const PATH_ARG_TOOLS = {
   notebook_edit: ['path', 'file_path', 'filePath']
 }
 const SHELL_TOOLS = new Set(['bash', 'shell', 'powershell', 'sh'])
+/**
+ * Tools whose arguments name no file but whose result does: generate_image writes a picture and
+ * reports its path. Without this the picture was never looked for, so it existed on disk, the model
+ * truthfully said it had saved it, and nothing was posted. Their result is trustworthy, because the
+ * tool itself aimed at that path.
+ */
+const PRODUCING_TOOLS = new Set(['generate_image'])
 
 /** Absolute paths mentioned in a command or its output. Quotes and trailing punctuation are not. */
 function pathsInText (text) {
@@ -150,11 +158,14 @@ function touchedSince (workspace, since, depth = 3, seen = { n: 0 }) {
  * machine as an attachment. When something plausible cannot be posted, the reason is returned
  * rather than swallowed, because "nothing happened" is the failure being fixed.
  */
-function outputsFromTool ({ name, args, result, workspace, since } = {}) {
+function outputsFromTool ({ name, args, result, workspace, imagesDir, since, isError } = {}) {
   const files = []
   const images = []
   const notPosted = []
   const a = args && typeof args === 'object' ? args : {}
+  // A failed call produced nothing, and posting a path it merely mentioned on the way to failing
+  // would put a card on the reply for a file that was never written.
+  if (isError) return { files, images, notPosted }
 
   const named = []
   for (const key of PATH_ARG_TOOLS[name] || []) {
@@ -167,7 +178,7 @@ function outputsFromTool ({ name, args, result, workspace, since } = {}) {
   // A shell command names no single output file, so its paths are read out of the command and its
   // output instead. Only shell tools guess: a read or a grep result also mentions paths, and
   // posting those would put a card on the reply for a file the agent merely looked at.
-  const guessed = named.length || !SHELL_TOOLS.has(name)
+  const guessed = named.length || !(SHELL_TOOLS.has(name) || PRODUCING_TOOLS.has(name))
     ? []
     : [...pathsInText(a.command), ...pathsInText(resultText(result))]
 
@@ -184,10 +195,11 @@ function outputsFromTool ({ name, args, result, workspace, since } = {}) {
       return
     }
     if (!st.isFile()) return
-    if (!insideWorkspace(abs, workspace)) {
+    if (!insideWorkspace(abs, workspace) && !(imagesDir && insideWorkspace(abs, imagesDir))) {
       // Only worth saying when the tool itself aimed there: a command mentioning a path outside the
-      // folder is usually something it read, not something it made.
-      if (trusted) notPosted.push(`${base} is outside ${workspace}`)
+      // folder is usually something it read, not something it made. A picture this app generated is
+      // the app's own file, so its folder counts as ours.
+      if (trusted) notPosted.push(`${base} is outside the folders this chat may post from`)
       return
     }
     if (since && st.mtimeMs < since) {
@@ -201,7 +213,9 @@ function outputsFromTool ({ name, args, result, workspace, since } = {}) {
   }
 
   for (const raw of named) add(raw, true)
-  for (const raw of guessed) add(raw, false)
+  // A tool that produces a file names it in its own result, so a refusal there is worth saying: the
+  // model has just told the user it saved something, and nothing would appear.
+  for (const raw of guessed) add(raw, PRODUCING_TOOLS.has(name))
 
   // Last resort, shell tools only: a command that writes a file without printing its name leaves
   // nothing to find in the text. So look at the folder itself for files that changed while that
@@ -478,7 +492,9 @@ function createTranslator (onEvent, opts = {}) {
               name: e.toolName,
               args: (tool && tool.args) || e.args,
               result: e.result,
+              isError: e.isError,
               workspace: opts.workspace,
+              imagesDir: opts.imagesDir,
               // a little slack: mtime and Date.now() come from the same clock but not the same instant
               since: (startedAt.get(e.toolCallId) || opts.startedAt || 0) - 2000
             })
