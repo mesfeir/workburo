@@ -299,6 +299,45 @@ function makeExecutable (file) {
   }
 }
 
+/**
+ * Move an archive's contents up when it packed them inside a folder.
+ *
+ * The Windows llama.cpp build is a .zip with the programs at its root; the macOS .tar.gz puts
+ * everything under a top-level `llama-b11284/` folder, dylibs and all. Unpacking either into the
+ * version directory therefore does not leave the server where layout() says it is, and the check
+ * below reported that as a runtime that would not run. The layout is normalised here rather than
+ * assumed. Keep the folder's contents together: the binary finds its dylibs beside it.
+ */
+function hoistContents (dir, program) {
+  try {
+    if (fs.statSync(path.join(dir, program)).isFile()) return false
+  } catch {
+    /* not at the top level: that is the case this exists for */
+  }
+  let entries = []
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true })
+  } catch {
+    return false
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    try {
+      if (!fs.statSync(path.join(dir, entry.name, program)).isFile()) continue
+    } catch {
+      continue
+    }
+    const aside = path.join(dir, `.${entry.name}.unpacked`)
+    fs.renameSync(path.join(dir, entry.name), aside)
+    for (const inner of fs.readdirSync(aside)) {
+      fs.renameSync(path.join(aside, inner), path.join(dir, inner))
+    }
+    fs.rmdirSync(aside)
+    return true
+  }
+  return false
+}
+
 /** Ask the binary what it is. Proves the unpack really produced something that runs. */
 function binaryVersion (exe, timeoutMs = 60000, attempts = 2) {
   let last = null
@@ -355,6 +394,8 @@ async function install (opts = {}) {
       const staging = `${L.versionDir}.partial`
       fs.rmSync(staging, { recursive: true, force: true })
       extractArchive(L.archive, staging)
+      // the macOS archive nests everything under a folder named for the build; the zip does not
+      hoistContents(staging, path.basename(L.exe))
       const exe = path.join(staging, path.basename(L.exe))
       // before it is asked to run: without the execute bit the check below fails with EACCES and
       // reports it as a runtime that would not run
@@ -513,6 +554,7 @@ module.exports = {
   llamaUrl,
   layout,
   makeExecutable,
+  hoistContents,
   modelPath,
   entryFor,
   humanSize,

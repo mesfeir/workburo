@@ -426,6 +426,32 @@ function stubFetch (body, { status = 200, headers = {} } = {}) {
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
+  await checkAsync('an archive that nests its program in a folder still unpacks where the app looks', async () => {
+    // The same release is packed differently per platform: the Windows Pi .zip has pi.exe at its
+    // root, the macOS .tar.gz puts everything under a top-level `pi/` folder, and llama.cpp's macOS
+    // build nests under `llama-b11284/`. Unhandled, the program lands one level too deep, the app
+    // spawns a directory, and starting it fails with EACCES. This check runs on every platform.
+    assert.strictEqual(typeof local.hoistContents, 'function', 'the local installer does not expose one')
+    assert.strictEqual(typeof piModule.hoistContents, 'function', 'the Pi installer does not expose one')
+    for (const [program, folder] of [['pi', 'pi'], ['llama-server', 'llama-b11284'], ['pi.exe', 'pi']]) {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zen-unpack-'))
+      fs.mkdirSync(path.join(dir, folder), { recursive: true })
+      fs.writeFileSync(path.join(dir, folder, program), 'binary')
+      fs.writeFileSync(path.join(dir, folder, 'libllama.0.dylib'), 'dylib')
+      assert.strictEqual(local.hoistContents(dir, program), true, `${folder}/${program} was not hoisted`)
+      assert.ok(fs.statSync(path.join(dir, program)).isFile(), `${program} is not where the app looks for it`)
+      assert.ok(fs.statSync(path.join(dir, 'libllama.0.dylib')).isFile(), 'a file that sits beside it was left behind')
+      assert.ok(!fs.existsSync(path.join(dir, folder)), 'the folder it arrived in was left behind')
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+    // an archive that is already flat is left exactly as it is
+    const flat = fs.mkdtempSync(path.join(os.tmpdir(), 'zen-unpack-'))
+    fs.writeFileSync(path.join(flat, 'pi'), 'binary')
+    assert.strictEqual(local.hoistContents(flat, 'pi'), false, 'it moved something that was already right')
+    assert.ok(fs.statSync(path.join(flat, 'pi')).isFile(), 'the flat layout was disturbed')
+    fs.rmSync(flat, { recursive: true, force: true })
+  })
+
   console.log(`\n=== summary ===`)
   console.log(`  ${passed} passed, ${failures.length} failed`)
   if (failures.length) {

@@ -410,6 +410,50 @@ function makeExecutable (file) {
 }
 
 /**
+ * Move an archive's contents up when it packed them inside a folder.
+ *
+ * The same release is packed differently per platform. The Windows Pi .zip has `pi.exe` at its
+ * root; the macOS .tar.gz puts everything under a top-level `pi/` folder. Unpacking either into the
+ * version directory therefore does not leave the program where layout() says it is: on a Mac it
+ * landed at <version>/pi/pi, and the app spawns <version>/pi, which is a directory, so starting Pi
+ * failed with "spawn ... EACCES". llama.cpp's macOS build nests under `llama-b11284/` the same way.
+ * The layout is normalised here rather than assumed.
+ *
+ * Returns true when something was moved, so a caller can tell which layout it got.
+ */
+function hoistContents (dir, program) {
+  try {
+    if (fs.statSync(path.join(dir, program)).isFile()) return false
+  } catch {
+    /* not at the top level: that is the case this exists for */
+  }
+  let entries = []
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true })
+  } catch {
+    return false
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    try {
+      if (!fs.statSync(path.join(dir, entry.name, program)).isFile()) continue
+    } catch {
+      continue
+    }
+    // Move the folder aside first, because the program is often named the same as the folder
+    // holding it and a file cannot be moved onto a directory that still exists.
+    const aside = path.join(dir, `.${entry.name}.unpacked`)
+    fs.renameSync(path.join(dir, entry.name), aside)
+    for (const inner of fs.readdirSync(aside)) {
+      fs.renameSync(path.join(aside, inner), path.join(dir, inner))
+    }
+    fs.rmdirSync(aside)
+    return true
+  }
+  return false
+}
+
+/**
  * Install Pi. Verified download, extract to a staging directory, and only then swap it into
  * place — an interrupted install never leaves something that looks installed.
  */
@@ -441,6 +485,8 @@ async function install (piRoot, opts = {}) {
   fs.mkdirSync(staging, { recursive: true })
   try {
     await extract(L.download, staging)
+    // the macOS archive nests everything under `pi/`, the Windows one does not
+    hoistContents(staging, path.basename(L.exe))
     const staged = path.join(staging, path.basename(L.exe))
     if (!fs.existsSync(staged)) {
       throw new Error('the release did not contain the expected program')
@@ -741,5 +787,6 @@ module.exports = { ensureImageExtension,
   runTurn,
   modelsFor,
   shaFor,
-  makeExecutable
+  makeExecutable,
+  hoistContents
 }
