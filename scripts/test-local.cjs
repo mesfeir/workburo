@@ -276,7 +276,9 @@ function stubFetch (body, { status = 200, headers = {} } = {}) {
   check('18. a file that is not a program does not claim to be a runtime', () => {
     const fake = path.join(scratch, 'not-a-program.exe')
     fs.writeFileSync(fake, 'just text')
-    assert.strictEqual(local.binaryVersion(fake), null, 'a text file was accepted as the runtime')
+    const bad = local.binaryVersion(fake)
+    assert.strictEqual(bad.ok, false, 'a text file was accepted as the runtime')
+    assert.ok(bad.why, 'the refusal did not say why it would not run')
     return true
   })
 
@@ -320,7 +322,7 @@ function stubFetch (body, { status = 200, headers = {} } = {}) {
 
     check('19. the runtime reports the version it was pinned to', () => {
       const v = local.binaryVersion(L.exe)
-      assert.ok(v, 'the pinned runtime would not run')
+      assert.ok(v.ok, `the pinned runtime would not run: ${v.why}`)
       assert.strictEqual(v.build, local.LLAMA_VERSION.replace(/^b/, ''), `build mismatch: ${JSON.stringify(v)}`)
       return true
     })

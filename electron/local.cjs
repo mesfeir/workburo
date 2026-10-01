@@ -229,12 +229,29 @@ function extractArchive (archive, dest) {
 }
 
 /** Ask the binary what it is. Proves the unpack really produced something that runs. */
-function binaryVersion (exe, timeoutMs = 15000) {
-  const r = require('node:child_process').spawnSync(exe, ['--version'], { windowsHide: true, timeout: timeoutMs })
-  const text = `${r.stdout || ''}${r.stderr || ''}`.trim()
-  if (r.status !== 0 || !text) return null
-  const m = text.match(/build\s+(\d+)/i)
-  return { text: text.split('\n')[0].trim(), build: m ? m[1] : null }
+function binaryVersion (exe, timeoutMs = 60000, attempts = 2) {
+  let last = null
+  for (let i = 0; i < attempts; i += 1) {
+    const r = require('node:child_process').spawnSync(exe, ['--version'], { windowsHide: true, timeout: timeoutMs })
+    const text = `${r.stdout || ''}${r.stderr || ''}`.trim()
+    if (r.status === 0 && text) {
+      const m = text.match(/build\s+(\d+)/i)
+      return { ok: true, text: text.split('\n')[0].trim(), build: m ? m[1] : null }
+    }
+    // Say why. "Would not run" on its own sends someone hunting for a day, and the cases are
+    // different problems: the file is not there, the spawn itself failed (blocked, no permission),
+    // or it ran and refused (usually a DLL missing beside it).
+    last = r.error
+      ? r.error.message
+      : r.status === null
+        ? 'it did not finish'
+        : `exit ${r.status}${text ? `: ${text.split('\n')[0].slice(0, 140)}` : ''}`
+    // The first run of a freshly unpacked binary can be slow while antivirus reads every one of the
+    // fifty files beside it. A second attempt costs a second and a half and turns that cold start
+    // into a working install, instead of throwing away a completed download over it.
+    if (i < attempts - 1) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1500)
+  }
+  return { ok: false, why: last }
 }
 
 /**
@@ -269,9 +286,10 @@ async function install (opts = {}) {
       extractArchive(L.archive, staging)
       const exe = path.join(staging, path.basename(L.exe))
       const version = binaryVersion(exe)
-      if (!version) {
-        fs.rmSync(staging, { recursive: true, force: true })
-        return { ok: false, error: 'the unpacked runtime would not run, so it was removed.' }
+      if (!version.ok) {
+        // Keep the staging directory and the archive. Removing them made the failure invisible and
+        // threw away a finished 19 MB download, so a retry had to fetch the whole thing again.
+        return { ok: false, error: `the unpacked runtime would not run (${version.why}). The download was kept, so retrying will not fetch it again.` }
       }
       fs.rmSync(L.versionDir, { recursive: true, force: true })
       fs.renameSync(staging, L.versionDir)
