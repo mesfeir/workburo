@@ -115,19 +115,31 @@ function stripInlineImages(store) {
 
 /** read the bytes back for display; a missing file is surfaced, never hidden */
 function restoreInlineImages(store) {
+  // The agent names a file the way it wrote it, often "villa-night.png" rather than a full path, and
+  // reading that from the app's own folder failed and showed the picture as missing even though the
+  // file was written correctly. Try the path as given, then the workspace, then the documents folder.
+  const ws = (store?.config?.agent || {}).workspace
+  const tries = (p) => [
+    String(p),
+    ws ? path.resolve(ws, String(p)) : '',
+    path.resolve(documentsDir(), String(p)),
+  ].filter(Boolean)
   for (const c of Array.isArray(store?.conversations) ? store.conversations : []) {
     for (const m of c.messages || []) {
       if (!Array.isArray(m.images)) continue
       m.images = m.images.map((im) => {
         if (!im || !im.path || im.url) return im
-        try {
-          const buf = fs.readFileSync(im.path)
-          const ext = path.extname(im.path).slice(1).toLowerCase()
-          const mime = ext === 'png' ? 'png' : ext === 'webp' ? 'webp' : 'jpeg'
-          return { ...im, url: `data:image/${mime};base64,${buf.toString('base64')}` }
-        } catch {
-          return { ...im, missing: true }
+        for (const candidate of tries(im.path)) {
+          try {
+            const buf = fs.readFileSync(candidate)
+            const ext = path.extname(candidate).slice(1).toLowerCase()
+            const mime = ext === 'png' ? 'png' : ext === 'webp' ? 'webp' : 'jpeg'
+            return { ...im, path: candidate, url: `data:image/${mime};base64,${buf.toString('base64')}` }
+          } catch {
+            /* try the next place it could be */
+          }
         }
+        return { ...im, missing: true }
       })
     }
   }
@@ -629,7 +641,14 @@ async function runAgentTurn (req) {
   // The pictures note goes on every turn, not only the first: a picture made after agent mode was
   // switched on is exactly the one "use the image from before" refers to.
   const pictures = pictureNoteForAgent()
-  const prompt = [seed, pictures, req.prompt].filter(Boolean).join('\n\n---\n\n')
+  // Being offered a tool is not the same as believing you have it. Say the picture tool is there,
+  // and only when a key makes it actually work.
+  const imageNote = String(((cfg.imageGen || {}).falKey) || '').trim()
+    ? 'You can create pictures with the generate_image tool. When the user asks to see something, to ' +
+      'draw or change a picture, call generate_image with a detailed prompt instead of describing the ' +
+      'scene in words. The picture is saved as a file and its path is in the result.'
+    : ''
+  const prompt = [seed, pictures, imageNote, req.prompt].filter(Boolean).join('\n\n---\n\n')
 
   // A local server needs no key, but Pi reads one from the environment before it will start at all,
   // so an empty key made agent mode refuse with "No API key found for zen" while the chat beside it
@@ -647,6 +666,12 @@ async function runAgentTurn (req) {
     model: req.model || cfg.model,
     relayKey,
     prompt,
+    // The agent's own picture tool: the same fal.ai key and folders the composer uses, handed to
+    // the agent so "make it night time" produces a picture instead of a description of one.
+    extension: pi.ensureImageExtension(path.join(app.getPath('userData'), 'agent-ext')),
+    falKey: (cfg.imageGen || {}).falKey || '',
+    imagesDir: imagesDir(),
+    imageModel: (cfg.imageGen || {}).model || '',
     timeoutMs: 15 * 60 * 1000,
     onEvent: ev => {
       const mapped = agentEventFor(requestId, ev)

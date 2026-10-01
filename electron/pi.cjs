@@ -521,6 +521,23 @@ function createTranslator (onEvent, opts = {}) {
 }
 
 /**
+ * The image tool, written out where Pi can read it. It lives inside the app's archive, and that is
+ * not a place a separate process can load from, so it is copied to a real folder first. Written on
+ * every run so an updated app never leaves a stale extension behind.
+ */
+function ensureImageExtension (dir) {
+  const source = path.join(__dirname, 'agent-ext', 'generate-image.ts')
+  try {
+    fs.mkdirSync(dir, { recursive: true })
+    const target = path.join(dir, 'generate-image.ts')
+    fs.writeFileSync(target, fs.readFileSync(source))
+    return target
+  } catch {
+    return ''
+  }
+}
+
+/**
  * One turn, one process. Resolves when Pi settles, with the text it produced.
  * Returns a handle so the Stop button can end it.
  */
@@ -537,6 +554,9 @@ function runTurn (opts) {
   } else {
     args.push('--no-session')
   }
+  // The picture tool, loaded for this run only. It is registered alongside Pi's own tools, so the
+  // agent can make a picture instead of saying it has no way to.
+  if (opts.extension) args.push('--extension', opts.extension)
   args.push('--model', model, opts.prompt)
 
   const child = spawn(L.exe, args, {
@@ -548,7 +568,13 @@ function runTurn (opts) {
     env: {
       ...process.env,
       PI_CODING_AGENT_DIR: opts.agentDir || L.agentDir,
-      [KEY_ENV]: opts.relayKey || ''
+      [KEY_ENV]: opts.relayKey || '',
+      // The image tool reads these. The key rides the environment rather than the extension file,
+      // which is written to disk in the clear.
+      WORKBURO_FAL_KEY: opts.falKey || '',
+      WORKBURO_IMAGES_DIR: opts.imagesDir || '',
+      WORKBURO_IMAGE_MODEL: opts.imageModel || '',
+      WORKBURO_WORKSPACE: opts.workspace || ''
     }
   })
 
@@ -627,7 +653,7 @@ function modelsFor (catalog) {
   return out
 }
 
-module.exports = {
+module.exports = { ensureImageExtension,
   PI_VERSION,
   PROVIDER,
   KEY_ENV,
