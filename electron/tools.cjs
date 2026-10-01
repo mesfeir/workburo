@@ -51,8 +51,9 @@ async function webSearch(args, opts = {}) {
     return {
       ok: false,
       error:
-        `Search backend at ${searchUrl} is unreachable (${err.message}). ` +
-        'It is the local SearXNG container — start Docker Desktop, or set a different search URL in Settings → Tools.',
+        `No search service is answering at ${searchUrl} (${err.message}). ` +
+        'Search needs a SearXNG instance with the JSON API enabled, in search.formats. ' +
+        'Point this at one in Settings, then Tools, or run: docker run -d -p 8888:8080 searxng/searxng',
     }
   }
 
@@ -165,19 +166,32 @@ async function getWeather(args, opts = {}) {
   if (!place) return { ok: false, error: 'get_weather needs a location.' }
   const days = Math.min(Math.max(Number(args.days) || 1, 1), 7)
 
-  let geo
-  try {
-    const r = await fetch(
-      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(place)}&count=1&language=en&format=json`,
-      { headers: { 'User-Agent': UA }, signal: timeoutSignal(15000, opts.signal) },
-    )
-    if (!r.ok) return { ok: false, error: `Geocoding failed with HTTP ${r.status}.` }
-    geo = await r.json()
-  } catch (err) {
-    return { ok: false, error: `Could not reach the geocoding service: ${err.message}` }
+  // open-meteo's geocoder rejects some "City, Country" strings outright: "London, UK" comes back
+  // with no results at all while "Paris, France" works, so a person naming a place the natural way
+  // was told the place does not exist. Ask for what they said, then for the part before the first
+  // comma, rather than letting the phrasing decide whether the tool works.
+  const asked = [place]
+  const bare = place.split(',')[0].trim()
+  if (bare && bare !== place) asked.push(bare)
+
+  let geo = null
+  for (const [i, name] of asked.entries()) {
+    try {
+      const r = await fetch(
+        `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=en&format=json`,
+        { headers: { 'User-Agent': UA }, signal: timeoutSignal(15000, opts.signal) },
+      )
+      if (!r.ok) return { ok: false, error: `Geocoding failed with HTTP ${r.status}.` }
+      geo = await r.json()
+    } catch (err) {
+      return { ok: false, error: `Could not reach the geocoding service: ${err.message}` }
+    }
+    if ((geo.results || []).length) break
+    // Only worth trying the shorter form once, and only when it is genuinely different.
+    if (i === asked.length - 1) geo = null
   }
 
-  const hit = (geo.results || [])[0]
+  const hit = ((geo && geo.results) || [])[0]
   if (!hit) return { ok: false, error: `I could not find a place called "${place}".` }
 
   const label = [hit.name, hit.admin1, hit.country].filter(Boolean).join(', ')

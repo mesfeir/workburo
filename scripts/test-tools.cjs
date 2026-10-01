@@ -31,6 +31,22 @@ function check(name, fn) {
   }
 }
 
+/**
+ * `check` is synchronous, so handing it an async function reported PASS the moment the function
+ * returned its promise, before any of its assertions had run. Use this for anything that awaits.
+ */
+async function checkAsync(name, fn) {
+  try {
+    const r = fn()
+    if (r && typeof r.then === 'function') await r
+    console.log(`PASS  ${name}`)
+    passed += 1
+  } catch (err) {
+    console.log(`FAIL  ${name}\n        ${err.message}`)
+    failed += 1
+  }
+}
+
 const names = (cfg) => chatToolDefs(cfg).map((t) => t.function && t.function.name)
 
 check('connected-app tools stay hidden until the user turns them on', () => {
@@ -255,6 +271,43 @@ const drawOpts = (over = {}) => ({
     )
     assert.strictEqual(bad.ok, false)
     assert.ok(/xlsx/.test(bad.error) && /pdf/.test(bad.error), bad.error)
+  })
+
+  await checkAsync('the weather tool finds a place named the way a person names it', async () => {
+    // open-meteo answers "Paris, France" but returns nothing at all for "London, UK", so a person
+    // typing their city the natural way was told the place did not exist. It now asks again without
+    // the qualifier rather than letting the phrasing decide whether the tool works.
+    const realFetch = globalThis.fetch
+    const asked = []
+    globalThis.fetch = async (url) => {
+      const u = String(url)
+      asked.push(u)
+      if (u.includes('geocoding')) {
+        const name = new URL(u).searchParams.get('name')
+        const hit = name === 'London'
+          ? { name: 'London', admin1: 'England', country: 'United Kingdom', latitude: 51.5, longitude: -0.12 }
+          : null
+        return { ok: true, json: async () => ({ results: hit ? [hit] : [] }) }
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          timezone: 'Europe/London',
+          current: { time: 'now', weather_code: 0, temperature_2m: 12, apparent_temperature: 11, relative_humidity_2m: 70, wind_speed_10m: 5, precipitation: 0 },
+          current_units: {},
+          daily: {},
+        }),
+      }
+    }
+    try {
+      const r = await executeTool('get_weather', { location: 'London, UK' }, {})
+      assert.ok(r.ok, `it gave up: ${r.error}`)
+      assert.ok(asked.some((u) => u.includes('name=London%2C%20UK')), 'it never asked for what was typed')
+      assert.ok(asked.some((u) => /[?&]name=London(&|$)/.test(u)), 'it never fell back to the bare name')
+      assert.match(r.text, /London, England, United Kingdom/, r.text)
+    } finally {
+      globalThis.fetch = realFetch
+    }
   })
 
   console.log(`\n${passed}/${passed + failed} checks passed`)
