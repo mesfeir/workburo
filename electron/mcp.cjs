@@ -71,6 +71,15 @@ const ENV_BASELINE = [
   'LANG',
   'LC_ALL',
   'HOME',
+  // The Unix side of the same list. Without TMPDIR a program that writes a temporary file is left
+  // guessing, and without USER or SHELL a script that asks who it is running as gets nothing. Names
+  // that are absent on this platform are skipped, so carrying both sets costs nothing.
+  'TMPDIR',
+  'USER',
+  'LOGNAME',
+  'SHELL',
+  'TZ',
+  'SSH_AUTH_SOCK',
 ]
 
 /** What the process table must never see, and what a log must never keep. */
@@ -376,10 +385,15 @@ function resolveCommand(command) {
     const here = fs.existsSync(c)
     return { file: c, needsShell: /\.(cmd|bat)$/i.test(c), missing: !here }
   }
-  const exts = String(process.env.PATHEXT || '.COM;.EXE;.BAT;.CMD')
-    .split(';')
-    .map((e) => e.trim())
-    .filter(Boolean)
+  // Windows resolves a bare name by trying PATHEXT extensions; everywhere else the name itself is
+  // the file, and appending .EXE to it finds nothing. This is why an MCP server configured with a
+  // plain command name could never start on macOS.
+  const exts = process.platform === 'win32'
+    ? String(process.env.PATHEXT || '.COM;.EXE;.BAT;.CMD')
+      .split(';')
+      .map((e) => e.trim())
+      .filter(Boolean)
+    : ['']
   for (const dir of String(process.env.PATH || '').split(path.delimiter)) {
     if (!dir) continue
     for (const ext of exts) {

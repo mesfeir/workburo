@@ -10,7 +10,7 @@ const os = require('node:os')
 const path = require('node:path')
 const assert = require('node:assert/strict')
 
-const pi = require('C:/Users/Mel/zen-chat/electron/pi.cjs')
+const pi = require('../electron/pi.cjs')
 
 let pass = 0
 let fail = 0

@@ -177,7 +177,23 @@ async function main() {
   await mcp.stop(envConn)
 
   const built = mcp.childEnv({ PATH: 'x', SECRET: 'ghp_abc' })
-  check('childEnv keeps the baseline a process needs to start', built.PATH === 'x' && typeof built.SystemRoot === 'string', Object.keys(built).length + ' vars')
+  // The baseline differs by platform. Windows needs SystemRoot; macOS and Linux need HOME and
+  // TMPDIR. Assert the platform's own essential, not a Windows name that cannot exist here.
+  const essential = process.platform === 'win32' ? 'SystemRoot' : 'HOME'
+  check(
+    'childEnv keeps the baseline a process needs to start',
+    built.PATH === 'x' && typeof built[essential] === 'string',
+    Object.keys(built).length + ' vars, ' + essential + ' ' + (typeof built[essential]),
+  )
+  if (process.platform !== 'win32') {
+    // Without TMPDIR a program that wants a temporary file is left guessing where to put it.
+    const unixEnv = mcp.childEnv({})
+    check(
+      'on a unix machine the baseline carries TMPDIR, USER and SHELL',
+      typeof unixEnv.TMPDIR === 'string' && unixEnv.TMPDIR.length > 0,
+      JSON.stringify({ TMPDIR: !!unixEnv.TMPDIR, USER: !!unixEnv.USER, SHELL: !!unixEnv.SHELL }),
+    )
+  }
   check('childEnv carries only what was configured, never the whole environment', built.ZEN_APP_API_KEY === undefined, String(built.ZEN_APP_API_KEY))
 
   /* ---------------------------------------------------------------- 5. redaction */
@@ -202,9 +218,13 @@ async function main() {
   check('a command that does not exist names the missing binary', /was not found on this machine/.test(String(missing.error && missing.error.message)), String(missing.error && missing.error.message))
 
   const resolved = mcp.resolveCommand('node')
+  // The suffix differs: cmd appends PATHEXT extensions, a unix shell does not.
+  const wanted = process.platform === 'win32' ? /node\.exe$/i : /(^|[/\\])node$/
   check(
-    'a bare command is resolved on PATH, the way cmd would',
-    !!resolved && resolved.missing === false && /node\.exe$/i.test(resolved.file),
+    process.platform === 'win32'
+      ? 'a bare command is resolved on PATH, the way cmd would'
+      : 'a bare command is resolved on PATH, the way the shell would',
+    !!resolved && resolved.missing === false && wanted.test(resolved.file),
     String(resolved && resolved.file),
   )
   check('a command that is nowhere is reported as missing, not guessed at', mcp.resolveCommand('no-such-binary-xyz').missing === true, 'missing')
