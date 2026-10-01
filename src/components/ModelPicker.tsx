@@ -6,6 +6,9 @@ import type { Config, ModelGroup, ModelInfo } from '../types'
  * The model chooser. Every model this machine can actually reach, grouped under the provider it
  * came from, with one search box that spans all of them. Nothing is pre-selected: until you pick,
  * it says so rather than showing a name you never agreed to.
+ *
+ * Each row hands back the endpoint it belongs to as well as the model, because the group is the
+ * thing that knows which provider a model came from.
  */
 export default function ModelPicker({
   models,
@@ -24,7 +27,7 @@ export default function ModelPicker({
   unavailable?: { provider: string; error?: string }[]
   current: string
   config: Config
-  onSelect: (id: string) => void
+  onSelect: (id: string, from?: { baseUrl: string; key?: string; affinity?: boolean }) => void
   onRefresh: () => void
   onProbe: (id: string) => void
   probingId: string | null
@@ -126,7 +129,15 @@ export default function ModelPicker({
                 >
                   <button
                     onClick={() => {
-                      onSelect(m.id)
+                      // The model travels with the endpoint that offers it, its key and whether it wants
+                      // affinity. Without that the app stayed on whichever provider it was already
+                      // pointed at, so a model chosen from a second provider was sent to the first one
+                      // and it failed. Picking the model is now the whole decision: no click on the
+                      // provider first, and every provider that has a key is ready.
+                      onSelect(
+                        m.id,
+                        g.baseUrl ? { baseUrl: g.baseUrl, key: g.key, affinity: g.affinity } : undefined,
+                      )
                       setOpen(false)
                     }}
                     className="flex min-w-0 flex-1 items-center gap-2 px-1 py-2 text-left"

@@ -137,6 +137,10 @@ export interface ModelGroup {
   baseUrl: string
   models: ModelInfo[]
   error?: string
+  /** The key this provider should be asked with, resolved when the list was fetched. */
+  key?: string
+  /** Whether this provider wants the affinity header, so a chosen model can carry it too. */
+  affinity?: boolean
 }
 
 export interface ModelPref {

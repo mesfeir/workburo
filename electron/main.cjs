@@ -617,6 +617,31 @@ function pictureNoteForAgent () {
 }
 
 /**
+ * What the agent should know about the files attached to this message, and the copy it can open.
+ *
+ * A document attached in chat is read by the app and handed to the model as text. In agent mode the
+ * file has to be a real file in a place the agent can reach, so one outside the workspace is copied
+ * into it. If the copy cannot be made the note still names the original, because a path the agent
+ * might manage is better than no mention of the file at all.
+ */
+function attachmentNoteForAgent (req, workspace) {
+  const docs = ((req && req.documents) || []).filter((d) => d && d.path)
+  const images = ((req && req.images) || []).filter((i) => i && i.path)
+  const copied = {}
+  for (const c of appPaths.attachmentCopies(docs, workspace)) {
+    try {
+      if (!fs.existsSync(c.from)) continue
+      fs.mkdirSync(path.dirname(c.to), { recursive: true })
+      fs.copyFileSync(c.from, c.to)
+      copied[c.from] = c.to
+    } catch {
+      /* the note falls back to naming the original path */
+    }
+  }
+  return appPaths.attachmentNote(docs, images, copied)
+}
+
+/**
  * One agent turn: Pi runs the loop in the chosen folder, using the model the chat has selected.
  * The provider config is regenerated first, so switching model in the composer switches the
  * model the agent uses too.
@@ -671,7 +696,9 @@ async function runAgentTurn (req) {
       'its path as image_path so the model works from that picture rather than redrawing it from the ' +
       'words alone. The pictures are saved as files and their paths are in the result.'
     : ''
-  const prompt = [seed, pictures, imageNote, req.prompt].filter(Boolean).join('\n\n---\n\n')
+  // Whatever was attached to this message, as files the agent can actually open.
+  const attachments = attachmentNoteForAgent(req, workspace)
+  const prompt = [seed, pictures, imageNote, attachments, req.prompt].filter(Boolean).join('\n\n---\n\n')
 
   // A local server needs no key, but Pi reads one from the environment before it will start at all,
   // so an empty key made agent mode refuse with "No API key found for zen" while the chat beside it
@@ -2330,7 +2357,18 @@ ipcMain.handle('models:all', async (_e, { cfg } = {}) => {
   console.log(`[models:all] asking ${sources.length}: ${sources.map((s) => s.provider).join(', ')}`)
   const asked = await Promise.all(
     sources.map(async (s) => {
-      const g = { provider: s.provider, baseUrl: s.baseUrl, models: [], error: '' }
+      // The key and the affinity this source was resolved with ride along, so picking one of its
+      // models can apply the provider in the same step and none of them has to be chosen first.
+      // They never leave this machine: the renderer already holds the saved keys, and this is the
+      // same list it is choosing from.
+      const g = {
+        provider: s.provider,
+        baseUrl: s.baseUrl,
+        key: s.key || '',
+        affinity: Boolean(s.affinity),
+        models: [],
+        error: '',
+      }
       try {
         const res = await fetch(`${s.baseUrl}/models`, {
           headers: headersFor({ ...c, baseUrl: s.baseUrl, apiKey: s.key }),

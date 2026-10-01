@@ -244,6 +244,14 @@ export interface ZenApi {
       prompt: string
       model?: string
       workspace?: string
+      /**
+       * Files attached to the message. Pi runs in a folder of its own and reads files with its own
+       * tools, so a document travels as the path to it; main copies one that lives outside the
+       * workspace into the workspace so the agent can always open it.
+       */
+      documents?: { name?: string; path?: string }[]
+      /** pictures attached to the message, named when they exist as files on disk */
+      images?: { name?: string; path?: string }[]
     }) => Promise<{ ok: boolean; stopped?: boolean; text?: string; tools?: number; error?: string }>
     stop: (requestId: string) => Promise<{ stopped: boolean }>
     onProgress: (

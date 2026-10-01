@@ -524,14 +524,25 @@ export default function App() {
       // With agent mode on the turn goes to Pi instead, carrying the same requestId, so its
       // events land in the very same stream the chat already draws. With it off, this is
       // exactly the chat it always was: no process, nothing extra.
+      // The message being sent: its text, and whatever was attached to it. Agent mode used to send
+      // the text alone, so an attached file was invisible to the agent and it answered as though
+      // nothing had been attached.
+      const lastTurn = history[history.length - 1]
       const pending =
         cfg.agent?.enabled && agentReadyRef.current
           ? window.zen.pi.turn({
               requestId,
               conversationId: convId,
-              prompt: history[history.length - 1]?.content || '',
+              prompt: lastTurn?.content || '',
               model: cfg.model,
               workspace: active?.agentWorkspace || cfg.agent?.workspace,
+              // A document travels as its path, because Pi reads the file itself with its own tools.
+              // main copies one that lives outside the workspace into it, so the agent is certain to
+              // be able to open it.
+              documents: (lastTurn?.documents || []).map((d) => ({ name: d.name, path: d.path })),
+              // Pictures are named when they are files on disk. A picture that only ever existed as
+              // a data URL has nowhere to point at, and Pi's command line takes text.
+              images: (lastTurn?.images || []).map((i) => ({ name: i.name, path: i.path })),
             })
           : window.zen.chat.start({
               requestId,
@@ -1227,6 +1238,36 @@ export default function App() {
 
   /* ---------------------------------------------------------------- ui */
 
+  /**
+   * The whole change of choosing a model, which includes the provider it came from.
+   *
+   * Choosing a model and choosing a provider used to be two separate decisions, and only the second
+   * one carried the key. Picking a model from a provider you had not clicked therefore sent that
+   * model's name to the previous provider's endpoint, which failed. The source a model came from
+   * already knows its endpoint, the key to ask with and whether it wants affinity, so choosing the
+   * model is the only decision, and every provider holding a key is ready without being armed first.
+   *
+   * The key is always set, including when the source has none. A source with no key is a server on
+   * this machine, which needs no key; leaving the previous provider's key in place would send one
+   * provider's credential to another endpoint, which is how a stale key and a fresh endpoint end up
+   * together in the first place.
+   *
+   * A row with no endpoint of its own is the one the app is already pointed at, so it changes the
+   * model and leaves the endpoint and the key exactly as they are.
+   */
+  const pickModel = useCallback(
+    (id: string, from?: { baseUrl: string; key?: string; affinity?: boolean }) =>
+      from && from.baseUrl
+        ? {
+            model: id,
+            baseUrl: from.baseUrl,
+            sendAffinity: Boolean(from.affinity),
+            apiKey: from.key || '',
+          }
+        : { model: id },
+    [],
+  )
+
   const patchConfig = useCallback((patch: Partial<Config>) => {
     setConfig((c) => ({ ...c, ...patch }))
   }, [])
@@ -1295,7 +1336,7 @@ export default function App() {
             unavailable={modelsUnavailable}
             current={config.model}
             config={config}
-            onSelect={(id) => patchConfig({ model: id })}
+            onSelect={(id, from) => patchConfig(pickModel(id, from))}
             onRefresh={refreshModels}
             onProbe={probeModel}
             probingId={probing}

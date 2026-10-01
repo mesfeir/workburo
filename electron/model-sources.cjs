@@ -65,11 +65,21 @@ function sourcesFor (cfg, localPort) {
     if (localUrl && n === localUrl) return true
     return /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/i.test(n)
   }
-  const add = (provider, baseUrl, key) => {
+  const add = (provider, baseUrl, key, affinity) => {
     const norm = normalize(baseUrl)
     if (!norm || seen.has(norm)) return
     seen.add(norm)
-    out.push({ provider: String(provider || '').trim() || 'Endpoint', baseUrl: norm, key: key || '' })
+    // The key and the affinity travel with the source, because choosing a model from this group has
+    // to be the whole decision. Without them the picker changed the model and left the previous
+    // provider's endpoint and key in place, so a model chosen from a second provider was sent to the
+    // first one and the request failed, and the fix for that looked like clicking the provider
+    // first and then changing the model.
+    out.push({
+      provider: String(provider || '').trim() || 'Endpoint',
+      baseUrl: norm,
+      key: key || '',
+      affinity: Boolean(affinity),
+    })
   }
   // The endpoint in use is always worth asking, whatever its profile says. It used to be listed
   // only when NO profile matched it, so the provider a person was actually using disappeared from
@@ -79,15 +89,15 @@ function sourcesFor (cfg, localPort) {
   // prefers the profile's key and falls back to the app's, and a local endpoint needs neither.
   if (current) {
     const key = keyFor(cfg)
-    if (key || onThisMachine(current)) add((match && match.name) || host, cfg && cfg.baseUrl, key)
+    if (key || onThisMachine(current)) add((match && match.name) || host, cfg && cfg.baseUrl, key, match && match.affinity)
   }
   // Each provider is asked with its own key, and only when it has one. A second paid provider
   // cannot list its models off someone else's key, so the app's own key is not a substitute.
   for (const p of profiles) {
     const key = String((p && p.apiKey) || '').trim()
-    if (key || onThisMachine(p && p.baseUrl)) add(p && p.name, p && p.baseUrl, key)
+    if (key || onThisMachine(p && p.baseUrl)) add(p && p.name, p && p.baseUrl, key, p && p.affinity)
   }
-  if (localPort) add('On this machine', `http://127.0.0.1:${localPort}/v1`, '')
+  if (localPort) add('On this machine', `http://127.0.0.1:${localPort}/v1`, '', false)
   return out
 }
 

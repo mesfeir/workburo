@@ -242,6 +242,39 @@ check('19. a bare url is removed, and an empty error stays empty', () => {
   assert.strictEqual(sources.scrubMessage(null), '')
 })
 
+check('20. a source carries the key and the affinity a picked model will be used with', () => {
+  // Choosing a model has to be the whole decision. The source knows which provider it came from, the
+  // key to ask that provider with, and whether that provider wants affinity, so a model picked from
+  // the list can apply all three. Without them the app kept the previous provider's endpoint and
+  // key, which is why a model chosen from a second provider failed until that provider had been
+  // clicked first, and then the model changed again.
+  const s = sources.sourcesFor(
+    {
+      baseUrl: 'https://a.example/v1',
+      profiles: [
+        { name: 'A', baseUrl: 'https://a.example/v1', apiKey: 'a-key', affinity: true },
+        { name: 'B', baseUrl: 'https://b.example/v1', apiKey: 'b-key', affinity: false },
+      ],
+    },
+    0,
+  )
+  const a = s.find((x) => x.provider === 'A')
+  const b = s.find((x) => x.provider === 'B')
+  assert.ok(a && b, `both providers should be offered: ${JSON.stringify(s.map((x) => x.provider))}`)
+  assert.strictEqual(a.key, 'a-key')
+  assert.strictEqual(a.affinity, true)
+  assert.strictEqual(b.key, 'b-key')
+  assert.strictEqual(b.affinity, false)
+  // A server on this machine has no key and wants no affinity, and saying otherwise would send a
+  // paid provider's key to it.
+  const local = sources
+    .sourcesFor({ baseUrl: 'http://127.0.0.1:1234/v1' }, 8080)
+    .find((x) => x.provider === 'On this machine')
+  assert.ok(local, 'the local server should still be offered')
+  assert.strictEqual(local.key, '')
+  assert.strictEqual(local.affinity, false)
+})
+
 console.log('')
 if (failures.length) {
   for (const f of failures) console.log(`  ${f.name}\n     ${f.err && f.err.stack}`)

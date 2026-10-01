@@ -461,7 +461,23 @@ function stubFetch (body, { status = 200, headers = {} } = {}) {
     fs.rmSync(flat, { recursive: true, force: true })
   })
 
-  console.log(`\n=== summary ===`)
+  check('a rename that cannot work is not retried away', () => {
+    // The retry exists because Windows holds a freshly unpacked file open for a moment. It is not for
+    // a path that is simply wrong: that has to fail at once and loudly, or a broken install would only
+    // look like a slow one and the person would never see the reason.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zen-retry-'))
+    let threw = null
+    try {
+      local.renameWithRetry(path.join(dir, 'no-such-file'), path.join(dir, 'elsewhere'))
+    } catch (err) {
+      threw = err
+    }
+    assert.ok(threw, 'a source that does not exist should throw')
+    assert.strictEqual(threw.code, 'ENOENT')
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  console.log('\n=== summary ===')
   console.log(`  ${passed} passed, ${failures.length} failed`)
   if (failures.length) {
     for (const f of failures) console.log(`  FAILED: ${f.name} — ${f.err && f.err.message}`)

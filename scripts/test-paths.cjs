@@ -100,6 +100,48 @@ check('12. the note names the folder and every picture, and points the agent at 
   assert.ok(/read it from there/i.test(note), note)
 })
 
+check('13. nothing attached means no note, and a name with no path is not pretended about', () => {
+  assert.strictEqual(p.attachmentNote([], [], {}), '')
+  assert.strictEqual(p.attachmentNote(null, null, null), '')
+  // A document with no path cannot be pointed at, and naming it would only send the agent looking
+  // for something that is not there.
+  assert.strictEqual(p.attachmentNote([{ name: 'notes.md' }], [], {}), '')
+  // A picture that only ever existed as a data URL is not a file on disk.
+  assert.strictEqual(
+    p.attachmentNote([], [{ name: 'shot.png', url: 'data:image/png;base64,AA' }], {}),
+    '',
+  )
+})
+
+check('14. an attached document is named by path, and the agent is told to read it', () => {
+  // Agent mode sent the prompt alone, so an attached .md file reached the agent as nothing at all.
+  const note = p.attachmentNote([{ name: 'notes.md', path: 'C:/tmp/notes.md' }], [], {})
+  assert.ok(note.includes('notes.md'), note)
+  assert.ok(note.includes('C:/tmp/notes.md'), note)
+  assert.ok(/read them with your file tools/i.test(note), note)
+})
+
+check('15. a document copied into the agent folder is named where it can be opened', () => {
+  const copied = { 'C:/elsewhere/notes.md': 'C:/work/attachments/notes.md' }
+  const note = p.attachmentNote([{ name: 'notes.md', path: 'C:/elsewhere/notes.md' }], [], copied)
+  assert.ok(note.includes('C:/work/attachments/notes.md'), note)
+  assert.ok(note.includes('C:/elsewhere/notes.md'), note)
+})
+
+check('16. a document outside the agent folder is placed inside it, and one already there is not', () => {
+  const ws = path.resolve('/work')
+  const inside = path.join(ws, 'notes.md')
+  const outside = path.resolve('/elsewhere/report.md')
+  const copies = p.attachmentCopies([{ name: 'notes.md', path: inside },
+                                     { name: 'report.md', path: outside }], ws)
+  assert.strictEqual(copies.length, 1, JSON.stringify(copies))
+  assert.strictEqual(copies[0].from, outside)
+  assert.strictEqual(copies[0].to, path.join(ws, 'attachments', 'report.md'))
+  // No folder to put it in, and nothing attached: nothing to do.
+  assert.deepStrictEqual(p.attachmentCopies([{ path: outside }], ''), [])
+  assert.deepStrictEqual(p.attachmentCopies([], ws), [])
+})
+
 console.log('')
 console.log(`=== ${pass} passed, ${fail} failed ===`)
 process.exit(fail ? 1 : 0)

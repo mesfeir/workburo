@@ -300,6 +300,49 @@ function makeExecutable (file) {
 }
 
 /**
+ * Rename, giving Windows a few tries first.
+ *
+ * A rename fails with EPERM or EBUSY while anything still holds the file open, and on Windows a
+ * virus scanner or the search indexer routinely holds a freshly unpacked file for a moment. This was
+ * seen for real: unpacking a nested archive failed with EPERM while the disk was busy, and it would
+ * have failed on a person's machine in exactly the same way. Trying again briefly is the difference
+ * between a download that works every time and one that works most times.
+ */
+function renameWithRetry (from, to, attempts = 10, waitMs = 150) {
+  for (let i = 0; ; i++) {
+    try {
+      fs.renameSync(from, to)
+      return
+    } catch (err) {
+      const transient =
+        err && (err.code === 'EPERM' || err.code === 'EBUSY' || err.code === 'EACCES')
+      if (!transient || i >= attempts - 1) throw err
+      sleepSync(waitMs)
+    }
+  }
+}
+
+/** The same courtesy for removing the folder once it has been emptied. */
+function rmdirWithRetry (dir, attempts = 10, waitMs = 150) {
+  for (let i = 0; ; i++) {
+    try {
+      fs.rmdirSync(dir)
+      return
+    } catch (err) {
+      const transient =
+        err && (err.code === 'EPERM' || err.code === 'EBUSY' || err.code === 'ENOTEMPTY')
+      if (!transient || i >= attempts - 1) throw err
+      sleepSync(waitMs)
+    }
+  }
+}
+
+/** A synchronous pause. Everything around an unpack is synchronous on purpose, so it stays so. */
+function sleepSync (ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+}
+
+/**
  * Move an archive's contents up when it packed them inside a folder.
  *
  * The Windows llama.cpp build is a .zip with the programs at its root; the macOS .tar.gz puts
@@ -328,11 +371,11 @@ function hoistContents (dir, program) {
       continue
     }
     const aside = path.join(dir, `.${entry.name}.unpacked`)
-    fs.renameSync(path.join(dir, entry.name), aside)
+    renameWithRetry(path.join(dir, entry.name), aside)
     for (const inner of fs.readdirSync(aside)) {
-      fs.renameSync(path.join(aside, inner), path.join(dir, inner))
+      renameWithRetry(path.join(aside, inner), path.join(dir, inner))
     }
-    fs.rmdirSync(aside)
+    rmdirWithRetry(aside)
     return true
   }
   return false
@@ -555,6 +598,7 @@ module.exports = {
   layout,
   makeExecutable,
   hoistContents,
+  renameWithRetry,
   modelPath,
   entryFor,
   humanSize,
