@@ -77,7 +77,18 @@ contextBridge.exposeInMainWorld('zen', {
   openExternal: (url) => ipcRenderer.invoke('open:external', { url }),
   tools: {
     list: () => ipcRenderer.invoke('tools:list'),
-    probe: (searchUrl) => ipcRenderer.invoke('tools:probe', { searchUrl }),
+    // takes the whole search setting so what gets tested is what is chosen; a bare url still works
+    probe: (asked) =>
+      ipcRenderer.invoke('tools:probe', typeof asked === 'string' ? { searchUrl: asked } : asked || {}),
+  },
+  search: {
+    docker: () => ipcRenderer.invoke('search:docker'),
+    install: (opts) => ipcRenderer.invoke('search:install', opts || {}),
+    onInstallProgress: (handler) => {
+      const listener = (_e, payload) => handler(payload)
+      ipcRenderer.on('search:install-progress', listener)
+      return () => ipcRenderer.removeListener('search:install-progress', listener)
+    },
   },
   images: {
     models: (key, categories) => ipcRenderer.invoke('images:models', { key, categories }),

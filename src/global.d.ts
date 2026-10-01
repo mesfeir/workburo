@@ -1,4 +1,4 @@
-import type { ChatEvent, StoreShape } from './types'
+import type { ChatEvent, SearchMode, StoreShape } from './types'
 
 export interface HotkeyStatus {
   requested: string
@@ -132,12 +132,28 @@ export interface ZenApi {
   openExternal: (url: string) => Promise<{ ok: boolean; error?: string }>
   tools: {
     list: () => Promise<{ name: string; label: string; describe: string }[]>
-    probe: (searchUrl: string) => Promise<{
+    probe: (asked: string | { searchUrl?: string; searchMode?: SearchMode; searchKey?: string; searchProvider?: string; query?: string }) => Promise<{
       ok: boolean
       error: string | null
       preview: string
       sources: { title: string; url: string }[]
+      /** true when the answer came from the reference sources rather than a search service */
+      reference: boolean
     }>
+  }
+  search: {
+    /** is Docker here, and is its daemon awake? Two different questions on Windows. */
+    docker: () => Promise<{ docker: boolean; daemon: boolean; version: string | null; error: string | null }>
+    /** one click: write the settings, start the container, wait until it answers */
+    install: (opts?: { port?: number }) => Promise<{
+      ok: boolean
+      url?: string
+      port?: number
+      name?: string
+      results?: number
+      error?: string
+    }>
+    onInstallProgress: (handler: (p: { phase: string; message: string }) => void) => () => void
   }
   images: {
     models: (key: string, categories?: string) => Promise<{ ok: boolean; models?: FalModel[]; total?: number; error?: string; status?: number }>

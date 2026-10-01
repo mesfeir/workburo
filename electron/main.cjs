@@ -1186,6 +1186,7 @@ const REASONING_HINTS = /reasoning_effort|disabling thinking|thinking-only|reaso
 const TOOL_HINTS = /tool_calls|tool_choice|"tools"|tools are not supported|tool.*not supported|'function' is|invalid_parameter_error.*(tool|function)/i
 
 const { chatToolDefs, responsesToolDefs, executeTool, ALL_TOOLS, REGISTRY } = require('./tools.cjs')
+const searxng = require('./searxng.cjs')
 // MCP servers, spoken to directly. See ./mcp.cjs for why this is hand-rolled.
 const mcp = require('./mcp.cjs')
 
@@ -2536,17 +2537,57 @@ ipcMain.handle('tools:list', () =>
   })),
 )
 
-// lets Settings prove the search backend works before a model ever needs it
-ipcMain.handle('tools:probe', async (_e, { searchUrl }) => {
-  const r = await executeTool('web_search', { query: 'test', limit: 2 }, { searchUrl })
+// lets Settings prove the search backend works before a model ever needs it.
+// Takes the whole search setting, so whatever is chosen is what gets tested, and still accepts a
+// bare url from older callers.
+ipcMain.handle('tools:probe', async (_e, arg = {}) => {
+  const asked = typeof arg === 'string' ? { searchUrl: arg } : arg || {}
+  const cfg = readStore().config || {}
+  const r = await executeTool(
+    'web_search',
+    { query: asked.query || 'test', limit: 2 },
+    {
+      searchUrl: asked.searchUrl !== undefined ? asked.searchUrl : cfg.searchUrl,
+      searchMode: asked.searchMode !== undefined ? asked.searchMode : cfg.searchMode,
+      searchKey: asked.searchKey !== undefined ? asked.searchKey : cfg.searchKey,
+      searchProvider: asked.searchProvider !== undefined ? asked.searchProvider : cfg.searchProvider,
+    },
+  )
+  const text = String(r.text || r.error || '')
   return {
     ok: r.ok,
     error: r.error || null,
-    preview: String(r.text || r.error || '')
-      .replace(/\s+/g, ' ')
-      .slice(0, 240),
+    preview: text.replace(/\s+/g, ' ').slice(0, 240),
     sources: r.sources || [],
+    // The answer says out loud when it came from the reference sources instead of a search
+    // service, so Settings can say so too rather than implying a search service answered.
+    reference: /reference sources/i.test(text),
   }
+})
+
+/* ---- setting search up: one click, when Docker is there ----
+ *
+ * Not required: search answers from the reference sources with nothing installed. This is the
+ * upgrade to a real web search, and it only ever runs when someone asks for it.
+ */
+
+ipcMain.handle('search:docker', () => searxng.dockerStatus({}))
+
+ipcMain.handle('search:install', async (_e, opts = {}) => {
+  const store = readStore()
+  const cfg = store.config || {}
+  const port = Number(opts.port) || searxng.DEFAULT_PORT
+  const r = await searxng.installSearxng({
+    port,
+    name: searxng.CONTAINER,
+    dir: opts.dir || searxng.settingsDir(app.getPath('userData')),
+    onProgress: (p) => sendToRenderer('search:install-progress', p),
+  })
+  if (r.ok) {
+    // Point search at what was just installed and remember the choice, so the next search uses it.
+    writeStore({ ...store, config: { ...cfg, searchUrl: r.url, searchMode: 'searxng' } })
+  }
+  return r
 })
 
 ipcMain.handle('app:setLoginItem', (_e, { enabled }) => setStartWithWindows(enabled))

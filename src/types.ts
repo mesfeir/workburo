@@ -218,6 +218,13 @@ export interface McpConfig {
  *  stock. Both live in index.css as variables, so this value is the entire switch. */
 export type ThemeName = 'dark' | 'paper'
 
+/**
+ * The ways to search: the model provider's own search, your own SearXNG, a search API key, or the
+ * reference sources on their own. Whatever is chosen falls back to the reference sources when it is
+ * not available, so search is never a dead end.
+ */
+export type SearchMode = 'provider' | 'searxng' | 'key' | 'reference'
+
 export interface Config {
   theme?: ThemeName
   baseUrl: string
@@ -249,6 +256,14 @@ export interface Config {
   maxToolRounds: number
   /** SearXNG-compatible JSON search endpoint */
   searchUrl: string
+  /**
+   * How search is answered. Every mode falls back to the reference sources when it is not
+   * available, and the answer says where it came from, so none of them ends in a dead end.
+   */
+  searchMode?: SearchMode
+  /** the key for the search API, when a key is the chosen way to search */
+  searchKey?: string
+  searchProvider?: 'brave' | 'tavily'
   /** fal.ai image generation (hosted; local models are not wired in yet) */
   imageGen: ImageGenConfig
   /** connected apps via Composio; off unless switched on */

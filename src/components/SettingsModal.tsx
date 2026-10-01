@@ -201,6 +201,35 @@ export default function SettingsModal({
   const [toolList, setToolList] = useState<{ name: string; label: string; describe: string }[]>([])
   const [searchTest, setSearchTest] = useState<{ ok: boolean; msg: string } | null>(null)
   const [testing, setTesting] = useState(false)
+  // Search: three ways to answer it, and Docker's state for setting one of them up.
+  const [docker, setDocker] = useState<{ docker: boolean; daemon: boolean; version: string | null; error: string | null } | null>(null)
+  const [installing, setInstalling] = useState(false)
+  const [installNote, setInstallNote] = useState<{ kind: 'busy' | 'ok' | 'err'; msg: string }>({ kind: 'busy', msg: '' })
+  /** What is shown as chosen: a stored mode, or the one search behaves as until told otherwise. */
+  const searchMode = config.searchMode || 'searxng'
+  /** The three ways to search, in the terms someone choosing between them needs. */
+  const SEARCH_CHOICES = [
+    {
+      id: 'searxng',
+      title: 'Your own search service',
+      body: 'A SearXNG instance you run. Searches the whole web, with no key and no query limit.',
+    },
+    {
+      id: 'key',
+      title: 'A search API key',
+      body: 'Brave or Tavily. Real web results without running anything yourself.',
+    },
+    {
+      id: 'provider',
+      title: "The model provider's own search",
+      body: 'Nothing to set up. Used where your provider offers search; the reference sources answer otherwise.',
+    },
+    {
+      id: 'reference',
+      title: 'Reference sources only',
+      body: 'Wikipedia, Stack Overflow, Hacker News and Open Library. No setup and no key, but they are reference material rather than the whole web.',
+    },
+  ] as const
 
   /* ------------------------------------------------------ fal.ai images */
 
@@ -254,6 +283,19 @@ export default function SettingsModal({
   }, [tab])
 
   useEffect(() => window.zen.pi.onProgress(setPiProgress), [])
+  // Whatever the install is doing, said as it happens, so a slow first pull is not a frozen button.
+  useEffect(() => window.zen.search.onInstallProgress((p) => setInstallNote({ kind: 'busy', msg: p.message || p.phase })), [])
+  // Whether Docker is here at all decides what the search setting can offer, so ask when it is opened.
+  useEffect(() => {
+    if (tab !== 'tools') return
+    let live = true
+    window.zen.search.docker().then((d) => {
+      if (live) setDocker(d)
+    })
+    return () => {
+      live = false
+    }
+  }, [tab])
 
   /* ---- the local model: no key, no account, about a second to an answer ---- */
 
@@ -1515,27 +1557,139 @@ export default function SettingsModal({
                 </Field>
 
                 <Field
-                  label="Search backend"
-                  hint="A SearXNG-compatible JSON endpoint. Your local container on :8888 needs no key and has no query limit — start Docker Desktop if search stops working."
+                  label="Search"
+                  hint="Three ways to search, and reference sources underneath all of them. Whatever you choose falls back to those when it is not available, and the answer always says which source it came from."
                 >
-                  <div className="space-y-2">
-                    <input
-                      value={config.searchUrl || ''}
-                      onChange={(e) => onConfig({ searchUrl: e.target.value })}
-                      spellCheck={false}
-                      placeholder="http://localhost:8888"
-                      className="w-full rounded-lg border border-[var(--rule)] bg-[var(--app)] px-3 py-2 font-mono text-[12.5px] text-[var(--text-mid)] outline-none focus:border-[var(--accent-rule)]"
-                    />
+                  <div className="space-y-3">
+                    <div className="space-y-2.5">
+                      {SEARCH_CHOICES.map((o) => (
+                        <label key={o.id} className="flex cursor-pointer items-start gap-2.5">
+                          <input
+                            type="radio"
+                            name="search-mode"
+                            checked={searchMode === o.id}
+                            onChange={() => {
+                              onConfig({ searchMode: o.id })
+                              setSearchTest(null)
+                            }}
+                            className="mt-1 accent-[var(--accent)]"
+                          />
+                          <span>
+                            <span className="block text-[13px] text-[var(--text-mid)]">{o.title}</span>
+                            <span className="mt-0.5 block text-[11.5px] leading-snug text-faint">{o.body}</span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+
+                    {searchMode === 'searxng' && (
+                      <div className="space-y-2 rounded-lg border border-[var(--rule)] p-3">
+                        <input
+                          value={config.searchUrl || ''}
+                          onChange={(e) => onConfig({ searchUrl: e.target.value })}
+                          spellCheck={false}
+                          placeholder="http://localhost:8888"
+                          className="w-full rounded-lg border border-[var(--rule)] bg-[var(--app)] px-3 py-2 font-mono text-[12.5px] text-[var(--text-mid)] outline-none focus:border-[var(--accent-rule)]"
+                        />
+                        {docker && (
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                            <button
+                              disabled={installing || !docker.daemon}
+                              onClick={async () => {
+                                setInstalling(true)
+                                setInstallNote({ kind: 'busy', msg: 'Setting it up…' })
+                                const r = await window.zen.search.install({})
+                                setInstalling(false)
+                                setInstallNote(
+                                  r.ok
+                                    ? { kind: 'ok', msg: `Ready. Search answers at ${r.url} with ${r.results} results.` }
+                                    : { kind: 'err', msg: r.error || 'That did not work.' },
+                                )
+                                if (r.ok && r.url) onConfig({ searchUrl: r.url, searchMode: 'searxng' })
+                              }}
+                              className="flex items-center gap-1.5 rounded-lg border border-[var(--rule)] px-3 py-2 text-[12.5px] text-muted transition hover:bg-[var(--raised)] hover:text-ink disabled:opacity-50"
+                            >
+                              {installing ? <RefreshCw size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                              Set up SearXNG for me
+                            </button>
+                            <span className="text-[11.5px] leading-snug text-faint">
+                              {docker.daemon
+                                ? `Docker ${docker.version || ''} is here: one click starts a container on :8888 and waits until it actually answers.`
+                                : docker.docker
+                                  ? 'Docker is installed but its daemon is not running. Start Docker Desktop and try again.'
+                                  : 'Docker is not installed. Search still works: the reference sources need nothing.'}
+                            </span>
+                          </div>
+                        )}
+                        {installNote.msg && (
+                          <div
+                            className={`flex items-start gap-1.5 text-[12px] ${
+                              installNote.kind === 'ok'
+                                ? 'text-[var(--ok)]'
+                                : installNote.kind === 'err'
+                                  ? 'text-[var(--err)]'
+                                  : 'text-faint'
+                            }`}
+                          >
+                            {installNote.kind === 'ok' && <Check size={13} className="mt-[1px] shrink-0" />}
+                            {installNote.kind === 'err' && <TriangleAlert size={13} className="mt-[1px] shrink-0" />}
+                            <span className="break-words">{installNote.msg}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {searchMode === 'key' && (
+                      <div className="space-y-2 rounded-lg border border-[var(--rule)] p-3">
+                        <div className="flex gap-4">
+                          {(['brave', 'tavily'] as const).map((p) => (
+                            <label
+                              key={p}
+                              className="flex cursor-pointer items-center gap-2 text-[12.5px] text-[var(--text-mid)]"
+                            >
+                              <input
+                                type="radio"
+                                name="search-provider"
+                                checked={(config.searchProvider || 'brave') === p}
+                                onChange={() => onConfig({ searchProvider: p })}
+                                className="accent-[var(--accent)]"
+                              />
+                              {p === 'brave' ? 'Brave' : 'Tavily'}
+                            </label>
+                          ))}
+                        </div>
+                        <input
+                          type="password"
+                          value={config.searchKey || ''}
+                          onChange={(e) => onConfig({ searchKey: e.target.value })}
+                          spellCheck={false}
+                          placeholder="paste the key here"
+                          className="w-full rounded-lg border border-[var(--rule)] bg-[var(--app)] px-3 py-2 font-mono text-[12.5px] text-[var(--text-mid)] outline-none focus:border-[var(--accent-rule)]"
+                        />
+                        <span className="block text-[11.5px] leading-snug text-faint">
+                          Kept the same way the model keys are, in this app's own file. If the key stops working,
+                          search falls back to the reference sources rather than failing.
+                        </span>
+                      </div>
+                    )}
+
                     <button
                       disabled={testing}
                       onClick={async () => {
                         setTesting(true)
                         setSearchTest(null)
-                        const r = await window.zen.tools.probe(config.searchUrl)
+                        const r = await window.zen.tools.probe({
+                          searchUrl: config.searchUrl,
+                          searchMode: config.searchMode,
+                          searchKey: config.searchKey,
+                          searchProvider: config.searchProvider,
+                        })
                         setTesting(false)
                         setSearchTest({
                           ok: r.ok,
-                          msg: r.ok ? `Search works — ${r.preview.slice(0, 150)}` : r.error || 'Search failed.',
+                          msg: r.ok
+                            ? `${r.reference ? 'Reference sources answered' : 'Search works'} — ${r.preview.slice(0, 150)}`
+                            : r.error || 'Search failed.',
                         })
                       }}
                       className="flex items-center gap-1.5 rounded-lg border border-[var(--rule)] px-3 py-2 text-[12.5px] text-muted transition hover:bg-[var(--raised)] hover:text-ink disabled:opacity-50"
