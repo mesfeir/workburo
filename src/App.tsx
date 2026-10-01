@@ -1494,7 +1494,9 @@ export default function App() {
       )}
 
       {toast && (
-        <div className="pointer-events-none fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-xl border border-[var(--rule)] bg-[var(--raised)] px-4 py-2 text-[12.5px] text-[var(--text-mid)] shadow-xl">
+        // Under the settings modal (z-50), not level with it: a transient notice was painting over
+        // an open panel because it comes later in the document and matched its stacking.
+        <div className="pointer-events-none fixed bottom-24 left-1/2 z-40 -translate-x-1/2 rounded-xl border border-[var(--rule)] bg-[var(--raised)] px-4 py-2 text-[12.5px] text-[var(--text-mid)] shadow-xl">
           {toast}
         </div>
       )}

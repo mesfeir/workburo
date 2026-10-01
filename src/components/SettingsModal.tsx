@@ -227,7 +227,7 @@ export default function SettingsModal({
     {
       id: 'reference',
       title: 'Reference sources only',
-      body: 'Wikipedia, Stack Overflow, Hacker News, Open Library. Reference material, not the whole web.',
+      body: 'Wikipedia, Stack Overflow, Hacker News, Open Library.',
     },
   ] as const
 
