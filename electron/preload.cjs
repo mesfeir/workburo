@@ -1,5 +1,13 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron')
 
+// The title bar has to know which side the native window buttons are on before it paints. macOS
+// puts them on the left, so the bar reserves space there instead of on the right.
+if (process.platform === 'darwin') {
+  const mark = () => document.documentElement.setAttribute('data-platform', 'darwin')
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mark)
+  else mark()
+}
+
 // One narrow, explicit surface for the renderer. No node, no fs, no keys in the page.
 contextBridge.exposeInMainWorld('zen', {
   theme: {
@@ -113,6 +121,9 @@ contextBridge.exposeInMainWorld('zen', {
   },
   app: {
     info: () => ipcRenderer.invoke('app:info'),
+    /** asked synchronously by the title bar: macOS draws its window buttons on the left, Windows on
+     *  the right, and the bar has to keep clear of the correct side before the first paint. */
+    platform: process.platform,
     openStore: () => ipcRenderer.invoke('app:openStore'),
     pickImages: () => ipcRenderer.invoke('app:pickImages'),
     getHotkey: () => ipcRenderer.invoke('app:getHotkey'),

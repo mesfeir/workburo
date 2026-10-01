@@ -87,6 +87,27 @@ function stubFetch (body, { status = 200, headers = {} } = {}) {
     return true
   })
 
+  check('2b. the archive each platform downloads is the one GitHub actually publishes', () => {
+    // The macOS branch asked for `...macos-arm64.zip` and the real asset is `.tar.gz`, and the
+    // digest pinned for it was the WINDOWS archive's. Neither could fail on Windows, because that
+    // branch never runs there. Assert every platform's name and that no two share a digest.
+    assert.match(local.llamaAsset('win32', 'x64'), /bin-win-cpu-x64\.zip$/, 'the Windows asset changed shape')
+    assert.match(local.llamaAsset('darwin', 'arm64'), /bin-macos-arm64\.tar\.gz$/, 'the macOS asset is not the .tar.gz GitHub publishes')
+    assert.match(local.llamaAsset('darwin', 'x64'), /bin-macos-x64\.tar\.gz$/, 'the Intel macOS asset is wrong')
+    assert.equal(local.llamaPin('win32').bytes, 19197239, 'the Windows pin moved')
+    assert.equal(local.llamaPin('darwin').bytes, 11797542, 'the macOS pin moved')
+    assert.notEqual(
+      local.llamaPin('darwin').sha256,
+      local.llamaPin('win32').sha256,
+      'the two platforms share a digest, so one of them is wrong'
+    )
+    for (const [platform, pin] of Object.entries(local.LLAMA_PINS)) {
+      assert.match(pin.sha256, /^[0-9a-f]{64}$/, `${platform} has no usable digest`)
+      assert.ok(pin.bytes > 1e6, `${platform} has an implausible size`)
+    }
+    return true
+  })
+
   check('3. every model on offer is described honestly', () => {
     assert.ok(local.CATALOGUE.length >= 1, 'no models on offer')
     for (const m of local.CATALOGUE) {

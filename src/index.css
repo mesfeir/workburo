@@ -185,6 +185,11 @@
     /* keep clear of the native window buttons drawn by titleBarOverlay */
     padding-right: 148px;
   }
+  [data-platform='darwin'] .titlebar-space {
+    /* macOS draws close, minimise and zoom on the LEFT, so the space goes there instead */
+    padding-right: 0;
+    padding-left: 78px;
+  }
 }
 
 /* ---------------------------------------------------------- markdown prose */

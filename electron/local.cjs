@@ -40,13 +40,30 @@ const { spawn } = require('node:child_process')
 
 /** Pinned. Upgrading is a deliberate act with a new digest, not a silent surprise. */
 const LLAMA_VERSION = 'b11284'
-const LLAMA_BYTES = 19197239
-const LLAMA_SHA256 = 'd1ae718af63497d74caf4a012e4550bbbdfab2d9faceefbd5f06b73dacbe903a'
+/** Each platform's archive is a different file with a different size and digest. The macos build is
+ *  a .tar.gz and carries a set of .dylibs beside the binary; the Windows one is a .zip. */
+const LLAMA_PINS = {
+  win32: {
+    bytes: 19197239,
+    sha256: 'd1ae718af63497d74caf4a012e4550bbbdfab2d9faceefbd5f06b73dacbe903a'
+  },
+  darwin: {
+    bytes: 11797542,
+    sha256: 'f26782642b52467e1c1f7814349c478d5477d61887aeb237b7fe1ee1527554e5'
+  }
+}
+/** This platform's pin, falling back to the Windows one so an unpinned platform fails on its digest
+ *  rather than silently downloading something unverified. */
+function llamaPin (platform = process.platform) {
+  return LLAMA_PINS[platform] || LLAMA_PINS.win32
+}
+const LLAMA_BYTES = llamaPin().bytes
+const LLAMA_SHA256 = llamaPin().sha256
 
 function llamaAsset (platform = process.platform, arch = process.arch) {
   const a = arch === 'arm64' ? 'arm64' : 'x64'
   if (platform === 'win32') return `llama-${LLAMA_VERSION}-bin-win-cpu-${a}.zip`
-  if (platform === 'darwin') return `llama-${LLAMA_VERSION}-bin-macos-${a}.zip`
+  if (platform === 'darwin') return `llama-${LLAMA_VERSION}-bin-macos-${a}.tar.gz`
   return `llama-${LLAMA_VERSION}-bin-ubuntu-${a}.zip`
 }
 
@@ -272,8 +289,8 @@ async function install (opts = {}) {
       await download({
         url: llamaUrl(),
         dest: L.archive,
-        bytes: LLAMA_BYTES,
-        sha256: LLAMA_SHA256,
+        bytes: llamaPin().bytes,
+        sha256: llamaPin().sha256,
         signal: opts.signal,
         fetchImpl: opts.fetchImpl,
         onProgress: (p) => onProgress({ phase: 'runtime', ...p }),
@@ -430,6 +447,8 @@ module.exports = {
   LLAMA_VERSION,
   LLAMA_BYTES,
   LLAMA_SHA256,
+  LLAMA_PINS,
+  llamaPin,
   CATALOGUE,
   DEFAULT_MODEL,
   KNOWN_LOCAL,
