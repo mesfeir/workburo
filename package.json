@@ -104,7 +104,7 @@
       ]
     },
     "mac": {
-      "icon": "build/icon.png",
+      "icon": "build/icon-512.png",
       "category": "public.app-category.productivity",
       "target": [
         {
