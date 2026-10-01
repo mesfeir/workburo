@@ -82,7 +82,16 @@
 
 ## Install
 
-There is **no prebuilt binary** published yet, so build it:
+Download from [**Releases**](../../releases):
+
+| File | What it is |
+|---|---|
+| **`WorkBuro-Setup-x.y.z.exe`** | The installer. Start menu entry, uninstaller, optional start with Windows. |
+| **`WorkBuro-x.y.z-portable.exe`** | One file, nothing installed. Run it from anywhere. |
+
+Both are **unsigned**, so **SmartScreen** will say "unknown publisher" until that changes. Choose *More info*, then *Run anyway*. `SHA256SUMS.txt` is on the release if you want to check what you downloaded.
+
+Or build it yourself:
 
 ```bash
 git clone git@github.com:mesfeir/workburo.git
@@ -91,7 +100,7 @@ npm install
 npm run dist     # -> release/WorkBuro-Setup-<version>.exe
 ```
 
-`npm run dist` makes an **NSIS installer** and a **portable .exe**. The installer is **unsigned**, so **SmartScreen** will say "unknown publisher" until it is signed.
+`npm run dist` makes an **NSIS installer** and a **portable .exe**.
 
 ## First run
 
