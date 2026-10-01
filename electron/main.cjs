@@ -2087,6 +2087,9 @@ ipcMain.handle('chat:start', async (event, req) => {
 
         const r = await executeTool(tc.name, rawArgs, {
           searchUrl: cfg.searchUrl,
+          searchMode: cfg.searchMode,
+          searchKey: cfg.searchKey,
+          searchProvider: cfg.searchProvider,
           signal: ac.signal,
           // A tool discovered on an MCP server runs over the protocol, through here: the page never
           // touches a child process, and a dead server returns a failed tool result rather than

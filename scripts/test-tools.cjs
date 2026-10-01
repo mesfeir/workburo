@@ -12,7 +12,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
 
-const { chatToolDefs, responsesToolDefs, executeTool, ALL_TOOLS, REGISTRY } = require('../electron/tools.cjs')
+const { chatToolDefs, responsesToolDefs, executeTool, ALL_TOOLS, REGISTRY, referenceSearch } = require('../electron/tools.cjs')
 const create = require('../electron/create.cjs')
 
 /** The three that reach into someone's real accounts; hidden unless switched on. */
@@ -308,6 +308,150 @@ const drawOpts = (over = {}) => ({
     } finally {
       globalThis.fetch = realFetch
     }
+  })
+
+  /* ---- search: the reference sources are the floor under it, and they say what they are ----
+   *
+   * Measured against the live endpoints before being relied on: Wikipedia, Stack Exchange, Hacker
+   * News and Open Library each answer clean JSON with no key and no account. They are not a web
+   * search, so every answer names its sources and says out loud that it is reference material.
+   */
+
+  const jsonRes = (body, status = 200) => ({
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+  })
+
+  /** Answers by looking at the URL, and remembers what it was asked for. */
+  const fakeFetch = (routes) => {
+    const asked = []
+    const f = async (url) => {
+      asked.push(String(url))
+      const hit = routes.find(([needle]) => String(url).includes(needle))
+      if (!hit) throw new Error(`nothing answers ${url}`)
+      return hit[1]
+    }
+    f.asked = asked
+    return f
+  }
+
+  const REFERENCE_ROUTES = [
+    ['en.wikipedia.org', jsonRes({ query: { search: [
+      { title: 'Alpha', snippet: '<span class="searchmatch">alpha</span> the first' },
+      { title: 'Beta', snippet: 'the second' },
+    ] } })],
+    ['api.stackexchange.com', jsonRes({ items: [
+      { title: 'How do I alpha?', link: 'https://stackoverflow.com/q/1', body: '<p>Use <code>alpha</code>.</p>' },
+    ] })],
+    ['hn.algolia.com', jsonRes({ hits: [
+      { title: 'Alpha at scale', url: 'https://example.com/a', points: 42, num_comments: 7 },
+    ] })],
+    ['openlibrary.org', jsonRes({ docs: [
+      { title: 'Alpha', author_name: ['A Writer'], first_publish_year: 1999, key: '/works/OL1W' },
+    ] })],
+  ]
+
+  await checkAsync('the reference sources are asked at once, and every result says where it came from', async () => {
+    const f = fakeFetch(REFERENCE_ROUTES)
+    const r = await referenceSearch('alpha', 6, { fetchImpl: f })
+    assert.ok(r.ok, `it failed: ${r.error}`)
+    assert.strictEqual(r.reference, true, 'it did not flag itself as reference material')
+    assert.match(r.text, /Reference results/, r.text)
+    for (const s of ['Wikipedia', 'Stack Overflow', 'Hacker News', 'Open Library']) {
+      assert.ok(r.text.includes(s), `the answer never names ${s}`)
+    }
+    assert.match(r.text, /reference sources rather than a live web search/, 'it does not say what it is')
+    assert.strictEqual(f.asked.length, 4, `it asked ${f.asked.length} sources`)
+    // Markup stripped: the model gets words, not tags.
+    assert.ok(!/<[a-z]/i.test(r.text), r.text)
+    // Search-match markup in a Wikipedia snippet must not survive.
+    assert.ok(!/searchmatch/.test(r.text), r.text)
+  })
+
+  await checkAsync('results take turns between sources rather than one source filling the list', async () => {
+    const r = await referenceSearch('alpha', 6, { fetchImpl: fakeFetch(REFERENCE_ROUTES) })
+    const order = [...r.text.matchAll(/^\d+\. (.*) \([A-Za-z ]+\)$/gm)].map((m) => m[1])
+    assert.strictEqual(order[0], 'Alpha', JSON.stringify(order))
+    assert.strictEqual(order[1], 'How do I alpha?', JSON.stringify(order))
+    assert.strictEqual(order[2], 'Alpha at scale', JSON.stringify(order))
+    assert.match(order[3], /^Alpha A Writer \(1999\)$/, JSON.stringify(order))
+    // Wikipedia's second result comes last: nobody had a second turn before everyone had a first.
+    assert.strictEqual(order[4], 'Beta', JSON.stringify(order))
+  })
+
+  await checkAsync('one dead source is named, and the search still answers', async () => {
+    const routes = REFERENCE_ROUTES.filter(([n]) => !n.includes('openlibrary'))
+    const r = await referenceSearch('alpha', 6, { fetchImpl: fakeFetch(routes) })
+    assert.ok(r.ok, `one dead source killed the search: ${r.error}`)
+    assert.ok(r.text.includes('Open Library'), 'the dead source is not named')
+    assert.match(r.text, /did not answer this time/)
+  })
+
+  await checkAsync('every source dead is an error, not a quiet empty answer', async () => {
+    const r = await referenceSearch('alpha', 6, { fetchImpl: fakeFetch([]) })
+    assert.strictEqual(r.ok, false)
+    assert.match(r.error, /No reference source could be reached/)
+  })
+
+  await checkAsync('finding nothing is said plainly rather than dressed up', async () => {
+    const empty = [
+      ['en.wikipedia.org', jsonRes({ query: { search: [] } })],
+      ['api.stackexchange.com', jsonRes({ items: [] })],
+      ['hn.algolia.com', jsonRes({ hits: [] })],
+      ['openlibrary.org', jsonRes({ docs: [] })],
+    ]
+    const r = await referenceSearch('zzzz', 6, { fetchImpl: fakeFetch(empty) })
+    assert.ok(r.ok, r.error)
+    assert.match(r.text, /No reference results/)
+  })
+
+  await checkAsync('a search service that is down falls back to the references, and says so', async () => {
+    // Nothing in these routes answers the service the setting points at.
+    const f = fakeFetch(REFERENCE_ROUTES)
+    const r = await executeTool(
+      'web_search',
+      { query: 'alpha' },
+      { searchMode: 'searxng', searchUrl: 'http://127.0.0.1:8899', fetchImpl: f },
+    )
+    assert.ok(r.ok, `it gave up instead of falling back: ${r.error}`)
+    assert.match(r.text, /Falling back to reference sources/)
+    assert.ok(f.asked.some((u) => u.includes('8899')), 'it never tried the search service it was told to use')
+    assert.ok(f.asked.some((u) => u.includes('wikipedia')), 'it never fell back to the references')
+  })
+
+  await checkAsync('choosing the references outright never calls a search service at all', async () => {
+    const f = fakeFetch(REFERENCE_ROUTES)
+    const r = await executeTool(
+      'web_search',
+      { query: 'alpha' },
+      { searchMode: 'reference', searchUrl: 'http://127.0.0.1:8899', fetchImpl: f },
+    )
+    assert.ok(r.ok, r.error)
+    assert.ok(!f.asked.some((u) => u.includes('8899')), `it called the service anyway: ${f.asked.join(', ')}`)
+  })
+
+  await checkAsync('with no search API key it says so instead of pretending to search', async () => {
+    const r = await executeTool('web_search', { query: 'alpha' }, { searchMode: 'key', fetchImpl: fakeFetch([]) })
+    assert.strictEqual(r.ok, false)
+    assert.match(r.error, /No search API key/)
+  })
+
+  await checkAsync('a Brave answer is read into the same result shape as every other source', async () => {
+    const f = fakeFetch([['api.search.brave.com', jsonRes({ web: { results: [
+      { title: 'Brave hit', url: 'https://example.com/b', description: 'a description' },
+    ] } })]])
+    const r = await executeTool(
+      'web_search',
+      { query: 'alpha' },
+      { searchMode: 'key', searchKey: 'k', searchProvider: 'brave', fetchImpl: f },
+    )
+    assert.ok(r.ok, r.error)
+    assert.match(r.text, /Brave hit/)
+    assert.match(r.text, /a description/)
+    // A real search must never be labelled as reference material.
+    assert.ok(!/Reference results/.test(r.text), r.text)
   })
 
   console.log(`\n${passed}/${passed + failed} checks passed`)

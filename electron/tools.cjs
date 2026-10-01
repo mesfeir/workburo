@@ -35,15 +35,225 @@ function decodeEntities(s) {
     .replace(/&#(\d+);/g, (_m, d) => String.fromCharCode(Number(d)))
 }
 
-async function webSearch(args, opts = {}) {
-  const query = String(args.query || args.q || '').trim()
-  if (!query) return { ok: false, error: 'web_search needs a query.' }
-  const limit = Math.min(Math.max(Number(args.limit) || 6, 1), 10)
+/* ------------------------------------------------- the reference sources
+ *
+ * A floor under search that needs no key, no account and no service running, so a fresh install is
+ * never dead-ended by search. Measured before being relied on: Wikipedia, Stack Overflow, Hacker
+ * News and Open Library each answer clean JSON with no credential.
+ *
+ * These are reference sources, not a general web search. What they cover is an encyclopaedia,
+ * programming questions, forum posts and books, so the results say which sources they came from and
+ * the tool says out loud that this is what it is. Nothing here is ever presented as a web search,
+ * and a model that cannot answer from them is expected to say so rather than guess.
+ */
+
+const REFERENCE_NOTE =
+  'These are reference sources rather than a live web search: an encyclopaedia, programming ' +
+  'questions, forum posts and books. Say which of them an answer came from. If they do not cover ' +
+  'the question, say what you could not find instead of filling the gap in yourself.'
+
+const REFERENCE_UA = UA
+
+/** Search-match markup and forum HTML both arrive wrapped; the model wants the words. */
+function stripTags (s) {
+  return decodeEntities(String(s || '').replace(/<[^>]+>/g, ' '))
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+async function wikipediaSearch (query, n, opts) {
+  const url =
+    'https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&origin=*' +
+    `&srlimit=${n}&srsearch=${encodeURIComponent(query)}`
+  const res = await opts.fetchImpl(url, { headers: { 'User-Agent': REFERENCE_UA, Accept: 'application/json' }, signal: opts.signal })
+  if (!res.ok) throw new Error(`Wikipedia answered HTTP ${res.status}`)
+  const json = await res.json()
+  return ((json.query || {}).search || []).map((h) => ({
+    title: decodeEntities(h.title || ''),
+    url: `https://en.wikipedia.org/wiki/${encodeURIComponent(String(h.title || '').replace(/\s+/g, '_'))}`,
+    snippet: stripTags(h.snippet),
+  }))
+}
+
+async function stackOverflowSearch (query, n, opts) {
+  // filter=withbody is what brings the text back; the default filter returns no body at all.
+  const url =
+    'https://api.stackexchange.com/2.3/search/advanced?order=desc&sort=relevance&site=stackoverflow' +
+    `&pagesize=${n}&filter=withbody&q=${encodeURIComponent(query)}`
+  const res = await opts.fetchImpl(url, { headers: { 'User-Agent': REFERENCE_UA, Accept: 'application/json' }, signal: opts.signal })
+  if (!res.ok) throw new Error(`Stack Exchange answered HTTP ${res.status}`)
+  const json = await res.json()
+  return ((json.items || [])).map((it) => ({
+    title: decodeEntities(it.title || ''),
+    url: it.link,
+    snippet: clamp(stripTags(it.body), 300),
+  }))
+}
+
+async function hackerNewsSearch (query, n, opts) {
+  const url = `https://hn.algolia.com/api/v1/search?hitsPerPage=${n}&query=${encodeURIComponent(query)}`
+  const res = await opts.fetchImpl(url, { headers: { 'User-Agent': REFERENCE_UA, Accept: 'application/json' }, signal: opts.signal })
+  if (!res.ok) throw new Error(`Hacker News answered HTTP ${res.status}`)
+  const json = await res.json()
+  return ((json.hits || []))
+    .map((h) => {
+      const title = decodeEntities(h.title || h.story_title || '')
+      const text = stripTags(h.story_text || h.comment_text || '')
+      const points = Number(h.points)
+      const talks = Number(h.num_comments)
+      return {
+        title,
+        url: h.url || `https://news.ycombinator.com/item?id=${h.objectID}`,
+        snippet: text ? clamp(text, 300) : [points ? `${points} points` : '', talks ? `${talks} comments` : ''].filter(Boolean).join(', '),
+      }
+    })
+    .filter((r) => r.title && r.url)
+}
+
+async function openLibrarySearch (query, n, opts) {
+  const url =
+    'https://openlibrary.org/search.json?limit=' + n +
+    `&fields=title,author_name,first_publish_year,key&q=${encodeURIComponent(query)}`
+  const res = await opts.fetchImpl(url, { headers: { 'User-Agent': REFERENCE_UA, Accept: 'application/json' }, signal: opts.signal })
+  if (!res.ok) throw new Error(`Open Library answered HTTP ${res.status}`)
+  const json = await res.json()
+  return ((json.docs || []))
+    .map((d) => {
+      const author = (d.author_name || [])[0]
+      const year = d.first_publish_year
+      return {
+        title: [decodeEntities(d.title || ''), author, year ? `(${year})` : ''].filter(Boolean).join(' '),
+        url: d.key ? `https://openlibrary.org${d.key}` : '',
+        snippet: '',
+      }
+    })
+    .filter((r) => r.title && r.url)
+}
+
+const REFERENCE_SOURCES = [
+  { label: 'Wikipedia', run: wikipediaSearch },
+  { label: 'Stack Overflow', run: stackOverflowSearch },
+  { label: 'Hacker News', run: hackerNewsSearch },
+  { label: 'Open Library', run: openLibrarySearch },
+]
+
+/**
+ * Ask every reference source at once, then take turns so one source cannot fill the whole list.
+ *
+ * A source that fails or is slow is left out and named, rather than failing the whole search: this
+ * is the path taken when nothing else works, so it has to be the one that keeps going.
+ */
+async function referenceSearch (query, limit, opts = {}) {
+  const n = Math.min(Math.max(Number(limit) || 6, 1), 10)
+  const per = Math.max(2, Math.ceil(n / 2))
+  const call = { ...opts, fetchImpl: opts.fetchImpl || fetch, signal: timeoutSignal(9000, opts.signal) }
+
+  const settled = await Promise.all(
+    REFERENCE_SOURCES.map(async (s) => {
+      try {
+        return { s, results: await s.run(query, per, call) }
+      } catch (err) {
+        return { s, error: err.message }
+      }
+    }),
+  )
+
+  const results = []
+  for (let round = 0; round < per && results.length < n; round++) {
+    for (const { s, results: r } of settled) {
+      const item = (r || [])[round]
+      if (item) results.push({ ...item, source: s.label })
+      if (results.length >= n) break
+    }
+  }
+
+  const answered = settled.filter((x) => (x.results || []).length).map((x) => x.s.label)
+  const failed = settled.filter((x) => x.error).map((x) => x.s.label)
+
+  if (!results.length) {
+    if (failed.length === REFERENCE_SOURCES.length) {
+      return { ok: false, error: `No reference source could be reached (${failed.join(', ')}).` }
+    }
+    return { ok: true, text: `No reference results for "${query}".${failed.length ? ` ${failed.join(' and ')} could not be reached.` : ''}`, sources: [] }
+  }
+
+  const lines = results.map((r, i) => {
+    const snippet = clamp(r.snippet || '', 400)
+    return `${i + 1}. ${r.title} (${r.source})\n   ${r.url}${snippet ? `\n   ${snippet}` : ''}`
+  })
+
+  return {
+    ok: true,
+    text:
+      `Reference results for "${query}" from ${answered.join(', ')} (${results.length}):\n\n` +
+      `${lines.join('\n\n')}\n\n${REFERENCE_NOTE}` +
+      (failed.length ? `\n${failed.join(' and ')} did not answer this time.` : ''),
+    sources: results.map((r) => ({ title: r.title, url: r.url })),
+    reference: true,
+  }
+}
+
+/* --------------------------------------------------------- a search API key */
+
+/**
+ * Brave and Tavily, for an install that wants real web search without running anything.
+ *
+ * Both are reached over plain JSON with a key. Both shapes are written from their published API, so
+ * treat the key path as untested here until an install proves it with a real key.
+ */
+async function keyedSearch (query, limit, opts = {}) {
+  const key = String(opts.searchKey || '').trim()
+  const provider = String(opts.searchProvider || 'brave').toLowerCase()
+  if (!key) return { ok: false, error: 'No search API key is set. Add one in Settings, then Tools.' }
+  const call = { fetchImpl: opts.fetchImpl || fetch, signal: timeoutSignal(20000, opts.signal) }
+
+  let results = []
+  try {
+    if (provider === 'tavily') {
+      const res = await call.fetchImpl('https://api.tavily.com/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: key, query, max_results: limit }),
+        signal: call.signal,
+      })
+      if (!res.ok) return { ok: false, error: `Tavily answered HTTP ${res.status}.` }
+      const json = await res.json()
+      results = (json.results || []).map((r) => ({ title: r.title || r.url, url: r.url, snippet: r.content || '' }))
+    } else {
+      const res = await call.fetchImpl(
+        `https://api.search.brave.com/res/v1/web/search?count=${limit}&q=${encodeURIComponent(query)}`,
+        { headers: { Accept: 'application/json', 'X-Subscription-Token': key }, signal: call.signal },
+      )
+      if (!res.ok) return { ok: false, error: `Brave answered HTTP ${res.status}.` }
+      const json = await res.json()
+      results = (((json.web || {}).results) || []).map((r) => ({ title: r.title || r.url, url: r.url, snippet: r.description || '' }))
+    }
+  } catch (err) {
+    return { ok: false, error: `${provider === 'tavily' ? 'Tavily' : 'Brave'} could not be reached: ${err.message}` }
+  }
+
+  results = results.filter((r) => r && r.url).slice(0, limit)
+  if (!results.length) return { ok: true, text: `No results for "${query}".`, sources: [] }
+  const lines = results.map((r, i) => {
+    const snippet = clamp(decodeEntities(r.snippet || '').replace(/\s+/g, ' ').trim(), 400)
+    return `${i + 1}. ${decodeEntities(r.title || r.url)}\n   ${r.url}${snippet ? `\n   ${snippet}` : ''}`
+  })
+  return {
+    ok: true,
+    text: `Search results for "${query}" (${results.length}):\n\n${lines.join('\n\n')}`,
+    sources: results.map((r) => ({ title: decodeEntities(r.title || r.url), url: r.url })),
+  }
+}
+
+/* ---------------------------------------------------------- your own SearXNG */
+
+async function searxngSearch (query, limit, opts = {}) {
   const searchUrl = String(opts.searchUrl || DEFAULT_SEARCH_URL).replace(/\/+$/, '')
+  const call = { fetchImpl: opts.fetchImpl || fetch }
 
   let res
   try {
-    res = await fetch(`${searchUrl}/search?q=${encodeURIComponent(query)}&format=json`, {
+    res = await call.fetchImpl(`${searchUrl}/search?q=${encodeURIComponent(query)}&format=json`, {
       headers: { 'User-Agent': UA, Accept: 'application/json' },
       signal: timeoutSignal(25000, opts.signal),
     })
@@ -86,6 +296,46 @@ async function webSearch(args, opts = {}) {
     ok: true,
     text: `Search results for "${query}" (${results.length}):\n\n${lines.join('\n\n')}`,
     sources: results.map((r) => ({ title: decodeEntities(r.title || r.url), url: r.url })),
+  }
+}
+
+/* --------------------------------------------------------------- choosing one
+ *
+ * Three ways to search, chosen in Settings, each falling back to the reference sources rather than
+ * failing outright:
+ *
+ *   provider   the model's own search, where the provider has one. Nothing to configure, and the
+ *              native search is used in main.cjs; this only runs when there is none.
+ *   searxng    your own instance, which is what a searchUrl points at.
+ *   key        Brave or Tavily with an API key.
+ *   reference  the sources above, on their own, with no service and no key at all.
+ *
+ * The fallback is never silent: the answer says which sources it came from, so nobody is left
+ * thinking an encyclopaedia entry was a web search.
+ */
+
+const SEARCH_MODES = ['provider', 'searxng', 'key', 'reference']
+
+async function webSearch(args, opts = {}) {
+  const query = String(args.query || args.q || '').trim()
+  if (!query) return { ok: false, error: 'web_search needs a query.' }
+  const limit = Math.min(Math.max(Number(args.limit) || 6, 1), 10)
+  const mode = SEARCH_MODES.includes(String(opts.searchMode)) ? String(opts.searchMode) : 'searxng'
+
+  if (mode === 'reference' || mode === 'provider') return referenceSearch(query, limit, opts)
+
+  const first = mode === 'key'
+    ? await keyedSearch(query, limit, opts)
+    : await searxngSearch(query, limit, opts)
+  if (first.ok) return first
+
+  const ref = await referenceSearch(query, limit, opts)
+  if (!ref.ok) return { ok: false, error: `${first.error} ${ref.error}` }
+  return {
+    ok: true,
+    text: `${first.error}\n\nFalling back to reference sources.\n\n${ref.text}`,
+    sources: ref.sources,
+    reference: true,
   }
 }
 
@@ -409,7 +659,10 @@ const REGISTRY = {
         name: 'web_search',
         description:
           'Search the internet for current information: news, prices, weather, sports, releases, ' +
-          'anything after your training cutoff. Returns ranked results with titles, URLs and snippets.',
+          'anything after your training cutoff. Returns ranked results with titles, URLs and snippets. ' +
+          'When no search service is set up, the results come from reference sources instead, ' +
+          'Wikipedia, programming questions, forum posts and books, and they say which source each ' +
+          'came from: treat those as reference material and do not present them as a web search.',
         parameters: {
           type: 'object',
           properties: {
@@ -872,4 +1125,8 @@ module.exports = {
   executeTool,
   htmlToText,
   DEFAULT_SEARCH_URL,
+  SEARCH_MODES,
+  referenceSearch,
+  keyedSearch,
+  searxngSearch,
 }
