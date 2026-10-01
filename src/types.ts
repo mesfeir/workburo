@@ -150,6 +150,9 @@ export interface Profile {
   name: string
   baseUrl: string
   affinity: boolean
+  /** A key for this provider alone. Without it the app's one key is tried, which is what makes a
+   *  second paid provider refuse to list its models. */
+  apiKey?: string
 }
 
 export interface ImageGenConfig {

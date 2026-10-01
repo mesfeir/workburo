@@ -1039,21 +1039,52 @@ export default function SettingsModal({
                 </div>
 
                 <div>
-                  <div className="mb-1.5 text-[12.5px] font-medium text-[var(--text-mid)]">Presets</div>
-                  <div className="flex flex-wrap gap-2">
-                    {config.profiles.map((p) => (
-                      <button
-                        key={p.name}
-                        onClick={() => onConfig({ baseUrl: p.baseUrl, sendAffinity: p.affinity })}
-                        className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12.5px] transition ${
-                          config.baseUrl === p.baseUrl
-                            ? 'border-[var(--accent-rule)] bg-[var(--raised)] text-ink'
-                            : 'border-[var(--rule)] text-muted hover:bg-[var(--raised)] hover:text-ink'
-                        }`}
-                      >
-                        <Globe size={12} /> {p.name}
-                      </button>
+                  <div className="mb-1.5 text-[12.5px] font-medium text-[var(--text-mid)]">Providers</div>
+                  <div className="space-y-1.5">
+                    {config.profiles.map((p, i) => (
+                      <div key={`${p.name}-${i}`} className="flex items-center gap-2">
+                        <button
+                          onClick={() =>
+                            // Switching to a provider switches to its key as well, because two paid
+                            // providers cannot both work off the one key.
+                            onConfig({
+                              baseUrl: p.baseUrl,
+                              sendAffinity: p.affinity,
+                              ...(p.apiKey ? { apiKey: p.apiKey } : {}),
+                            })
+                          }
+                          className={`flex w-[168px] shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12.5px] transition ${
+                            config.baseUrl === p.baseUrl
+                              ? 'border-[var(--accent-rule)] bg-[var(--raised)] text-ink'
+                              : 'border-[var(--rule)] text-muted hover:bg-[var(--raised)] hover:text-ink'
+                          }`}
+                        >
+                          <Globe size={12} className="shrink-0" />
+                          <span className="truncate">{p.name}</span>
+                        </button>
+                        <div className="relative min-w-0 flex-1">
+                          <KeyRound
+                            size={13}
+                            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint"
+                          />
+                          <input
+                            className={inputCls + ' pl-8'}
+                            type="password"
+                            value={p.apiKey || ''}
+                            spellCheck={false}
+                            placeholder="key for this provider (optional)"
+                            onChange={(e) => {
+                              const next = config.profiles.map((x, j) => (j === i ? { ...x, apiKey: e.target.value } : x))
+                              onConfig({ profiles: next })
+                            }}
+                          />
+                        </div>
+                      </div>
                     ))}
+                  </div>
+                  <div className="mt-1.5 text-[11.5px] leading-snug text-faint">
+                    Each provider is asked with its own key when it has one, so two accounts can both list their
+                    models. Leave one empty to try the key above.
                   </div>
                 </div>
 

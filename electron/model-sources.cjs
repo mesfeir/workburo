@@ -30,8 +30,10 @@ function sourcesFor (cfg, localPort) {
     seen.add(norm)
     out.push({ provider: String(provider || '').trim() || 'Endpoint', baseUrl: norm, key: key || '' })
   }
-  add(match ? match.name : 'This endpoint', cfg && cfg.baseUrl, cfg && cfg.apiKey)
-  for (const p of profiles) add(p && p.name, p && p.baseUrl, cfg && cfg.apiKey)
+  add(match ? match.name : 'This endpoint', cfg && cfg.baseUrl, (match && match.apiKey) || (cfg && cfg.apiKey))
+  // Each provider is asked with its own key when it has one. That is the whole point of keeping a
+  // key per profile: a second paid provider cannot list its models off someone else's key.
+  for (const p of profiles) add(p && p.name, p && p.baseUrl, (p && p.apiKey) || (cfg && cfg.apiKey))
   if (localPort) add('On this machine', `http://127.0.0.1:${localPort}/v1`, '')
   return out
 }

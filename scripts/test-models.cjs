@@ -120,6 +120,39 @@ check('11. a refusal is short, and a key problem says so', () => {
   assert.strictEqual(sources.tidyError(500, 'boom'), 'boom')
 })
 
+check('12. a provider with its own key is asked with that key', () => {
+  const s = sources.sourcesFor(
+    {
+      baseUrl: 'https://a.example/v1',
+      apiKey: 'app-key',
+      profiles: [{ name: 'B', baseUrl: 'https://b.example/v1', apiKey: 'b-key' }],
+    },
+    0,
+  )
+  assert.strictEqual(s.find((x) => x.provider === 'B').key, 'b-key')
+})
+
+check('13. a provider with no key of its own falls back to the main key', () => {
+  const s = sources.sourcesFor(
+    { baseUrl: 'https://a.example/v1', apiKey: 'app-key', profiles: [{ name: 'B', baseUrl: 'https://b.example/v1' }] },
+    0,
+  )
+  assert.strictEqual(s.find((x) => x.provider === 'B').key, 'app-key')
+})
+
+check('14. the endpoint in use uses its own profile key, not the main one', () => {
+  const s = sources.sourcesFor(
+    {
+      baseUrl: 'https://b.example/v1',
+      apiKey: 'app-key',
+      profiles: [{ name: 'B', baseUrl: 'https://b.example/v1', apiKey: 'b-key' }],
+    },
+    0,
+  )
+  assert.strictEqual(s.length, 1, JSON.stringify(s.map((x) => x.provider)))
+  assert.strictEqual(s[0].key, 'b-key')
+})
+
 console.log('')
 if (failures.length) {
   for (const f of failures) console.log(`  ${f.name}\n     ${f.err && f.err.stack}`)
