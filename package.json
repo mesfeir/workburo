@@ -1,7 +1,7 @@
 {
   "name": "workburo",
   "private": true,
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "WorkBuro, a desktop client for any OpenAI-compatible API (OpenCode Zen / Go, OpenAI, local LLMs)",
   "type": "module",
   "main": "electron/main.cjs",
@@ -19,6 +19,7 @@
     "test:agent": "node scripts/test-agent.cjs",
     "test:local": "node scripts/test-local.cjs",
     "test:models": "node scripts/test-models.cjs",
+    "test:paths": "node scripts/test-paths.cjs",
     "test:errors": "node scripts/test-errors.cjs",
     "test:mcp": "node scripts/test-mcp.cjs",
     "test:messages": "node scripts/test-messages.cjs",
@@ -29,7 +30,7 @@
     "test:documents": "node scripts/test-documents.cjs",
     "test:composio": "node scripts/test-composio.cjs",
     "test:create": "node scripts/test-create.cjs",
-    "test": "node scripts/check-syntax.cjs && npm run test:titles --silent && npm run test:agent --silent && npm run test:local --silent && npm run test:models --silent && npm run test:tools --silent && npm run test:files --silent && npm run test:documents --silent && npm run test:messages --silent && npm run test:errors --silent && npm run test:create --silent && npm run test:mcp --silent && npm run test:images --silent && npm run test:edit --silent && npm run test:pricing --silent && npm run test:composio --silent",
+    "test": "node scripts/check-syntax.cjs && npm run test:titles --silent && npm run test:agent --silent && npm run test:local --silent && npm run test:models --silent && npm run test:paths --silent && npm run test:tools --silent && npm run test:files --silent && npm run test:documents --silent && npm run test:messages --silent && npm run test:errors --silent && npm run test:create --silent && npm run test:mcp --silent && npm run test:images --silent && npm run test:edit --silent && npm run test:pricing --silent && npm run test:composio --silent",
     "check:syntax": "node scripts/check-syntax.cjs",
     "predist": "npm run check:syntax",
     "check:packaged": "node scripts/check-packaged-files.cjs"

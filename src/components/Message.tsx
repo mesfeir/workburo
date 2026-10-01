@@ -271,6 +271,18 @@ export default function Message({
 }) {
   const [copied, setCopied] = useState(false)
   const [vote, setVote] = useState<1 | -1 | null>(null)
+  const [fileNote, setFileNote] = useState('')
+
+  // Open and reveal report back now. Before this the answer from main was thrown away, so a refusal
+  // looked exactly like a dead button, which is what made an agent's files seem broken.
+  const openFile = async (p: string) => {
+    const r = await window.zen.files.open(p)
+    setFileNote(r && r.ok === false ? String(r.error || 'Could not open that file.') : '')
+  }
+  const revealFile = async (p: string) => {
+    const r = await window.zen.files.reveal(p)
+    setFileNote(r && r.ok === false ? String(r.error || 'Could not show that file.') : '')
+  }
 
   const copy = async () => {
     try {
@@ -412,7 +424,7 @@ export default function Message({
                 </div>
               </div>
               <button
-                onClick={() => void window.zen.files.open(f.path)}
+                onClick={() => void openFile(f.path)}
                 data-open-file={f.name}
                 title="Open it"
                 className="ml-1 flex items-center gap-1 rounded-lg border border-[var(--rule-soft)] px-2 py-1 text-[11.5px] text-[var(--text-mid)] transition hover:bg-[var(--raised-2)]"
@@ -420,7 +432,7 @@ export default function Message({
                 <ExternalLink size={12} /> Open
               </button>
               <button
-                onClick={() => void window.zen.files.reveal(f.path)}
+                onClick={() => void revealFile(f.path)}
                 data-reveal-file={f.name}
                 title="Show it in the folder"
                 className="rounded-lg border border-[var(--rule-soft)] px-2 py-1 text-[var(--text-mid)] transition hover:bg-[var(--raised-2)]"
@@ -429,6 +441,7 @@ export default function Message({
               </button>
             </div>
           ))}
+          {fileNote && <div className="mt-1.5 text-[11.5px] text-[var(--err)]">{fileNote}</div>}
         </div>
       )}
 

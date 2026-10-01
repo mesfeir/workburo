@@ -19,6 +19,7 @@ const fs = require('node:fs')
 const falImages = require('./images.cjs')
 const localModel = require('./local.cjs')
 const modelSources = require('./model-sources.cjs')
+const appPaths = require('./paths.cjs')
 const titles = require('./title.cjs')
 
 const DEV_URL = 'http://localhost:5173'
@@ -562,6 +563,27 @@ function agentSeed (store, convId, currentPrompt) {
 }
 
 /**
+ * What the agent should know about pictures made in this app. They are saved outside the folder the
+ * agent was given, which is exactly why "use the image from before" came back as not found: it had
+ * no reason to look there. The newest handful are named so it has something concrete to reach for.
+ */
+function pictureNoteForAgent () {
+  const dir = imagesDir()
+  let files = []
+  try {
+    files = fs.readdirSync(dir)
+      .filter((f) => /\.(png|jpe?g|webp)$/i.test(f))
+      .map((f) => ({ f, t: fs.statSync(path.join(dir, f)).mtimeMs }))
+      .sort((a, b) => b.t - a.t)
+      .slice(0, 6)
+      .map((x) => x.f)
+  } catch {
+    /* no pictures yet */
+  }
+  return appPaths.pictureNote(dir, files)
+}
+
+/**
  * One agent turn: Pi runs the loop in the chosen folder, using the model the chat has selected.
  * The provider config is regenerated first, so switching model in the composer switches the
  * model the agent uses too.
@@ -604,7 +626,10 @@ async function runAgentTurn (req) {
   const sessionDir = pi.sessionDirFor(PI_ROOT(), req.conversationId)
   const firstAgentTurn = !pi.hasSession(sessionDir)
   const seed = firstAgentTurn ? agentSeed(store, req.conversationId, req.prompt) : ''
-  const prompt = seed ? `${seed}\n\n---\n\n${req.prompt}` : req.prompt
+  // The pictures note goes on every turn, not only the first: a picture made after agent mode was
+  // switched on is exactly the one "use the image from before" refers to.
+  const pictures = pictureNoteForAgent()
+  const prompt = [seed, pictures, req.prompt].filter(Boolean).join('\n\n---\n\n')
 
   // A local server needs no key, but Pi reads one from the environment before it will start at all,
   // so an empty key made agent mode refuse with "No API key found for zen" while the chat beside it
@@ -2691,9 +2716,15 @@ function inDocumentsDir(p) {
 }
 
 ipcMain.handle('files:open', async (_e, { path: p } = {}) => {
-  if (!inDocumentsDir(p)) return { ok: false, error: 'That file is not in the WorkBuro folder.' }
+  const ws = (readStore().config.agent || {}).workspace
+  const target = appPaths.resolveOpenable(p, ws)
+  // A file the agent wrote belongs to the folder the agent was given, not to the documents folder.
+  // Refusing those was why Open did nothing at all on a file the agent had just created.
+  if (!appPaths.withinAny(target, [documentsDir(), ws])) {
+    return { ok: false, error: 'That file is outside the folders WorkBuro is allowed to open.' }
+  }
   try {
-    const err = await shell.openPath(path.resolve(p))
+    const err = await shell.openPath(target)
     return err ? { ok: false, error: err } : { ok: true }
   } catch (err) {
     return { ok: false, error: (err && err.message) || 'Could not open that file.' }
@@ -2701,9 +2732,13 @@ ipcMain.handle('files:open', async (_e, { path: p } = {}) => {
 })
 
 ipcMain.handle('files:reveal', async (_e, { path: p } = {}) => {
-  if (!inDocumentsDir(p)) return { ok: false, error: 'That file is not in the WorkBuro folder.' }
+  const ws = (readStore().config.agent || {}).workspace
+  const target = appPaths.resolveOpenable(p, ws)
+  if (!appPaths.withinAny(target, [documentsDir(), ws])) {
+    return { ok: false, error: 'That file is outside the folders WorkBuro is allowed to open.' }
+  }
   try {
-    shell.showItemInFolder(path.resolve(p))
+    shell.showItemInFolder(target)
     return { ok: true }
   } catch (err) {
     return { ok: false, error: (err && err.message) || 'Could not show that file.' }
