@@ -180,37 +180,74 @@ function sha256File (file) {
   return hash.digest('hex')
 }
 
+/** Thirty seconds of silence means a dead connection, whether the server went quiet or a firewall
+ *  dropped the packets. Without any timer at all the promise never settled and the UI showed
+ *  nothing, which is the same thing a person sees when a button does not work. */
+const STALL_MS = 30000
+const CAP_MS = 20 * 60 * 1000
+
 /**
  * Download to a temporary name, check it, then move it into place. An interrupted download can
  * therefore never look like a finished one, and a file that does not match its digest is deleted
  * rather than kept.
  */
-async function download ({ url, dest, bytes, sha256, onProgress, fetchImpl = fetch, signal }) {
+async function download ({ url, dest, bytes, sha256, onProgress, fetchImpl = fetch, signal, stallMs }) {
   const part = `${dest}.partial`
   fs.mkdirSync(path.dirname(dest), { recursive: true })
   fs.rmSync(part, { force: true })
+  // Overridable so a test can prove the stall path without waiting half a minute for it.
+  const stall = Number(stallMs) > 0 ? Number(stallMs) : STALL_MS
 
-  const res = await fetchImpl(url, { signal, redirect: 'follow' })
-  if (!res.ok) throw new Error(`the download was refused (${res.status}). ${url}`)
+  const ctl = new AbortController()
+  const relay = () => ctl.abort(signal && signal.reason)
+  if (signal) {
+    if (signal.aborted) ctl.abort(signal.reason)
+    else signal.addEventListener('abort', relay, { once: true })
+  }
+  let quiet = setTimeout(() => ctl.abort(new Error(`nothing arrived for ${Math.round(stall / 1000)} seconds, so the connection was blocked or dropped`)), stall)
+  const cap = setTimeout(() => ctl.abort(new Error('the download took longer than twenty minutes')), CAP_MS)
+  const done = () => {
+    clearTimeout(quiet)
+    clearTimeout(cap)
+    if (signal) signal.removeEventListener('abort', relay)
+  }
+
+  let res
+  try {
+    res = await fetchImpl(url, { signal: ctl.signal, redirect: 'follow' })
+  } catch (err) {
+    // The connection failed, was blocked, or never answered at all. The timers go with it, or a
+    // rejected download leaves a twenty minute timer holding the process open.
+    done()
+    throw err
+  }
+  if (!res.ok) {
+    done()
+    throw new Error(`the download was refused (${res.status}). ${url}`)
+  }
   const total = Number(res.headers.get('content-length') || bytes || 0)
   const out = fs.createWriteStream(part)
   let got = 0
   const reader = res.body.getReader()
   try {
     for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
+      const { done: finished, value } = await reader.read()
+      if (finished) break
       got += value.length
+      clearTimeout(quiet)
+      quiet = setTimeout(() => ctl.abort(new Error('the download stalled')), stall)
       if (onProgress) onProgress({ got, total })
       if (!out.write(Buffer.from(value))) {
         await new Promise((resolve) => out.once('drain', resolve))
       }
     }
   } catch (err) {
+    done()
     out.destroy()
     fs.rmSync(part, { force: true })
     throw err
   }
+  done()
   await new Promise((resolve, reject) => {
     out.end((err) => (err ? reject(err) : resolve()))
   })

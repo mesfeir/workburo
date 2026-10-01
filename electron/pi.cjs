@@ -316,23 +316,54 @@ function sha256File (file) {
   })
 }
 
-/** Download with byte progress, so a 42 MB install is not a frozen button. */
+/** Combine the caller's signal with a deadline, so a request cannot outlive it. */
+function deadline (ms, outer) {
+  const t = AbortSignal.timeout(ms)
+  return outer ? AbortSignal.any([outer, t]) : t
+}
+
+/** Silence is the failure worth naming. A firewall that drops packets leaves a fetch pending for
+ *  good, which is why the install button sat at "Installing…" and nothing ever happened. */
+const STALL_MS = 30000
+const CAP_MS = 15 * 60 * 1000
+
+/**
+ * Download with byte progress, so a 42 MB install is not a frozen button, and bounded at both ends:
+ * a stall timer that resets on every chunk, and a cap on the whole thing. Neither existed, so an
+ * unreachable GitHub left the promise pending forever and the UI with no error to show.
+ */
 async function download (url, dest, onProgress, signal) {
-  const res = await fetch(url, { redirect: 'follow', signal })
-  if (!res.ok) throw new Error(`download failed: HTTP ${res.status}`)
-  const total = Number(res.headers.get('content-length')) || 0
-  let received = 0
-  const out = fs.createWriteStream(dest)
-  try {
-    for await (const chunk of res.body) {
-      out.write(chunk)
-      received += chunk.length
-      if (onProgress) onProgress({ phase: 'download', received, total, pct: total ? Math.round((received / total) * 100) : null })
-    }
-  } finally {
-    await new Promise(r => out.end(r))
+  const ctl = new AbortController()
+  const relay = () => ctl.abort(signal && signal.reason)
+  if (signal) {
+    if (signal.aborted) ctl.abort(signal.reason)
+    else signal.addEventListener('abort', relay, { once: true })
   }
-  return received
+  let quiet = setTimeout(() => ctl.abort(new Error(`nothing arrived for ${STALL_MS / 1000} seconds, so the connection was blocked or dropped`)), STALL_MS)
+  const cap = setTimeout(() => ctl.abort(new Error('the download took longer than fifteen minutes')), CAP_MS)
+  try {
+    const res = await fetch(url, { redirect: 'follow', signal: ctl.signal })
+    if (!res.ok) throw new Error(`download failed: HTTP ${res.status}`)
+    const total = Number(res.headers.get('content-length')) || 0
+    let received = 0
+    const out = fs.createWriteStream(dest)
+    try {
+      for await (const chunk of res.body) {
+        out.write(chunk)
+        received += chunk.length
+        clearTimeout(quiet)
+        quiet = setTimeout(() => ctl.abort(new Error('the download stalled')), STALL_MS)
+        if (onProgress) onProgress({ phase: 'download', received, total, pct: total ? Math.round((received / total) * 100) : null })
+      }
+    } finally {
+      await new Promise(r => out.end(r))
+    }
+    return received
+  } finally {
+    clearTimeout(quiet)
+    clearTimeout(cap)
+    if (signal) signal.removeEventListener('abort', relay)
+  }
 }
 
 function run (cmd, args, opts = {}) {
@@ -373,7 +404,7 @@ async function install (piRoot, opts = {}) {
   fs.mkdirSync(piRoot, { recursive: true })
 
   onProgress({ phase: 'checksums' })
-  const sumsRes = await fetch(`${base}/SHA256SUMS`, { redirect: 'follow', signal: opts.signal })
+  const sumsRes = await fetch(`${base}/SHA256SUMS`, { redirect: 'follow', signal: deadline(30000, opts.signal) })
   if (!sumsRes.ok) throw new Error(`could not read checksums: HTTP ${sumsRes.status}`)
   const want = shaFor(await sumsRes.text(), asset)
   if (!want) throw new Error(`no published checksum for ${asset}`)

@@ -71,10 +71,15 @@ function sourcesFor (cfg, localPort) {
     seen.add(norm)
     out.push({ provider: String(provider || '').trim() || 'Endpoint', baseUrl: norm, key: key || '' })
   }
-  if (!match && current && !onThisMachine(current)) {
-    // the endpoint in use with no profile behind it: it still needs a key to be worth listing
+  // The endpoint in use is always worth asking, whatever its profile says. It used to be listed
+  // only when NO profile matched it, so the provider a person was actually using disappeared from
+  // the list as soon as it had a saved profile carrying no key of its own: this branch was skipped
+  // for having a match, and the loop below skipped the profile for having no key. Pressing Test
+  // wrote a key into the profile, which is why the models only appeared after that. keyFor already
+  // prefers the profile's key and falls back to the app's, and a local endpoint needs neither.
+  if (current) {
     const key = keyFor(cfg)
-    if (key) add(host, cfg && cfg.baseUrl, key)
+    if (key || onThisMachine(current)) add((match && match.name) || host, cfg && cfg.baseUrl, key)
   }
   // Each provider is asked with its own key, and only when it has one. A second paid provider
   // cannot list its models off someone else's key, so the app's own key is not a substitute.

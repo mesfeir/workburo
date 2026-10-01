@@ -171,6 +171,24 @@ check('13c. nothing is listed at all until a key exists', () => {
   assert.deepStrictEqual(s, [], JSON.stringify(s))
 })
 
+check('13d. the provider in use is listed even when its own profile carries no key', () => {
+  // This is the case that made the model list look broken. The endpoint being used had a saved
+  // profile with no key, and the app's key lives at the top level. One branch skipped it for
+  // having a match, the other for having no key, so the provider in use vanished from the list
+  // until Settings' Test wrote a key into the profile.
+  const s = sources.sourcesFor(
+    {
+      baseUrl: 'https://opencode.ai/zen/go/v1',
+      apiKey: 'a-fake-key-for-the-test',
+      profiles: [{ name: 'OpenCode Zen (Go)', baseUrl: 'https://opencode.ai/zen/go/v1' }],
+    },
+    0,
+  )
+  assert.strictEqual(s.length, 1, JSON.stringify(s))
+  assert.strictEqual(s[0].provider, 'OpenCode Zen (Go)')
+  assert.strictEqual(s[0].key, 'a-fake-key-for-the-test')
+})
+
 check('14. the endpoint in use uses its own profile key, not the main one', () => {
   const s = sources.sourcesFor(
     {

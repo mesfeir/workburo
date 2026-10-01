@@ -271,6 +271,29 @@ function stubFetch (body, { status = 200, headers = {} } = {}) {
     return true
   })
 
+  await checkAsync('15b. a download nobody ever answers is abandoned rather than waited on', async () => {
+    // A firewall that drops the packets leaves the connection pending for good. With no timer at
+    // all, the promise never settled: the button that started it sat at "Installing…" and the UI
+    // had no error to show. That is what "I click and nothing happens" was.
+    const dest = path.join(scratch, 'stalled.bin')
+    let aborted = false
+    const silent = (url, init) => new Promise((resolve, reject) => {
+      init.signal.addEventListener('abort', () => {
+        aborted = true
+        reject(init.signal.reason instanceof Error ? init.signal.reason : new Error('aborted'))
+      }, { once: true })
+    })
+    const started = Date.now()
+    await assert.rejects(
+      () => local.download({ url: 'https://example.com/never.zip', dest, fetchImpl: silent, stallMs: 300 }),
+      /nothing arrived|stalled/,
+    )
+    assert.ok(aborted, 'the request was never aborted, so nothing bounded it')
+    assert.ok(Date.now() - started < 5000, `it waited ${Date.now() - started} ms`)
+    assert.ok(!fs.existsSync(dest), 'a download that never arrived left its target behind')
+    return true
+  })
+
   // ---------------------------------------------------------------- talking to it
 
   await checkAsync('16. waiting for a server that is not there gives up honestly', async () => {
