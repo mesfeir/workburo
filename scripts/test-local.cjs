@@ -441,9 +441,16 @@ function stubFetch (body, { status = 200, headers = {} } = {}) {
       assert.strictEqual(local.hoistContents(dir, program), true, `${folder}/${program} was not hoisted`)
       assert.ok(fs.statSync(path.join(dir, program)).isFile(), `${program} is not where the app looks for it`)
       assert.ok(fs.statSync(path.join(dir, 'libllama.0.dylib')).isFile(), 'a file that sits beside it was left behind')
-      // the folder is gone, though a file of the same name may now stand where it was: that is the
-      // point of the move when the program and the folder are both called `pi`
-      assert.ok(!fs.statSync(path.join(dir, folder)).isDirectory(), 'the folder it arrived in was left behind')
+      // the folder is gone. It may still exist as a file of the same name, which is the point of the
+      // move when the program and the folder are both called `pi`, or it may be gone entirely. Both
+      // are correct; what must never remain is a directory in the program's place.
+      let stillADirectory = false
+      try {
+        stillADirectory = fs.statSync(path.join(dir, folder)).isDirectory()
+      } catch {
+        stillADirectory = false
+      }
+      assert.ok(!stillADirectory, 'a directory was left where the program should be')
       fs.rmSync(dir, { recursive: true, force: true })
     }
     // an archive that is already flat is left exactly as it is
