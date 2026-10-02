@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WorkBuro: an AI chat client for Windows that opens on a keystroke</title>
+<meta name="description" content="A small, fast Windows chat client for any OpenAI-compatible model. Press Alt+Space over whatever you are doing, or run a model on your own machine with no account.">
+<meta name="theme-color" content="#121212">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="assets/favicon-256.png" type="image/png">
+<link rel="apple-touch-icon" href="assets/favicon-256.png">
+<link rel="stylesheet" href="assets/warm.css">
+<style>html{background:#121212;color-scheme:dark}</style>
+<script>document.documentElement.className += ' js';</script>
+<script type="application/ld+json" id="ld-workburo">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "WorkBuro",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Windows 10, Windows 11, macOS 11 and later (Apple silicon)",
+  "description": "A small, fast Windows chat client for any OpenAI-compatible model. Press Alt+Space over whatever you are doing, or run a model on your own machine with no account.",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "downloadUrl": "https://github.com/mesfeir/workburo/releases/latest/download/WorkBuro-Setup-1.0.16.exe",
+  "softwareVersion": "1.0.16"
+}
+</script>
+</head>
+<body>
+
+<div class="bar" id="bar" aria-hidden="true"><span class="bar-fill" id="barFill"></span></div>
+
+<header class="hero wrap">
+  <div class="hero-text">
+    <h1 class="mark">
+      <img class="logo" src="assets/logo-898.png" alt="" width="46" height="46">
+      <span>WorkBuro</span>
+    </h1>
+    <p class="tagline" data-d="1">A quick pullup for your models.</p>
+    <p class="lede" data-d="2">A small desktop client for any OpenAI-compatible model, including your own.</p>
+    <div class="actions" data-d="3">
+      <a class="btn" id="hero-installer"
+         href="https://github.com/mesfeir/workburo/releases/latest/download/WorkBuro-Setup-1.0.16.exe"
+         rel="noopener" data-release="installer">Download for Windows</a>
+      <p class="alt-links">
+        <a href="https://github.com/mesfeir/workburo/releases/latest" rel="noopener" data-release="releases">or the macOS build</a>
+        <span class="sep" aria-hidden="true">·</span>
+        <a href="https://github.com/mesfeir/workburo/releases/latest/download/WorkBuro-1.0.16-portable.exe"
+           rel="noopener" data-release="portable">or the portable build</a>
+      </p>
+      <p class="meta-line">Windows 10 and 11 · macOS 11 and later on Apple silicon · Unsigned, so both systems will ask</p>
+    </div>
+  </div>
+  <figure class="shot hero-shot" data-d="4">
+    <img src="assets/screenshots/readme-app.png" width="2065" height="1402"
+         alt="The WorkBuro window, showing a streamed answer with markdown headings, a code block, a table and a collapsed thinking block.">
+  </figure>
+</header>
+
+<main>
+
+<section class="wrap section" aria-labelledby="s1">
+  <div class="rail" aria-hidden="true" data-d="1"><span class="idx">01</span><span class="rule"></span></div>
+  <h2 class="sr-only" id="s1">Three things it does</h2>
+  <div class="triggers">
+    <div class="trigger" data-d="1">
+      <p class="tag">Summon</p>
+      <h3><button class="key" type="button" data-copy="Alt+Space" aria-label="Alt plus Space, copy the shortcut to the clipboard"><kbd>Alt</kbd><i>+</i><kbd>Space</kbd></button> over whatever you are doing.</h3>
+      <p class="body">A small window, an answer, and gone. Rebindable, and it lives in the tray.</p>
+      <span class="tick" aria-hidden="true"></span>
+    </div>
+    <div class="trigger" data-d="2">
+      <p class="tag">Produce</p>
+      <h3>Ask for a spreadsheet, get a real <code>.xlsx</code>.</h3>
+      <p class="body">CSV, Word, PDF, markdown, JSON and text too, saved to a folder you can open.</p>
+      <span class="tick" aria-hidden="true"></span>
+    </div>
+    <div class="trigger" data-d="3">
+      <p class="tag">Connect</p>
+      <h3>Your endpoint, or your own machine.</h3>
+      <p class="body">Any OpenAI-compatible API. No account needed if you run a model locally.</p>
+      <span class="tick" aria-hidden="true"></span>
+    </div>
+  </div>
+  <p class="copied" id="copied" aria-live="polite">Alt+Space copied</p>
+</section>
+
+<section class="wrap section" aria-labelledby="s2">
+  <div class="rail" aria-hidden="true" data-d="1"><span class="idx">02</span><span class="rule"></span></div>
+  <h2 class="sr-only" id="s2">Pictures and the agent</h2>
+
+  <div class="split">
+    <div class="half" data-d="1">
+      <p class="tag">Pictures</p>
+      <h3 class="h-sub">Pictures both ways.</h3>
+      <p class="body">Ask to see something and it draws it. Send one and it changes it from your words.</p>
+      <figure class="shot">
+        <img src="assets/screenshots/readme-composer.png" width="2065" height="1402"
+             alt="The composer with a drawing prompt, and the finished image attached as a reference.">
+      </figure>
+    </div>
+
+    <div class="half" data-d="2">
+      <p class="tag">Agent</p>
+      <h3 class="h-sub">Agent when a job needs hands.</h3>
+      <p class="body">Flip it on and the model gets shell and file tools in a folder you can see. Flip it off again.</p>
+      <div class="triptych">
+        <figure class="shot narrow">
+          <img src="assets/screenshots/readme-agent-1.png" width="435" height="730"
+               alt="The agent running a shell command to list a folder.">
+        </figure>
+        <figure class="shot narrow">
+          <img src="assets/screenshots/readme-agent-2.png" width="423" height="683"
+               alt="The agent reading a file and planning a new one.">
+        </figure>
+        <figure class="shot narrow">
+          <img src="assets/screenshots/readme-agent-3.png" width="434" height="734"
+               alt="The agent handing back a finished HTML file with an Open button.">
+        </figure>
+      </div>
+      <p class="caption">It lists the folder, reads a file, writes one, and hands you the file with Open next to it.</p>
+    </div>
+  </div>
+</section>
+
+<section class="wrap section" aria-labelledby="download-heading">
+  <div class="rail" aria-hidden="true" data-d="1"><span class="idx">03</span><span class="rule"></span></div>
+  <h2 class="h-big" id="download-heading">Download</h2>
+
+  <div class="dl" id="download-rows">
+    <noscript>
+      <p class="body">The Windows installer and the portable build are on the
+        <a href="https://github.com/mesfeir/workburo/releases/latest" rel="noopener">releases page</a>.</p>
+    </noscript>
+  </div>
+
+  <p class="small">
+    Check your download against
+    <a id="sums-link" href="https://github.com/mesfeir/workburo/releases/latest/download/SHA256SUMS-1.0.16.txt"
+       rel="noopener" class="mono-link" data-release="sums">SHA256SUMS-1.0.16.txt</a>.
+  </p>
+  <p class="small faint">
+    Unsigned. Windows will show a SmartScreen warning on first run. On macOS, right click the app and choose
+    Open the first time; a plain double click will be refused.
+  </p>
+</section>
+
+</main>
+
+<footer class="wrap footer">
+  <div class="footer-row">
+    <div class="footer-id">
+      <span class="mark mini">
+        <img class="logo" src="assets/logo-898.png" alt="" width="20" height="20">
+        <span>WorkBuro</span>
+      </span>
+      <p class="mono faint">Windows 10 and 11 · macOS on Apple silicon</p>
+    </div>
+    <nav class="footer-links" aria-label="Project links">
+      <a href="https://github.com/mesfeir/workburo" rel="noopener">GitHub</a>
+      <span class="sep" aria-hidden="true">·</span>
+      <a href="https://github.com/mesfeir/workburo/releases" rel="noopener">Releases</a>
+      <span class="sep" aria-hidden="true">·</span>
+      <a href="https://github.com/mesfeir/workburo/releases/latest/download/SHA256SUMS-1.0.16.txt"
+         rel="noopener" data-release="sums">Checksums</a>
+    </nav>
+  </div>
+  <p class="small faint last">No telemetry. Not affiliated with OpenAI.</p>
+</footer>
+
+<script src="assets/release.js"></script>
+<!-- script shared with the elegant page, it is page agnostic -->
+<script src="assets/elegant.js"></script>
+</body>
+</html>
