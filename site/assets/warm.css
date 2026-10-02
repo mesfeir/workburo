@@ -148,9 +148,16 @@ code { color: var(--text); font-size: .92em; }
 
 .actions { margin-top: 32px; }
 
+.btn-row {
+  display: flex; align-items: center;
+  gap: 12px;
+}
+
 .btn {
   display:inline-flex; align-items:center; justify-content:center;
   min-height: 46px; padding: 0 24px;
+  /* equal columns at every width, and never wider than the space available */
+  flex: 1 1 0; min-width: 0; white-space: nowrap;
   border-radius: var(--r-btn);
   background: var(--accent);
   color: #17140f;
@@ -159,6 +166,13 @@ code { color: var(--text); font-size: .92em; }
 }
 .btn:hover { background: var(--accent-bright); color:#17140f; transform: translateY(-1px); }
 .btn:active { transform: translateY(0); }
+
+/* Both platform buttons are filled the same. An earlier version made the second one
+   outlined to signal secondary, which read as one button being disabled. */
+.btn-ghost:hover {
+  background: var(--accent-bright);
+  color: #17140f;
+}
 
 .alt-links { margin-top: 15px; font-size: 13.5px; line-height: 1.95; }
 
@@ -391,4 +405,7 @@ code { color: var(--text); font-size: .92em; }
   .mark .logo { width: 34px; height: 34px; }
   .triptych { gap: 11px; }
   .key { font-size: 11px; padding: 3px 6px; }
+  /* keep the two platform buttons side by side down to the narrowest phones */
+  .btn-row { gap: 8px; }
+  .btn { min-height: 44px; padding: 0 14px; font-size: 14px; }
 }
