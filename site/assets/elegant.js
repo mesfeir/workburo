@@ -114,7 +114,7 @@ var RELEASE = WORKBURO_RELEASE;
       '@type': 'SoftwareApplication',
       name: 'WorkBuro',
       applicationCategory: 'UtilitiesApplication',
-      operatingSystem: 'Windows 10, Windows 11',
+      operatingSystem: RELEASE.platforms || 'Windows 10, Windows 11',
       description: document.querySelector('meta[name="description"]').getAttribute('content'),
       offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
       downloadUrl: fileUrl('installer'),

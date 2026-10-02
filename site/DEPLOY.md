@@ -5,7 +5,9 @@ no dependencies, no server-side anything.
 
 ```
 index.html                the page
-assets/release.js         the one place a release lives
+assets/release.js         the one place a release lives: the version, the
+                          filenames and sizes, the platforms the structured
+                          data claims, and the canonical domain
 assets/warm.css           the styling
 assets/elegant.js         the motion, and the download rows
 assets/logo-898.png       the app mark
@@ -32,8 +34,13 @@ https://github.com/mesfeir/workburo/releases/latest/download/<filename>
 
 `latest` resolves to the newest published release, so a new version means bumping `version` and the
 four filenames in `assets/release.js` and uploading matching assets to that release. Nothing else on
-the page needs touching: the rows, their labels, their sizes, the checksums filename, the JSON-LD
-block and the `rel="canonical"` tag all follow from that one file.
+the page needs touching: the rows, their labels, their sizes, the checksums filename, the platforms
+the structured data claims, and the `rel="canonical"` tag all follow from that one file.
+
+The page title, the description and the social preview tags are static in `index.html`. The text
+description of the JSON-LD block is read from the `meta[name="description"]` tag, so editing that one
+tag keeps both in step. `operatingSystem` deliberately does not: it comes from `RELEASE.platforms`,
+because it previously lived in the page and in the script at once and the two drifted apart.
 
 The hard coded `href`s in `index.html` are a no-JavaScript fallback and are the only other place a
 version number appears.

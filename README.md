@@ -1,12 +1,13 @@
 <div align="center">
 
-<img src="build/icon.png" alt="WorkBuro, a Windows AI chat client icon" width="96" height="96">
+<img src="build/icon.png" alt="WorkBuro, a desktop AI chat client icon" width="96" height="96">
 
 # WorkBuro
 
-**Press a key, ask, and get an answer you can use. A small Windows client that talks to any OpenAI-compatible endpoint, including a model running on your own machine.**
+**Press a key, ask, and get an answer you can use. A small desktop client that talks to any OpenAI-compatible endpoint, including a model running on your own machine.**
 
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?logo=windows&logoColor=white)](#install)
+[![Platform](https://img.shields.io/badge/platform-macOS%2011%2B%20Apple%20silicon-000000?logo=apple&logoColor=white)](#install)
 [![Electron](https://img.shields.io/badge/Electron-35-47848F?logo=electron&logoColor=white)](#build-from-source)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](#build-from-source)
 [![Telemetry](https://img.shields.io/badge/telemetry-none-brightgreen)](#privacy)
@@ -18,7 +19,7 @@
 
 ## What it is
 
-**WorkBuro** is a **lightweight, powerful chat app for Windows** that talks to **any OpenAI-compatible LLM**, answers on **one keystroke**, can run a **model on your own machine** with **no account at all**, and turns any of them into an **agent** when a job needs hands.
+**WorkBuro** is a **lightweight, powerful chat app for Windows and macOS** that talks to **any OpenAI-compatible LLM**, answers on **one keystroke**, can run a **model on your own machine** with **no account at all**, and turns any of them into an **agent** when a job needs hands.
 
 ## Why we made it
 
@@ -41,7 +42,7 @@
 - **Pictures both ways.** Ask to see something and it **draws it**. Send a picture and it can **change it from your words**, or **look at it and answer**.
 
   ![WorkBuro drawing a picture from a prompt, then offering to edit it, with the finished image attached to the composer as a reference](docs/screenshots/readme-composer.png)
-- **A brief burst of agent work.** Flip **Agent** on and the model gets **shell** and **file** tools inside a **folder you can see**, then you flip it off again. Nothing installs or schedules in the background.
+- **A brief burst of agent work.** Flip **Agent** on and the model gets **shell** and **file** tools inside a **folder you can see**, then you flip it off again. Nothing installs or schedules in the background. An attached picture is **read as a picture** rather than guessed at from its name, and switching Agent on part way through a chat **picks up the conversation you were already having** instead of starting from scratch.
 - **No key at all?** It will run a **lightweight model on your machine**. One **429 MB** download, then about a **second to an answer**, with **no account** and **no browser**.
 
 <p align="center">
@@ -74,7 +75,7 @@
 
 **Is there a free option?** The app costs nothing and there is no subscription. With no API key at all it will download a **lightweight model** (429 MB) and run it **on your machine**, which is free to use from then on. If you already pay for a model, it uses your **own key** instead, and either way there is no second bill.
 
-**Why not just use Open WebUI?** Open WebUI is a web app you install, run and sign into, usually in Docker and usually on a server you maintain. WorkBuro is a **desktop app for Windows**: install it, press **Alt+Space**, get an answer, close it. No server, no browser, no account. If you want a shared web UI for a team, use Open WebUI. If you want a **desktop client** that writes a **real file** into a **real folder**, this is the one.
+**Why not just use Open WebUI?** Open WebUI is a web app you install, run and sign into, usually in Docker and usually on a server you maintain. WorkBuro is a **desktop app for Windows and macOS**: install it, press **Alt+Space**, get an answer, close it. No server, no browser, no account. If you want a shared web UI for a team, use Open WebUI. If you want a **desktop client** that writes a **real file** into a **real folder**, this is the one.
 
 **Do I need an account?** No. There is no sign-in, no telemetry, and no backend to sign into.
 
@@ -86,10 +87,12 @@ Download from [**Releases**](../../releases):
 
 | File | What it is |
 |---|---|
-| **`WorkBuro-Setup-x.y.z.exe`** | The installer. Start menu entry, uninstaller, optional start with Windows. |
-| **`WorkBuro-x.y.z-portable.exe`** | One file, nothing installed. Run it from anywhere. |
+| **`WorkBuro-Setup-x.y.z.exe`** | Windows installer. Start menu entry, uninstaller, optional start with Windows. |
+| **`WorkBuro-x.y.z-portable.exe`** | Windows, one file, nothing installed. Run it from anywhere. |
+| **`WorkBuro-x.y.z.dmg`** | macOS on Apple silicon. Open it and drag the app to Applications. |
+| **`WorkBuro-x.y.z-arm64-mac.zip`** | The same macOS app zipped, if you would rather not use the disk image. |
 
-Both are **unsigned**, so **SmartScreen** will say "unknown publisher" until that changes. Choose *More info*, then *Run anyway*. `SHA256SUMS.txt` is on the release if you want to check what you downloaded.
+**Neither build is signed**, so the system will ask the first time. On Windows, **SmartScreen** says "unknown publisher": choose *More info*, then *Run anyway*. On macOS, **Gatekeeper** says the app cannot be checked: right click the app, choose **Open**, then choose **Open** again. A `SHA256SUMS-x.y.z.txt` for Windows and a `SHA256SUMS-x.y.z-mac.txt` for macOS sit on each release if you want to check what you downloaded.
 
 Or build it yourself:
 
@@ -97,10 +100,10 @@ Or build it yourself:
 git clone git@github.com:mesfeir/workburo.git
 cd workburo
 npm install
-npm run dist     # -> release/WorkBuro-Setup-<version>.exe
+npm run dist     # -> release/WorkBuro-Setup-<version>.exe, or a .dmg on macOS
 ```
 
-`npm run dist` makes an **NSIS installer** and a **portable .exe**.
+`npm run dist` makes an **NSIS installer** and a **portable .exe** on Windows, and a **disk image** and a **zipped app** on macOS.
 
 ## First run
 
@@ -116,7 +119,7 @@ npm run dist     # -> release/WorkBuro-Setup-<version>.exe
 
 | Key | Action |
 |---|---|
-| *your summon shortcut* | Show or hide WorkBuro from anywhere in Windows (default **Alt+Space**) |
+| *your summon shortcut* | Show or hide WorkBuro from anywhere (default **Alt+Space**) |
 | **Ctrl+N** | New chat |
 | **Ctrl+B** | Toggle sidebar |
 | **Ctrl+K** | Search chats |
@@ -131,7 +134,7 @@ If **Alt+Space** is already taken, which happens on plenty of machines, WorkBuro
 - **No telemetry**, no analytics, no backend. There is nothing to phone home to.
 - **Your key stays on your machine.** It is held in the **main process** and leaves only as an **Authorization header** to the endpoint you configured. It is never exposed to the page.
 - **Prompts go to your endpoint**, plus your **search endpoint** and **Open-Meteo** if you switch those tools on. Nothing else is contacted.
-- **One honest caveat.** The key is stored in **plain text** in the app's own JSON file at **%APPDATA%\WorkBuro\zen-chat-store.json**. That is a trade for transparency and hand-editability, and it is worth knowing before you file a security issue. Encrypting it with **Windows DPAPI** is on the list.
+- **One honest caveat.** The key is stored in **plain text** in the app's own JSON file, at **`%APPDATA%\WorkBuro\zen-chat-store.json`** on Windows and **`~/Library/Application Support/WorkBuro/zen-chat-store.json`** on macOS. That is a trade for transparency and hand-editability, and it is worth knowing before you file a security issue. Encrypting it with the system keychain is on the list.
 
 ## Build from source
 
@@ -139,7 +142,7 @@ If **Alt+Space** is already taken, which happens on plenty of machines, WorkBuro
 npm install
 npm run dev      # Vite dev server plus Electron with devtools
 npm run build    # type-check and bundle the renderer into dist/
-npm run dist     # full Windows installer and portable exe into release/
+npm run dist     # Windows installer and portable exe, or a macOS disk image, into release/
 npm test         # the offline suites, including the local model
 ```
 
@@ -147,8 +150,8 @@ There is also an **end-to-end harness** that drives the **real window**: typing 
 
 ## Known limitations
 
-- **The installer is unsigned.** **SmartScreen** will warn until it is signed.
-- **Windows only.** The code is written cross-platform, but it is only packaged and tested on Windows.
+- **Neither build is signed.** **SmartScreen** warns on Windows and **Gatekeeper** asks on macOS until that changes, which needs a paid certificate on one and an Apple Developer account on the other.
+- **macOS is Apple silicon only.** There is no Intel build, and the macOS build is packaged and tested on one machine rather than across a range of Macs.
 - **Image generation is hosted.** It needs a **fal.ai** key, and your prompts leave the machine when you use it. Local generation was measured on real hardware and the numbers are in [`docs/image-generation.md`](docs/image-generation.md), but it is not wired in yet.
 - **MCP servers are stdio only.** A server is a program run on this machine. Servers reachable only over **HTTP** are not supported yet.
 - **A very small model is a demo, not a worker.** The **429 MB** model that answers in about a second is good for a question and a reply. It is not the model to hand **shell tools** to.

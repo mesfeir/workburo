@@ -15,6 +15,10 @@ var WORKBURO_RELEASE = {
     maczip:    { name: 'WorkBuro-1.0.16-arm64-mac.zip', bytes: 129220365 }
   },
 
+  /* What the app runs on, written into the structured data. Kept here so the page cannot drift
+   * from what it claims, the way it did when this string lived in a script as well. */
+  platforms: 'Windows 10, Windows 11, macOS 11 and later (Apple silicon)',
+
   repo: 'https://github.com/mesfeir/workburo',
   releases: 'https://github.com/mesfeir/workburo/releases',
 
