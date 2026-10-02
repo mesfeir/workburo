@@ -50,3 +50,7 @@ desktop.ini
 /er.json
 # the pricing suite caches fal's rate map here on purpose, so it is real state, not source
 /zen-chat/
+# The deploy script lives beside the site on the Mac and already excludes itself from what it uploads,
+# so it has never been served. It still holds a Cloudflare zone id and an account id, neither of which
+# belongs in a public repository, and one careless `git add -A` would put them here.
+/site/deploy.sh
