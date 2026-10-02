@@ -540,9 +540,12 @@ export default function App() {
               // main copies one that lives outside the workspace into it, so the agent is certain to
               // be able to open it.
               documents: (lastTurn?.documents || []).map((d) => ({ name: d.name, path: d.path })),
-              // Pictures are named when they are files on disk. A picture that only ever existed as
-              // a data URL has nowhere to point at, and Pi's command line takes text.
-              images: (lastTurn?.images || []).map((i) => ({ name: i.name, path: i.path })),
+              // Pictures travel as a path when they are files on disk, and as the data URL when they
+              // were pasted or picked — which is the usual case, and the one that used to arrive
+              // with nothing for Pi to open. Main writes a data URL into the workspace and hands the
+              // agent the path it wrote, so the model's own sight is what reads the picture, exactly
+              // as it does with agent mode off.
+              images: (lastTurn?.images || []).map((i) => ({ name: i.name, path: i.path, url: i.url })),
             })
           : window.zen.chat.start({
               requestId,

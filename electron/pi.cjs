@@ -553,20 +553,25 @@ async function install (piRoot, opts = {}) {
  */
 function writeConfig ({ agentDir, baseUrl, models }) {
   fs.mkdirSync(agentDir, { recursive: true })
+  // `input` is the whole reason an attached picture reached the model and was never sent. Pi sends a
+  // picture only to a model it believes can read one, and reads an unstated capability as text-only.
+  // `modelsFor` decided this already; writing `['text']` for everything threw that decision away, so
+  // the picture was accepted, recorded in Pi's own session, and never sent — while the same model
+  // read the same file through the chat path. The capability is decided in one place and carried.
   const entries = (models || [])
     .filter(m => m && m.id)
     .map(m => ({
       id: m.id,
       name: m.name || m.id,
       ...(m.reasoning ? { reasoning: true } : {}),
-      input: ['text']
+      input: Array.isArray(m.input) && m.input.length ? m.input : ['text', 'image']
     }))
   const config = {
     providers: {
       [PROVIDER]: {
         baseUrl,
         api: 'openai-completions',
-        apiKey: `$${KEY_ENV}`,
+        apiKey: '$' + KEY_ENV,
         models: entries
       }
     }
@@ -694,26 +699,46 @@ function ensureImageExtension (dir) {
 }
 
 /**
- * One turn, one process. Resolves when Pi settles, with the text it produced.
- * Returns a handle so the Stop button can end it.
+ * Pi's argument list for one turn. Pure, so the shape can be asserted without spawning anything.
+ *
+ * Attached files ride as `@path` before the message, which is how Pi takes a file into a turn. A
+ * picture pasted into the composer exists only as a data URL, so the caller writes it to disk first
+ * and passes that path: a data URL has no path for a tool to open.
  */
-function runTurn (opts) {
-  const L = layout(opts.piRoot)
-  const model = `${PROVIDER}/${opts.model}`
+function turnArgs (opts) {
+  const o = opts || {}
   const args = ['--mode', 'json']
   // A conversation keeps its own Pi session, so a follow-up turn remembers the previous one —
   // including what its tools did. With no session directory the turn is a one-off.
-  if (opts.sessionDir) {
-    fs.mkdirSync(opts.sessionDir, { recursive: true })
-    args.push('--session-dir', opts.sessionDir)
-    if (hasSession(opts.sessionDir)) args.push('--continue')
+  if (o.sessionDir) {
+    args.push('--session-dir', o.sessionDir)
+    if (o.continueSession) args.push('--continue')
   } else {
     args.push('--no-session')
   }
   // The picture tool, loaded for this run only. It is registered alongside Pi's own tools, so the
   // agent can make a picture instead of saying it has no way to.
-  if (opts.extension) args.push('--extension', opts.extension)
-  args.push('--model', model, opts.prompt)
+  if (o.extension) args.push('--extension', o.extension)
+  args.push('--model', `${PROVIDER}/${o.model}`)
+  for (const f of o.images || []) {
+    const p = String(f || '').trim()
+    if (p) args.push('@' + p)
+  }
+  args.push(o.prompt)
+  return args
+}
+
+/**
+ * One turn, one process. Resolves when Pi settles, with the text it produced.
+ * Returns a handle so the Stop button can end it.
+ */
+function runTurn (opts) {
+  const L = layout(opts.piRoot)
+  if (opts.sessionDir) fs.mkdirSync(opts.sessionDir, { recursive: true })
+  const args = turnArgs({
+    ...opts,
+    continueSession: opts.sessionDir ? hasSession(opts.sessionDir) : false,
+  })
 
   const child = spawn(L.exe, args, {
     cwd: opts.workspace || opts.piRoot,
@@ -797,7 +822,14 @@ function runTurn (opts) {
   }
 }
 
-/** The models Pi may use: the same list the chat offers, so the two never disagree. */
+/**
+ * The provider config Pi is given.
+ *
+ * `input` matters more than it looks. Pi sends a picture only to a model it believes can read one,
+ * and anything left undeclared is taken as text-only: the picture was accepted, recorded in Pi's own
+ * session, and then never sent, while the same model read the same file correctly through the chat
+ * path. A model known to be text-only says so; everything else is offered pictures.
+ */
 function modelsFor (catalog) {
   const seen = new Set()
   const out = []
@@ -805,7 +837,8 @@ function modelsFor (catalog) {
     const id = typeof m === 'string' ? m : m && m.id
     if (!id || seen.has(id)) continue
     seen.add(id)
-    out.push({ id, name: (m && m.name) || id, reasoning: !!(m && m.reasoning) })
+    const input = Array.isArray(m && m.input) && m.input.length ? m.input : ['text', 'image']
+    out.push({ id, name: (m && m.name) || id, reasoning: !!(m && m.reasoning), input })
   }
   return out
 }
@@ -828,6 +861,7 @@ module.exports = { ensureImageExtension,
   createTranslator,
   outputsFromTool,
   runTurn,
+  turnArgs,
   modelsFor,
   shaFor,
   makeExecutable,

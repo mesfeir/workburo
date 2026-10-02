@@ -112,6 +112,47 @@ check('3. the generated provider config points at our endpoint and keeps the key
   return true
 })
 
+/* The bug this exists for: `modelsFor` decided a model could read pictures and `writeConfig` then
+   wrote `input: ['text']` for every model anyway, so Pi believed no model could see and never sent
+   an attached picture. The declaration is two places, and both have to agree. */
+check('3b. a model that can see pictures is declared as able to, and a blind one is not', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zen-pi-see-'))
+  const cfg = pi.writeConfig({
+    agentDir: dir,
+    baseUrl: 'https://opencode.ai/zen/go/v1',
+    models: pi.modelsFor([{ id: 'vision-model', name: 'Vision model' }])
+  })
+  const entry = cfg.providers.zen.models[0]
+  assert(
+    Array.isArray(entry.input) && entry.input.includes('image'),
+    `input came out as ${JSON.stringify(entry.input)} — Pi will never send a picture to it`
+  )
+  const dir2 = fs.mkdtempSync(path.join(os.tmpdir(), 'zen-pi-blind-'))
+  const blind = pi.writeConfig({
+    agentDir: dir2,
+    baseUrl: 'https://opencode.ai/zen/go/v1',
+    models: [{ id: 'blind-model', name: 'Text only', input: ['text'] }]
+  })
+  assert(
+    !blind.providers.zen.models[0].input.includes('image'),
+    'a model known to be text-only must stay text-only'
+  )
+  return true
+})
+
+check('3c. a picture attached to the message is handed to Pi as a file, before the prompt', () => {
+  const args = pi.turnArgs({
+    model: 'deepseek-v4.1-flash',
+    images: ['C:/ws/attachments/shot.png'],
+    prompt: 'what does it say?'
+  })
+  const at = args.indexOf('@C:/ws/attachments/shot.png')
+  assert(at !== -1, `the picture was not passed at all: ${JSON.stringify(args)}`)
+  assert(at === args.length - 2, 'the picture must ride before the prompt, which is the last argument')
+  assert(args[args.length - 1] === 'what does it say?', 'the prompt must stay last')
+  return true
+})
+
 check('4. framing survives U+2028 inside a string — the reason readline is unusable', () => {
   const events = []
   const t = pi.createTranslator(e => events.push(e))
@@ -519,6 +560,54 @@ async function live () {
     console.log(`        A ${((endA - startA) / 1000).toFixed(1)}s · B ${((endB - startB) / 1000).toFixed(1)}s · overlapped by ${((Math.min(endA, endB) - Math.max(startA, startB)) / 1000).toFixed(1)}s`)
     return true
   })
+
+  /* The complaint this exists for: with agent mode on, a picture attached to the message was never
+     seen by the model, and with agent mode off the same picture was. Two things had to be true at
+     once — the picture had to reach Pi as a real file, and the model had to be declared as able to
+     read one. Both halves are proved here against the real model, with a text-only declaration
+     beside it as the control: if that one reads the picture too, the declaration was not the
+     cause and this fix is not the fix. */
+  const shot = process.env.ZEN_PI_IMAGE
+  if (shot && fs.existsSync(shot)) {
+    const token = String(process.env.ZEN_PI_IMAGE_TOKEN || '')
+    const seeingDir = pi.sessionAgentDirFor(root, `image-${Date.now()}`)
+    pi.writeConfig({ agentDir: seeingDir, baseUrl, models: [{ id: model, name: model, input: ['text', 'image'] }] })
+    const rv = await pi.runTurn({
+      piRoot: root, workspace: ws, agentDir: seeingDir,
+      sessionDir: pi.sessionDirFor(root, `sees-${Date.now()}`),
+      model, relayKey: apiKey, images: [shot], onEvent: quiet,
+      prompt: 'What text is written in the attached picture? Reply with just that text.',
+      timeoutMs: 180000
+    }).promise
+    check('17b. a picture attached to the message reaches the model, which reads what is on it', () => {
+      assert(rv.ok, `the picture turn failed: ${(rv.stderr || '').slice(-200)}`)
+      assert(
+        new RegExp(token, 'i').test(String(rv.text)),
+        `the model did not read the picture — it answered ${JSON.stringify(String(rv.text).slice(0, 200))}`
+      )
+      console.log(`        read "${token}" off the picture · ${(rv.usage && rv.usage.totalTokens) || '?'} tokens`)
+      return true
+    })
+
+    const blindDir = pi.sessionAgentDirFor(root, `blind-${Date.now()}`)
+    pi.writeConfig({ agentDir: blindDir, baseUrl, models: [{ id: model, name: model, input: ['text'] }] })
+    const rb = await pi.runTurn({
+      piRoot: root, workspace: ws, agentDir: blindDir,
+      sessionDir: pi.sessionDirFor(root, `blind-${Date.now()}`),
+      model, relayKey: apiKey, images: [shot], onEvent: quiet,
+      prompt: 'What text is written in the attached picture? Reply with just that text.',
+      timeoutMs: 180000
+    }).promise
+    check('17c. the control: declared text-only, the same picture is not read', () => {
+      assert(
+        !new RegExp(token, 'i').test(String(rb.text)),
+        'a text-only declaration read the picture anyway, so the declaration was never the cause'
+      )
+      return true
+    })
+  } else if (root) {
+    console.log('        (picture checks skipped — set ZEN_PI_IMAGE to a test image)')
+  }
 
   check('18. each session works in its own folder and does not touch the other one', () => {
     const a = fs.existsSync(path.join(wsA, 'a.txt')) ? fs.readFileSync(path.join(wsA, 'a.txt'), 'utf8').trim() : null

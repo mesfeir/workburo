@@ -266,8 +266,11 @@ export interface ZenApi {
        * workspace into the workspace so the agent can always open it.
        */
       documents?: { name?: string; path?: string }[]
-      /** pictures attached to the message, named when they exist as files on disk */
-      images?: { name?: string; path?: string }[]
+      /**
+       * Pictures attached to the message. A picked or pasted picture is a data URL and has no path
+       * yet, so main writes it into the workspace and hands the agent the path it wrote.
+       */
+      images?: { name?: string; path?: string; url?: string }[]
     }) => Promise<{ ok: boolean; stopped?: boolean; text?: string; tools?: number; error?: string }>
     stop: (requestId: string) => Promise<{ stopped: boolean }>
     onProgress: (

@@ -480,11 +480,68 @@ const { dialog: piDialog } = require('electron')
 /** Pi lives beside the store, so uninstalling is deleting one folder. */
 const PI_ROOT = () => path.join(app.getPath('userData'), 'pi')
 
+/**
+ * What the agent is allowed to believe about a model's sight.
+ *
+ * The chat already learns this: a model that refuses a picture is remembered as blind, and one that
+ * answers with a picture is remembered as seeing. Handing the agent a different answer is how an
+ * attached image reached the model through the chat and never through agent mode — the chat path
+ * carried a picture, agent mode carried text, and both were told the same model could not see.
+ */
+function agentInputFor (cfg, model, declared) {
+  const known = learnedVision.get(model) || cfg.modelPrefs?.[model]?.vision || 'unknown'
+  if (known === 'no') return ['text']
+  if (Array.isArray(declared) && declared.includes('image')) return declared
+  return ['text', 'image']
+}
+
 /** The model list Pi is offered: the one the chat offers, so the two cannot disagree. */
 function agentModels (cfg, store) {
   const fromStore = Array.isArray(store && store.models) ? store.models : []
   const list = fromStore.length ? fromStore : []
-  return pi.modelsFor(list.concat([{ id: cfg.model, name: cfg.model }]))
+  return pi
+    .modelsFor(list.concat([{ id: cfg.model, name: cfg.model }]))
+    .map((m) => ({ ...m, input: agentInputFor(cfg, m.id, m.input) }))
+}
+
+/**
+ * Where the agent's place in each conversation is kept.
+ *
+ * Main-owned on purpose. The window saves the whole store, so a marker written into a conversation
+ * object would be overwritten by the next save from the renderer, and the agent would go back to
+ * being told everything again. The only thing stored is a conversation id, the words of the last
+ * prompt the agent was given, and the id of the newest message the store had at that moment.
+ */
+function agentSeenPath () {
+  return path.join(app.getPath('userData'), 'agent-seen.json')
+}
+
+function readAgentSeen () {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(agentSeenPath(), 'utf8'))
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+/** Remember how far the agent has been shown this conversation. Never fatal, only useful. */
+function rememberAgentSeen (conversationId, prompt, newestId) {
+  if (!conversationId) return
+  try {
+    const seen = readAgentSeen()
+    seen[conversationId] = {
+      prompt: String(prompt || '').replace(/\s+/g, ' ').slice(0, 500),
+      id: String(newestId || ''),
+      at: Date.now(),
+    }
+    // Conversations that no longer exist have no place to be resumed from, so they are dropped.
+    const live = new Set((readStore().conversations || []).map((c) => c.id))
+    for (const id of Object.keys(seen)) if (!live.has(id)) delete seen[id]
+    fs.writeFileSync(agentSeenPath(), JSON.stringify(seen, null, 2) + '\n', 'utf8')
+  } catch {
+    /* a marker that could not be written costs one repeat, never a failed turn */
+  }
 }
 
 const activeAgentTurns = new Map()
@@ -571,28 +628,37 @@ function agentFail (requestId, message) {
 }
 
 /**
- * The first agent turn in a conversation is seeded with what was said before it, because Pi
- * has no way to know about messages the chat handled itself. Every later turn continues Pi's
- * own session instead, so nothing is repeated.
+ * The pictures attached to this message, as files the agent can open.
+ *
+ * A picture pasted into the composer is a data URL and nothing else, so there is no file for Pi to
+ * open and no path to name in the prompt. It is written into the workspace's own attachments
+ * folder — the one place the agent is certain to be able to read from — and that path is what it is
+ * given. A picture that already lives inside the workspace is used where it is rather than copied.
  */
-function agentSeed (store, convId, currentPrompt) {
-  const convo = (store.conversations || []).find(c => c.id === convId)
-  if (!convo) return ''
-  const now = String(currentPrompt || '').trim()
-  const lines = []
-  for (const m of convo.messages || []) {
-    if (m.role !== 'user' && m.role !== 'assistant') continue
-    const text = String(m.content || '').trim()
-    if (!text || text === now) continue
-    lines.push(`${m.role === 'user' ? 'user' : 'assistant'}: ${text.replace(/\s+/g, ' ').slice(0, 600)}`)
+function agentPictureFiles (req, workspace) {
+  const out = []
+  for (const t of appPaths.attachmentImageTargets((req && req.images) || [], workspace)) {
+    try {
+      if (t.alreadyInside) {
+        if (fs.existsSync(t.from)) out.push({ name: t.name, path: t.from })
+        continue
+      }
+      const bytes = t.from ? null : appPaths.dataUrlBytes(t.dataUrl)
+      if (bytes) {
+        fs.mkdirSync(path.dirname(t.to), { recursive: true })
+        fs.writeFileSync(t.to, Buffer.from(bytes.base64, 'base64'))
+      } else if (t.from && fs.existsSync(t.from)) {
+        fs.mkdirSync(path.dirname(t.to), { recursive: true })
+        fs.copyFileSync(t.from, t.to)
+      } else {
+        continue
+      }
+      out.push({ name: t.name, path: t.to })
+    } catch {
+      /* a picture that could not be written is left out, rather than named at a path that is not there */
+    }
   }
-  const recent = lines.slice(-12)
-  if (!recent.length) return ''
-  return [
-    'Earlier in this conversation, before agent mode was switched on, this was said. Treat it as context for what comes next; do not repeat it back.',
-    '',
-    ...recent
-  ].join('\n')
+  return out
 }
 
 /**
@@ -624,9 +690,12 @@ function pictureNoteForAgent () {
  * into it. If the copy cannot be made the note still names the original, because a path the agent
  * might manage is better than no mention of the file at all.
  */
-function attachmentNoteForAgent (req, workspace) {
+function attachmentNoteForAgent (req, workspace, images) {
   const docs = ((req && req.documents) || []).filter((d) => d && d.path)
-  const images = ((req && req.images) || []).filter((i) => i && i.path)
+  // Pictures are the resolved ones — written to disk and named by the path that really holds them —
+  // not whatever the message carried. A pasted picture has no path until it is written, so filtering
+  // the message's own pictures by path dropped every picture that was pasted rather than picked.
+  const pics = (Array.isArray(images) ? images : []).filter((i) => i && i.path)
   const copied = {}
   for (const c of appPaths.attachmentCopies(docs, workspace)) {
     try {
@@ -638,7 +707,7 @@ function attachmentNoteForAgent (req, workspace) {
       /* the note falls back to naming the original path */
     }
   }
-  return appPaths.attachmentNote(docs, images, copied)
+  return appPaths.attachmentNote(docs, pics, copied)
 }
 
 /**
@@ -679,11 +748,17 @@ async function runAgentTurn (req) {
   pi.writeConfig({ agentDir, baseUrl: cfg.baseUrl, models: agentModels(cfg, store) })
 
   // Pi keeps this conversation's own session, so a follow-up turn remembers the last one —
-  // including what its tools did. Only the very first turn needs the chat's own history,
-  // because Pi never saw those messages.
+  // including what its tools did. What it cannot know is anything said while agent mode was off, so
+  // the conversation is read back to it from wherever it was last left. On the very first agent turn
+  // that is everything said so far; after that it is only the stretch it missed, because repeating
+  // what Pi already holds is noise rather than context.
   const sessionDir = pi.sessionDirFor(PI_ROOT(), req.conversationId)
-  const firstAgentTurn = !pi.hasSession(sessionDir)
-  const seed = firstAgentTurn ? agentSeed(store, req.conversationId, req.prompt) : ''
+  const seen = readAgentSeen()[req.conversationId] || {}
+  const context = appPaths.agentContextNote((conversation && conversation.messages) || [], {
+    sinceId: seen.id || '',
+    sinceText: seen.prompt || '',
+    currentPrompt: req.prompt,
+  })
   // The pictures note goes on every turn, not only the first: a picture made after agent mode was
   // switched on is exactly the one "use the image from before" refers to.
   const pictures = pictureNoteForAgent()
@@ -696,9 +771,11 @@ async function runAgentTurn (req) {
       'its path as image_path so the model works from that picture rather than redrawing it from the ' +
       'words alone. The pictures are saved as files and their paths are in the result.'
     : ''
-  // Whatever was attached to this message, as files the agent can actually open.
-  const attachments = attachmentNoteForAgent(req, workspace)
-  const prompt = [seed, pictures, imageNote, attachments, req.prompt].filter(Boolean).join('\n\n---\n\n')
+  // Whatever was attached to this message, as files the agent can actually open. The pictures are
+  // written out first, because a picture pasted into the composer has no path until it is.
+  const imageFiles = agentPictureFiles(req, workspace)
+  const attachments = attachmentNoteForAgent(req, workspace, imageFiles)
+  const prompt = [context, pictures, imageNote, attachments, req.prompt].filter(Boolean).join('\n\n---\n\n')
 
   // A local server needs no key, but Pi reads one from the environment before it will start at all,
   // so an empty key made agent mode refuse with "No API key found for zen" while the chat beside it
@@ -716,6 +793,9 @@ async function runAgentTurn (req) {
     model: req.model || cfg.model,
     relayKey,
     prompt,
+    // The attached pictures, as paths. Pi takes a file into a turn as `@path`, and the prompt tells
+    // it which of them is which; the model's own sight does the rest.
+    images: imageFiles.map((f) => f.path),
     // The agent's own picture tool: the same fal.ai key and folders the composer uses, handed to
     // the agent so "make it night time" produces a picture instead of a description of one.
     extension: pi.ensureImageExtension(path.join(app.getPath('userData'), 'agent-ext')),
@@ -748,6 +828,16 @@ async function runAgentTurn (req) {
     broadcastSessions()
   }
   sendToRenderer('chat:event', { requestId, type: 'done' })
+  // How far the agent has now been shown. Written only after a turn that really ran: one that never
+  // started has seen nothing, and must be offered the same context again rather than being assumed
+  // to know it.
+  if (result.ok) {
+    rememberAgentSeen(
+      req.conversationId,
+      req.prompt,
+      appPaths.lastMessageId((conversation && conversation.messages) || []),
+    )
+  }
   return {
     ok: result.ok,
     stopped: !!result.stopped,

@@ -142,6 +142,76 @@ check('16. a document outside the agent folder is placed inside it, and one alre
   assert.deepStrictEqual(p.attachmentCopies([], ws), [])
 })
 
+/* A picture pasted into the composer is a data URL and nothing else. These are the rules that turn
+   it into something an agent can open, and the rule that tells the agent what was discussed before
+   it was switched on. All three were written and then left unwired — which is why an attached image
+   reached the model with agent mode off and never with it on. */
+check('17. the bytes inside a data URL can be recovered, and anything else is refused', () => {
+  const got = p.dataUrlBytes('data:image/png;base64,QUJD')
+  assert.ok(got, 'a plain image data URL must decode')
+  assert.strictEqual(got.base64, 'QUJD')
+  assert.strictEqual(got.mime, 'image/png')
+  assert.strictEqual(p.dataUrlBytes('https://example.com/a.png'), null, 'a remote url has no bytes here')
+  assert.strictEqual(p.dataUrlBytes(''), null)
+  assert.strictEqual(p.dataUrlBytes(undefined), null)
+  assert.strictEqual(p.dataUrlBytes('data:text/plain;base64,QUJD'), null, 'only pictures are written out')
+})
+
+check('18. a pasted picture is given a name and a place in the agent folder', () => {
+  const targets = p.attachmentImageTargets([
+    { name: 'shot.png', url: 'data:image/png;base64,QUJD' },
+    { url: 'data:image/png;base64,QUJD' },
+    { name: 'already.png', path: path.join(ws, 'already.png') },
+    { name: 'nowhere' }
+  ], ws)
+  assert.strictEqual(targets.length, 3, `an entry with no picture at all must be dropped: ${JSON.stringify(targets)}`)
+  assert.strictEqual(targets[0].name, 'shot.png')
+  assert.strictEqual(targets[0].to, path.join(ws, 'attachments', 'shot.png'))
+  assert.strictEqual(targets[0].dataUrl, 'data:image/png;base64,QUJD')
+  assert.strictEqual(targets[1].name, 'attached-2.png', 'an unnamed picture still needs a usable name')
+  assert.strictEqual(targets[2].alreadyInside, true, 'a picture already in the workspace stays where it is')
+  // Two pictures with one name must not overwrite each other.
+  const dupes = p.attachmentImageTargets([
+    { name: 'a.png', url: 'data:image/png;base64,QUJD' },
+    { name: 'a.png', url: 'data:image/png;base64,QUJD' }
+  ], ws)
+  assert.notStrictEqual(dupes[0].name, dupes[1].name)
+  // No folder to put them in: nothing to plan.
+  assert.deepStrictEqual(p.attachmentImageTargets([{ name: 'a.png', url: 'data:image/png;base64,QUJD' }], ''), [])
+})
+
+check('19. the agent is told what was said before it was switched on, and what it missed since', () => {
+  const m1 = { id: 'm1', role: 'user', content: 'we are building the workburo site' }
+  const m2 = { id: 'm2', role: 'assistant', content: 'noted' }
+  const m3 = { id: 'm3', role: 'user', content: 'add a search box to the hero' }
+  const m4 = { id: 'm4', role: 'user', content: 'and a dark mode toggle' }
+
+  const first = p.agentContextNote([m1, m2, m3], { currentPrompt: 'now switch to agent mode' })
+  assert.ok(first.includes('we are building the workburo site'), `the first agent turn must be seeded: ${first}`)
+  assert.ok(/before agent mode was switched on/i.test(first), 'and must say why it is being told')
+  assert.ok(!first.includes('now switch to agent mode'), 'the prompt being sent must not be repeated back')
+
+  const since = p.agentContextNote([m1, m2, m3, m4], { sinceText: 'add a search box to the hero', currentPrompt: 'and a dark mode toggle' })
+  assert.strictEqual(since, '', 'with nothing said in between there is nothing to add, so no note is written')
+
+  // The real case: the conversation carried on while agent mode was off, and the agent has to be
+  // told about that stretch — and only that stretch.
+  const m3b = { id: 'm3b', role: 'assistant', content: 'the hero already has one, on the right' }
+  const missed = p.agentContextNote([m1, m2, m3, m3b, m4], { sinceText: 'add a search box to the hero', currentPrompt: 'and a dark mode toggle' })
+  assert.ok(missed.includes('the hero already has one'), `what the agent missed must be carried: ${missed}`)
+  assert.ok(!missed.includes('and a dark mode toggle'), 'the prompt is sent separately, never twice')
+  assert.ok(!missed.includes('we are building the workburo site'), 'nothing already known may be repeated')
+  assert.ok(/agent mode was off/i.test(missed), 'and it must say this is what it missed')
+
+  const byId = p.agentContextNote([m1, m2, m3], { sinceId: 'm1' })
+  assert.ok(byId.includes('noted') && byId.includes('add a search box'), 'everything after the anchor is included')
+  assert.ok(!byId.includes('we are building the workburo site'), 'and nothing before it')
+
+  assert.strictEqual(p.agentContextNote([], { currentPrompt: 'hello' }), '', 'an empty conversation adds nothing')
+  assert.strictEqual(p.lastMessageId([m1, m2]), 'm2', 'the watermark is the newest message id')
+  assert.strictEqual(p.lastMessageId([]), '')
+})
+
 console.log('')
 console.log(`=== ${pass} passed, ${fail} failed ===`)
 process.exit(fail ? 1 : 0)
