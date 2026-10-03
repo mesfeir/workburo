@@ -53,6 +53,21 @@ const argAfter = (flag) => {
 const DEFAULT_WINDOW = { width: 480, height: 660 }
 const MIN_WINDOW = { width: 380, height: 420 }
 
+/*
+ * How long one agent turn may run before it is stopped and told so.
+ *
+ * This was 15 minutes. That is the right ceiling for the app's usual job -- a quick pullup that
+ * produces a file -- and the wrong one for real work: a "build me a Minecraft replica" turn was
+ * measured being killed at 14m56s, and the only recourse was to type continue, over and over, for a
+ * task that needed hours. Nothing is lost when a turn is cut (the work continues from Pi's own
+ * session on the next message), but a task chopped every quarter of an hour cannot be supervised.
+ *
+ * An hour is long enough to finish real work and short enough that a wedged turn is not left running
+ * all night. If a turn ever does need longer, raise this one number -- and note that the message the
+ * user sees is generated from it, so it stays truthful.
+ */
+const AGENT_TURN_LIMIT_MS = 60 * 60 * 1000
+
 // The product was renamed from Zen Chat to WorkBuro. Its data folder is pinned explicitly rather
 // than left to be derived from the app name: a derived path would follow the rename to a new
 // folder and quietly leave the store, the API keys and every saved picture behind in one that
@@ -803,7 +818,7 @@ async function runAgentTurn (req) {
     imagesDir: imagesDir(),
     imageModel: (cfg.imageGen || {}).model || '',
     imageEditModel: (cfg.imageGen || {}).editModel || '',
-    timeoutMs: 15 * 60 * 1000,
+    timeoutMs: AGENT_TURN_LIMIT_MS,
     onEvent: ev => {
       const mapped = agentEventFor(requestId, ev)
       if (mapped) sendToRenderer('chat:event', { requestId, ...mapped })

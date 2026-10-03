@@ -28,6 +28,20 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { spawn } = require('node:child_process')
 
+/*
+ * A turn that hits the ceiling is stopped, and the user is told in words they can act on: how long it
+ * ran, and that sending anything carries on from where it left off (the work lives in Pi's own
+ * session, so nothing is lost -- which is the only reason being cut off is survivable at all).
+ */
+function humanDuration(ms) {
+  const minutes = Math.round(ms / 60000)
+  if (minutes >= 60) {
+    const hours = minutes / 60
+    return `${Number.isInteger(hours) ? hours : hours.toFixed(1)} ${hours === 1 ? 'hour' : 'hours'}`
+  }
+  return minutes >= 1 ? `${minutes} minute${minutes === 1 ? '' : 's'}` : `${Math.round(ms / 1000)} seconds`
+}
+
 /** The Pi release this app installs. Pinned: upgrading is a deliberate act, not a surprise. */
 const PI_VERSION = '0.87.1'
 const RELEASE_BASE = 'https://github.com/earendil-works/pi/releases/download'
@@ -771,7 +785,10 @@ function runTurn (opts) {
     if (opts.timeoutMs > 0) {
       timer = setTimeout(() => {
         killed = true
-        emit({ kind: 'error', message: `Agent turn timed out after ${Math.round(opts.timeoutMs / 1000)}s.` })
+        emit({
+          kind: 'error',
+          message: `Agent turn stopped after ${humanDuration(opts.timeoutMs)}. Send anything to carry on from where it left off.`
+        })
         try { child.kill() } catch {}
       }, opts.timeoutMs)
     }
