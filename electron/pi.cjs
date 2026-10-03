@@ -34,12 +34,17 @@ const { spawn } = require('node:child_process')
  * session, so nothing is lost -- which is the only reason being cut off is survivable at all).
  */
 function humanDuration(ms) {
+  const seconds = Math.round(ms / 1000)
+  if (seconds < 60) return `${seconds} second${seconds === 1 ? '' : 's'}`
   const minutes = Math.round(ms / 60000)
-  if (minutes >= 60) {
-    const hours = minutes / 60
-    return `${Number.isInteger(hours) ? hours : hours.toFixed(1)} ${hours === 1 ? 'hour' : 'hours'}`
-  }
-  return minutes >= 1 ? `${minutes} minute${minutes === 1 ? '' : 's'}` : `${Math.round(ms / 1000)} seconds`
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'}`
+  const hours = minutes / 60
+  return `${Number.isInteger(hours) ? hours : hours.toFixed(1)} ${hours === 1 ? 'hour' : 'hours'}`
+}
+
+/* The one place the stop is worded, so the wording is what the timer actually shows and can be tested. */
+function stopMessage(ms) {
+  return `Agent turn stopped after ${humanDuration(ms)}. Send anything to carry on from where it left off.`
 }
 
 /** The Pi release this app installs. Pinned: upgrading is a deliberate act, not a surprise. */
@@ -785,10 +790,7 @@ function runTurn (opts) {
     if (opts.timeoutMs > 0) {
       timer = setTimeout(() => {
         killed = true
-        emit({
-          kind: 'error',
-          message: `Agent turn stopped after ${humanDuration(opts.timeoutMs)}. Send anything to carry on from where it left off.`
-        })
+        emit({ kind: 'error', message: stopMessage(opts.timeoutMs) })
         try { child.kill() } catch {}
       }, opts.timeoutMs)
     }
@@ -861,6 +863,8 @@ function modelsFor (catalog) {
 }
 
 module.exports = { ensureImageExtension,
+  humanDuration,
+  stopMessage,
   PI_VERSION,
   PROVIDER,
   KEY_ENV,
