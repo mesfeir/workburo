@@ -189,6 +189,21 @@ check('6. the event stream becomes the chat\'s own events, in order', () => {
   return true
 })
 
+check('how a stopped turn is worded', () => {
+  assert(pi.humanDuration(60 * 60 * 1000) === '1 hour', `an hour reads as an hour, got ${pi.humanDuration(3600000)}`)
+  assert(pi.humanDuration(90 * 60 * 1000) === '1.5 hours', 'ninety minutes reads as an hour and a half')
+  assert(pi.humanDuration(15 * 60 * 1000) === '15 minutes', 'the previous limit would read as 15 minutes')
+  assert(pi.humanDuration(60 * 1000) === '1 minute', 'one minute is singular')
+  assert(pi.humanDuration(45 * 1000) === '45 seconds', 'a short wait stays in seconds')
+  const msg = pi.stopMessage(60 * 60 * 1000)
+  assert(
+    msg === 'Agent turn stopped after 1 hour. Send anything to carry on from where it left off.',
+    `the exact words the timer emits, got ${JSON.stringify(msg)}`
+  )
+  assert(!/\b\d+s\b/.test(msg), 'the user is never shown a bare count of seconds')
+  return true
+})
+
 check('7. tool calls arrive with a human label, a one-line summary and a real outcome', () => {
   const { events, state } = fixtureStream()
   const start = events.find(e => e.kind === 'tool_start')
