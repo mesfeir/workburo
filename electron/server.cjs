@@ -892,7 +892,7 @@ function staticFile(req, res, url) {
 
 const ROUTES = {
   '/api/config': { GET: (_req, res) => json(res, 200, publicConfig()) },
-  '/api/health': { GET: (_req, res) => json(res, 200, status()) },
+  '/api/health': { GET: (_req, res) => json(res, 200, publicHealth()) },
   '/api/pair': {
     POST: (req, res) => {
       /* bodyText hands back the raw body -- the parsing belongs here, next to the field being read */
@@ -993,6 +993,22 @@ function lanAddresses() {
     }
   } catch {}
   return out
+}
+
+/*
+ * What a stranger with no key may learn: that a server is here, and what it would let a device do.
+ * Not who has connected, what they asked for, or how many were turned away -- that is the app's
+ * business, and it reaches it over IPC rather than over the network. A health route that answered with
+ * the full status told anyone on the LAN who had been talking to this app and about what.
+ */
+function publicHealth() {
+  return {
+    ok: true,
+    running: Boolean(listening),
+    port: listening ? listening.address().port : null,
+    agentAllowed,
+    keySet: Boolean(apiKey),
+  }
 }
 
 function status() {

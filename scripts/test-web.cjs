@@ -206,6 +206,11 @@ async function main() {
   const health = await request({ ...base, path: '/api/health', method: 'GET' })
   check('health answers without a key (so the settings pane can self-test)', health.status === 200, String(health.status))
   check('health does not leak the key', !health.body.includes(key))
+  /*
+   * Health is reachable with no key at all, so it must not name who has been here: the request log and
+   * the device list are for the app, over IPC.
+   */
+  check('health tells a stranger nothing about who has connected', !/requests|devices|refusals/.test(health.body), health.body.slice(0, 120))
 
   const noKey = await request({ ...base, path: '/api/config', method: 'GET' })
   check('a request with no key is refused', noKey.status === 401, String(noKey.status))
