@@ -314,6 +314,15 @@ async function main() {
   const push = bridge.body.indexOf("api('/api/store', { conversations: store.conversations })")
   check('the bridge cannot push before it has read', gate > -1 && gate < push, `gate at ${gate}, push at ${push}`)
 
+  /*
+   * The host's copy is behind by however long a save takes, so adopting it while this page has its own
+   * news outstanding deletes what was just typed. The suppression, and the deferral of pushes until a
+   * turn is over, are what stop a message vanishing mid-flight.
+   */
+  check('the bridge ignores the host\'s copy while it has its own unsent', /if \(signatureOf\(store\) !== pushedSignature\) return false/.test(bridge.body))
+  check('the bridge does not push during a turn', /if \(turnsInFlight > 0\)/.test(bridge.body))
+  check('a turn is pushed once it is over', /turnsInFlight = Math\.max\(0, turnsInFlight - 1\)/.test(bridge.body))
+
   const stopped = await server.stop()
   check('the server stops cleanly', stopped.running === false)
 

@@ -196,6 +196,11 @@
   let store = { config: null, conversations: [], activeId: null, models: [] }
   let storeSignature = ''
   let storeLoaded = false
+  /* The signature of what was last successfully sent to the host, which is how this page tells its own
+   * news from the host's. */
+  let pushedSignature = ''
+  /* Turns in flight, chat or agent: while one is running this page is the one with the newer list. */
+  let turnsInFlight = 0
   const storeHandlers = new Set()
 
   /* Cheap, and enough to notice a new chat, a new message or an edit: ids, times, and how many. */
@@ -223,8 +228,29 @@
   async function pullStore() {
     try {
       const out = await api('/api/store')
+      const incoming = out.conversations || []
+      const incomingSignature = signatureOf({ conversations: incoming })
+      const first = !storeLoaded
       storeLoaded = true
-      return noteStore({ ...store, conversations: out.conversations || [] })
+
+      if (first) {
+        /* The app's own list, once at the start. This is what the conversation list is. */
+        pushedSignature = incomingSignature
+        return noteStore({ ...store, conversations: incoming })
+      }
+
+      /*
+       * After that, the host's copy is only taken when this page has nothing of its own outstanding.
+       *
+       * A save to the host rewrites every conversation it holds and takes seconds to do it, so mid-turn
+       * the host's list does not yet contain the words just typed. Re-reading and adopting it there
+       * deleted the message in front of the person using it, which reads as the app resetting itself.
+       * When this page's list differs from what it last sent, the newer copy is this one, so the host's
+       * is left alone until the two agree again.
+       */
+      if (signatureOf(store) !== pushedSignature) return false
+      if (incomingSignature === storeSignature) return false
+      return noteStore({ ...store, conversations: incoming })
     } catch (err) {
       console.warn('could not read the conversations', err.message)
       return false
@@ -236,6 +262,7 @@
    * with an empty list and helpfully save it over every conversation on the host, which is the one
    * mistake in here that would actually lose something.
    */
+  const PUSH_DELAY_MS = 1200
   let pushTimer = null
   function saveStore() {
     try {
@@ -245,14 +272,28 @@
     if (!storeLoaded) return
     storeSignature = signatureOf(store)
     if (pushTimer) return
-    pushTimer = setTimeout(async () => {
-      pushTimer = null
-      try {
-        await api('/api/store', { conversations: store.conversations })
-      } catch (err) {
-        console.warn('could not save to the app', err.message)
-      }
-    }, 400)
+    pushTimer = setTimeout(pushStore, PUSH_DELAY_MS)
+  }
+
+  async function pushStore() {
+    pushTimer = null
+    /*
+     * A turn changes this list constantly -- every streamed word is a change worth saving -- and each
+     * push rewrites the whole store on the host. Pushing during one would have the host working on a
+     * list that is already out of date, and the save would still be landing after the answer arrived.
+     * A turn is pushed once, when it is over: the last state is the one worth keeping.
+     */
+    if (turnsInFlight > 0) {
+      pushTimer = setTimeout(pushStore, PUSH_DELAY_MS)
+      return
+    }
+    const sending = signatureOf(store)
+    try {
+      await api('/api/store', { conversations: store.conversations })
+      pushedSignature = sending
+    } catch (err) {
+      console.warn('could not save to the app', err.message)
+    }
   }
 
   /* A chat started on the desktop should show up here on its own: a cheap poll, only when visible. */
@@ -325,8 +366,10 @@
           pushTimer = null
         }
         if (storeLoaded) {
+          const sending = signatureOf(store)
           try {
             await api('/api/store', { conversations: store.conversations })
+            pushedSignature = sending
           } catch {}
         }
         return true
@@ -351,6 +394,7 @@
         let usage = null
 
         // fire and forget: the renderer listens on onEvent, exactly as it does for the app
+        turnsInFlight++
         ;(async () => {
           try {
             emit({
@@ -400,6 +444,7 @@
             emit({ requestId, type: 'done', value: { ok: !stopped, stopped, usage, elapsedMs: Date.now() - started } })
           } finally {
             running.delete(requestId)
+            turnsInFlight = Math.max(0, turnsInFlight - 1)
           }
         })()
 
@@ -742,6 +787,7 @@
         const convo = (store.conversations || []).find((c) => c.id === req.conversationId)
         const contextMessages = (convo?.messages || []).map((m) => ({ id: m.id, role: m.role, content: m.content }))
 
+        turnsInFlight++
         ;(async () => {
           try {
             emit({
@@ -777,6 +823,8 @@
           } catch (err) {
             emit({ requestId, type: 'error', value: err.message })
             emit({ requestId, type: 'done', value: { ok: false, elapsedMs: Date.now() - started } })
+          } finally {
+            turnsInFlight = Math.max(0, turnsInFlight - 1)
           }
         })()
 
