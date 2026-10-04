@@ -60,32 +60,28 @@ const AUTH = token.replace(/^password=/, '').trim()
 const notes = [
   '## What is new',
   '',
-  'Pictures the agent makes now appear in the chat, with the drawing state shown while it works.',
+  '**An hour for an agent turn, instead of fifteen minutes.**',
   '',
-  '**Ask for more than one.** Set a count and a single call returns several pictures.',
+  'Agent mode used to be stopped a quarter of an hour into a turn. That is fine for a quick job and',
+  'wrong for real work: a turn building a Minecraft replica was measured being killed at 14 minutes',
+  '56 seconds, so the task could only be carried forward by typing continue, over and over, for what',
+  'should have been one uninterrupted run. A turn now has an hour.',
   '',
-  '**Change a picture you already have.** Give the agent a picture from before and it edits that one,',
-  'rather than drawing a new one from your words. Edits use the image-to-image model in Settings under Images.',
+  '**And when a turn is stopped, it says so in plain words.**',
   '',
-  '**A real image tool for the agent.** The agent has an image tool of its own, so it can act instead of',
-  'describing what it would have drawn.',
-  '',
-  '**Files the agent writes can be opened.** Open and Reveal work on anything the agent produced, and the',
-  'agent is told where your pictures are kept.',
-  '',
-  '**One key per provider.** Every provider has its own key field with a Test that tells you whether it works.',
-  '',
-  '**Hundreds of models across every provider you have a key for**, searchable, grouped by provider, and',
-  'labelled with the provider they come from.',
+  'Instead of a mystery you get: "Agent turn stopped after 1 hour. Send anything to carry on from',
+  'where it left off." Nothing is lost when that happens, which is why being stopped is survivable at',
+  'all: the work carries on from the agent\'s own session on your next message.',
   '',
   '## Install',
   '',
   `Run \`WorkBuro-Setup-${VERSION}.exe\`, or take \`WorkBuro-${VERSION}-portable.exe\` if you would rather not`,
-  'install anything.',
+  'install anything. On an Apple silicon Mac, open the dmg.',
   '',
-  `Check your download against \`SHA256SUMS-${VERSION}.txt\`.`,
+  `Check your download against \`SHA256SUMS-${VERSION}.txt\` on Windows, or \`SHA256SUMS-${VERSION}-mac.txt\` on a Mac.`,
   '',
-  'Windows only for now. The builds are unsigned, so SmartScreen will ask.'
+  'The builds are unsigned, so SmartScreen will ask on Windows, and macOS needs a right-click then Open',
+  'the first time.'
 ].join('\n')
 
 async function main () {
@@ -93,7 +89,10 @@ async function main () {
   const assets = [
     `WorkBuro-Setup-${VERSION}.exe`,
     `WorkBuro-${VERSION}-portable.exe`,
-    `SHA256SUMS-${VERSION}.txt`
+    `WorkBuro-${VERSION}.dmg`,
+    `WorkBuro-${VERSION}-arm64-mac.zip`,
+    `SHA256SUMS-${VERSION}.txt`,
+    `SHA256SUMS-${VERSION}-mac.txt`
   ]
   for (const a of assets) {
     if (!fs.existsSync(path.join(rel, a))) {
