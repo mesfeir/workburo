@@ -254,6 +254,21 @@ export default function App() {
     })
   }, [])
 
+  /*
+   * Another device writes to the same conversations -- a phone, with server mode on. The main process
+   * says so, and the list is re-read rather than merged: the store is the truth, and re-reading is
+   * the only way both ends are certain to agree. Only conversations are taken; settings cannot be
+   * written from a phone at all.
+   */
+  useEffect(() => {
+    if (!ready) return
+    return window.zen.store.onChanged(() => {
+      window.zen.store.get().then((s: StoreShape) => {
+        if (s.conversations) setConversations(s.conversations)
+      })
+    })
+  }, [ready])
+
   /* ---------------------------------------------------------------- save */
 
   useEffect(() => {

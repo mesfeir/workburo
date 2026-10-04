@@ -26,6 +26,26 @@ contextBridge.exposeInMainWorld('zen', {
     get: () => ipcRenderer.invoke('store:get'),
     save: (data) => ipcRenderer.invoke('store:save', data),
     flush: (data) => ipcRenderer.invoke('store:flush', data),
+    /* Fired when another device -- a phone -- has written to the same conversations. */
+    onChanged: (handler) => {
+      const listener = () => handler()
+      ipcRenderer.on('store:changed', listener)
+      return () => ipcRenderer.removeListener('store:changed', listener)
+    },
+  },
+
+  /*
+   * Server mode: this app serving itself to a phone or to another computer. The pane asks for a
+   * status, switches it on and off, and shows a pairing code. The key is never handed to the page --
+   * the pane is told that a key exists and how long it is, and nothing more.
+   */
+  server: {
+    status: () => ipcRenderer.invoke('server:status'),
+    start: () => ipcRenderer.invoke('server:start'),
+    stop: () => ipcRenderer.invoke('server:stop'),
+    settings: (patch) => ipcRenderer.invoke('server:settings', patch),
+    newKey: () => ipcRenderer.invoke('server:newkey'),
+    pair: () => ipcRenderer.invoke('server:pair'),
   },
   // MCP servers: the page asks for a status and a test, and never touches a child process itself
   mcp: {

@@ -260,7 +260,18 @@ let saveTimer = null
 function writeStore(data) {
   try {
     fs.mkdirSync(path.dirname(storePath()), { recursive: true })
-    fs.writeFileSync(storePath(), JSON.stringify(stripInlineImages(data), null, 2), 'utf8')
+    /*
+     * What the caller sent wins, and anything else the file already holds is kept. The window sends
+     * the parts it owns -- settings, conversations, which chat was open -- and a writer that dropped
+     * everything else would let a window saving a chat setting erase whatever main keeps beside it.
+     */
+    let keep = {}
+    try {
+      keep = JSON.parse(fs.readFileSync(storePath(), 'utf8')) || {}
+    } catch {}
+    const merged = { ...keep, ...data }
+    if (keep.config && data && data.config) merged.config = { ...keep.config, ...data.config }
+    fs.writeFileSync(storePath(), JSON.stringify(stripInlineImages(merged), null, 2), 'utf8')
     return true
   } catch (err) {
     console.error('[store] write failed', err)
@@ -1149,6 +1160,15 @@ app.whenReady().then(() => {
   // re-assert a login entry the user asked for (e.g. after the exe moved)
   const bootCfg = readStore().config
   if (bootCfg.startWithWindows && !getLoginState().openAtLogin) setStartWithWindows(true)
+  /*
+   * Server mode, if it was left switched on. Not silently: the settings pane shows the state, the
+   * toggle and the addresses it is reachable at, and the key is only ever compared, never printed.
+   */
+  if (serverSettings().enabled) {
+    startServer()
+      .then((status) => console.info(`[server] listening on ${(status.addresses || []).join(' ')}`))
+      .catch((err) => console.warn('[server] could not start:', err.message))
+  }
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
@@ -1172,6 +1192,11 @@ app.on('before-quit', (event) => {
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
   if (tray && !tray.isDestroyed()) tray.destroy()
+  // The server is this app's own listener, so it goes when the app goes -- and with it, every
+  // device's access. Nothing else on the machine is touched.
+  try {
+    if (serverLib.status().running) serverLib.stop()
+  } catch {}
   // The model server is this app's own child, started only when asked for, so it goes when the
   // app goes. Nothing else on the machine is touched.
   if (localServed) {
@@ -2558,6 +2583,109 @@ ipcMain.handle('models:probe', async (_e, { cfg, model, testImage }) => {
   return { ok: false, error: 'This model does not work with either protocol on this endpoint.', vision: false }
 })
 
+/* -------------------------------------------------------------- server mode */
+
+/*
+ * The app serving itself to another device. This is not a second app: every route the server answers
+ * is handled by the same module the IPC handlers above call, so what a phone can do cannot drift
+ * away from what the desktop does. The provider keys stay here; a phone only ever holds the key that
+ * opens this door.
+ *
+ * Every path is handed over rather than assumed, which is what makes "the app on my Mac serves my
+ * phone" the same code as "the app on my PC serves my phone".
+ */
+const serverLib = require('./server.cjs')
+
+const SERVER_DEFAULT_PORT = 8765
+
+function serverSettings() {
+  const cfg = readStore().config || {}
+  const s = cfg.server || {}
+  return {
+    enabled: Boolean(s.enabled),
+    port: Number.isFinite(s.port) && s.port > 0 ? s.port : SERVER_DEFAULT_PORT,
+    // 'all' is this network; anything else is this computer only
+    bind: s.bind === 'all' ? 'all' : 'localhost',
+    key: typeof s.key === 'string' ? s.key : '',
+  }
+}
+
+/* Written back through the same path the renderer's saves take, so there is still one writer. */
+function saveServerSettings(patch) {
+  const data = readStore()
+  const current = serverSettings()
+  const next = { ...current, ...patch }
+  const cfg = {
+    ...(data.config || {}),
+    server: {
+      enabled: Boolean(next.enabled),
+      port: Number(next.port) > 0 ? Number(next.port) : SERVER_DEFAULT_PORT,
+      bind: next.bind === 'all' ? 'all' : 'localhost',
+      key: next.key || current.key || serverLib.keygen(),
+    },
+  }
+  scheduleSave({ ...data, config: cfg })
+  return cfg.server
+}
+
+async function startServer() {
+  const s = serverSettings()
+  const key = s.key || saveServerSettings({}).key
+  return serverLib.start({
+    rendererDir: path.join(__dirname, '..', 'dist'),
+    store: storePath(),
+    imagesDir: imagesDir(),
+    piRoot: PI_ROOT(),
+    agentExt: path.join(app.getPath('userData'), 'agent-ext'),
+    uploadsDir: path.join(app.getPath('userData'), 'server-uploads'),
+    key,
+    port: s.port,
+    bind: s.bind === 'all' ? '0.0.0.0' : '127.0.0.1',
+    // Agent mode is the app's own setting, read from here, so a phone cannot switch it on by itself
+    agent: Boolean((readStore().config || {}).agent?.enabled),
+    // A conversation written on the phone should show up on the desktop without a relaunch
+    onStoreChanged: () => sendToRenderer('store:changed'),
+  })
+}
+
+ipcMain.handle('server:status', () => ({
+  ...serverLib.status(),
+  settings: serverSettings(),
+  pair: serverLib.pairState(),
+  agentEnabled: Boolean((readStore().config || {}).agent?.enabled),
+}))
+
+ipcMain.handle('server:settings', (_e, patch) => {
+  const before = serverSettings()
+  const after = saveServerSettings(patch || {})
+  const moved = ['port', 'bind'].some((k) => before[k] !== after[k])
+  return { settings: after, restartNeeded: moved && Boolean(after.enabled) && serverLib.status().running }
+})
+
+ipcMain.handle('server:start', async () => {
+  saveServerSettings({ enabled: true })
+  try {
+    // Starting again with a changed port or bind is the same gesture to the user, so do the whole of it
+    if (serverLib.status().running) await serverLib.stop()
+    const status = await startServer()
+    return { ok: true, status: { ...status, settings: serverSettings() } }
+  } catch (err) {
+    return { ok: false, error: err.message, status: { ...serverLib.status(), settings: serverSettings() } }
+  }
+})
+
+ipcMain.handle('server:stop', async () => {
+  saveServerSettings({ enabled: false })
+  const status = await serverLib.stop()
+  return { ok: true, status: { ...status, settings: serverSettings() } }
+})
+
+/* A fresh key for the same door: every device already holding the old one is out of it. */
+ipcMain.handle('server:newkey', () => ({ settings: saveServerSettings({ key: serverLib.keygen() }) }))
+
+/* The six digits a phone types once, instead of the key itself. */
+ipcMain.handle('server:pair', () => serverLib.issuePairCode())
+
 /* ------------------------------------------------------------- IPC: store */
 
 ipcMain.handle('store:get', () => readStore())
@@ -2570,6 +2698,13 @@ ipcMain.handle('store:save', (_e, data) => {
     for (const [model, vision] of learnedVision) prefs[model] = { ...(prefs[model] || {}), vision }
     config.modelPrefs = prefs
   }
+  /*
+   * And the same for server mode, for the same reason. The window's copy of the settings is from
+   * whenever it last read the store, so without this a window saving a chat setting silently writes
+   * the server switched off -- the server keeps running, the stored answer says it is off, and the
+   * pane disagrees with reality. Server settings belong to the host, so the host re-asserts them.
+   */
+  config.server = serverSettings()
   scheduleSave({ ...data, config })
 
   // a change to the window behaviour takes effect at once, without a restart

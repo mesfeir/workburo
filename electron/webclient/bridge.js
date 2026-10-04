@@ -2,10 +2,11 @@
  * The Electron bridge, provided by a page, backed by real work.
  *
  * The renderer in dist/ talks to window.zen and nothing else, so this file is the whole difference
- * between the app and this preview. Everything below does real work: the conversation goes to the
+ * between the desktop app and the phone. Everything below does real work: the turn goes to the
  * endpoint configured in the app, attachments are read by the app's own document reader, pictures are
- * drawn by the app's own fal pipeline, and conversations are kept in this browser so they survive a
- * reload. No key is in this file: the server on the PC holds it.
+ * drawn by the app's own fal pipeline, and the conversations are the app's own -- this page is a
+ * second front end onto the same list, not a copy of it. No provider key is in this file: the host
+ * holds them, and this file only ever holds the key that gets it in the door.
  *
  * The transport is the app's own wire format, copied from main.cjs: same headers, same body, same SSE
  * parsing. What is deliberately missing is listed at the bottom of the file.
@@ -13,13 +14,27 @@
 (function () {
   'use strict'
 
-  /* The link carries a token so a stray device on the network cannot spend the keys. */
+  /*
+   * The key guards the whole thing, so a stray device on the network cannot spend the keys. It
+   * normally arrives by pairing: the app shows a six-digit code, the phone types it once at /pair, and
+   * that page stores what it gets back. A ?key= in the link also works, for a device where pairing is
+   * inconvenient.
+   */
   const params = new URLSearchParams(location.search)
-  if (params.get('k')) localStorage.setItem('wb-preview-token', params.get('k'))
-  const TOKEN = localStorage.getItem('wb-preview-token') || ''
+  if (params.get('key')) localStorage.setItem('wb-server-key', params.get('key'))
+  const KEY = localStorage.getItem('wb-server-key') || ''
 
-  const LS_STORE = 'wb-preview-store'
-  const LS_SEEDED = 'wb-preview-v2'
+  /* Without a key there is nothing this page is allowed to do, so send the device to fetch one. */
+  if (!KEY) {
+    location.replace('/pair')
+    return
+  }
+
+  /* What the page keeps on its own is only which chat was open; the conversations live on the host. */
+  const LS_STORE = 'wb-server-store'
+  const LS_SEEDED = 'wb-server-v1'
+
+  const authHeaders = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${KEY}` })
 
   const chatHandlers = []
   const running = new Map()
@@ -44,7 +59,7 @@
   async function api(pathname, body, signal) {
     const res = await fetch(pathname, {
       method: body === undefined ? 'GET' : 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-preview-token': TOKEN },
+      headers: authHeaders(),
       body: body === undefined ? undefined : JSON.stringify(body),
       signal,
     })
@@ -63,7 +78,7 @@
   async function sse(pathname, body, onEvent, signal) {
     const res = await fetch(pathname, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-preview-token': TOKEN },
+      headers: authHeaders(),
       body: JSON.stringify(body),
       signal,
     })
@@ -135,7 +150,7 @@
       showUsage: true,
       protocol: 'chat',
       sendAffinity: true,
-      affinityId: 'wb-preview-' + Math.random().toString(36).slice(2, 10),
+      affinityId: 'wb-web-' + Math.random().toString(36).slice(2, 10),
       hotkey: '',
       startWithWindows: false,
       alwaysOnTop: false,
@@ -172,28 +187,81 @@
     }
   }
 
-  function loadStore() {
-    try {
-      const raw = localStorage.getItem(LS_STORE)
-      if (raw) return JSON.parse(raw)
-    } catch {}
-    return null
+  /*
+   * The list is the app's own: pulled once at boot, pushed back when this page changes it, and
+   * re-pulled while the page is in front, so a chat you started on the desktop turns up here without
+   * a reload. Only conversations cross -- settings and keys stay on the host, which is why the push
+   * below sends the conversations and nothing else.
+   */
+  let store = { config: null, conversations: [], activeId: null, models: [] }
+  let storeSignature = ''
+  let storeLoaded = false
+  const storeHandlers = new Set()
+
+  /* Cheap, and enough to notice a new chat, a new message or an edit: ids, times, and how many. */
+  const signatureOf = (s) =>
+    JSON.stringify(
+      (s.conversations || []).map((c) => [c.id, c.updatedAt || c.createdAt || '', (c.messages || []).length]),
+    )
+
+  function noteStore(next) {
+    const changed = signatureOf(next) !== storeSignature
+    store = next
+    storeSignature = signatureOf(store)
+    if (changed) {
+      storeHandlers.forEach((h) => {
+        try {
+          h(store)
+        } catch (e) {
+          console.error(e)
+        }
+      })
+    }
+    return changed
   }
 
-  let store = loadStore() || {
-    config: null,
-    conversations: [],
-    activeId: null,
-    models: [],
-  }
-
-  function saveStore() {
+  async function pullStore() {
     try {
-      localStorage.setItem(LS_STORE, JSON.stringify(store))
-    } catch (e) {
-      console.warn('could not save locally', e)
+      const out = await api('/api/store')
+      storeLoaded = true
+      return noteStore({ ...store, conversations: out.conversations || [] })
+    } catch (err) {
+      console.warn('could not read the conversations', err.message)
+      return false
     }
   }
+
+  /*
+   * Nothing is ever pushed before the first read has landed. Without that gate the page would arrive
+   * with an empty list and helpfully save it over every conversation on the host, which is the one
+   * mistake in here that would actually lose something.
+   */
+  let pushTimer = null
+  function saveStore() {
+    try {
+      const keep = JSON.parse(localStorage.getItem(LS_STORE) || '{}')
+      localStorage.setItem(LS_STORE, JSON.stringify({ ...keep, activeId: store.activeId }))
+    } catch {}
+    if (!storeLoaded) return
+    storeSignature = signatureOf(store)
+    if (pushTimer) return
+    pushTimer = setTimeout(async () => {
+      pushTimer = null
+      try {
+        await api('/api/store', { conversations: store.conversations })
+      } catch (err) {
+        console.warn('could not save to the app', err.message)
+      }
+    }, 400)
+  }
+
+  /* A chat started on the desktop should show up here on its own: a cheap poll, only when visible. */
+  setInterval(() => {
+    if (document.visibilityState === 'visible') void pullStore()
+  }, 4000)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') void pullStore()
+  })
 
   /* ---------------------------------------------------------------- the endpoints */
 
@@ -202,8 +270,9 @@
     try {
       real.config = await api('/api/config')
       real.settingsLoaded = true
+      /* The host's settings, adapted for drawing this page. They are not saved back: the host's copy
+       * is the one that counts, and /api/store would not accept them anyway. */
       store.config = seedConfig(real.config)
-      saveStore()
     } catch (err) {
       real.error = err.message
       if (!store.config) store.config = seedConfig({})
@@ -241,6 +310,8 @@
             real.error = err.message
           }
         }
+        /* The host's conversations, before the renderer is handed a list to draw. */
+        if (!storeLoaded) await pullStore()
         return JSON.parse(JSON.stringify(store))
       },
       save: async (next) => {
@@ -248,7 +319,23 @@
         saveStore()
         return true
       },
-      flush: async () => true,
+      flush: async () => {
+        if (pushTimer) {
+          clearTimeout(pushTimer)
+          pushTimer = null
+        }
+        if (storeLoaded) {
+          try {
+            await api('/api/store', { conversations: store.conversations })
+          } catch {}
+        }
+        return true
+      },
+      /* So this page can follow a chat that is being written on the desktop. */
+      onChanged: (cb) => {
+        storeHandlers.add(cb)
+        return () => storeHandlers.delete(cb)
+      },
     },
 
     chat: {
@@ -300,7 +387,7 @@
                 if (think) emit({ requestId, type: 'reasoning', value: String(think) })
                 if (d.content) emit({ requestId, type: 'text', value: d.content })
                 if (Array.isArray(d.tool_calls) && d.tool_calls.length) {
-                  emit({ requestId, type: 'notice', value: 'tool calls are not wired up in this preview' })
+                  emit({ requestId, type: 'notice', value: 'tool calls belong to agent mode, which runs on the host' })
                 }
                 if (choice.finish_reason) emit({ requestId, type: 'finish', value: choice.finish_reason })
               },
@@ -401,7 +488,7 @@
               try {
                 const res = await fetch(`/api/upload?name=${encodeURIComponent(f.name)}`, {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/octet-stream', 'x-preview-token': TOKEN },
+                  headers: { 'Content-Type': 'application/octet-stream', Authorization: `Bearer ${KEY}` },
                   body: f,
                 })
                 const out = await res.json()
@@ -441,14 +528,14 @@
       list: async () => [],
       probe: async () => ({
         ok: false,
-        error: 'search and tools are not wired up in this preview: they run in the app, not behind a page',
+        error: 'search is a setting on the host: change it in the app, not from here',
         sources: [],
       }),
     },
 
     search: {
-      docker: async () => ({ docker: false, daemon: false, version: null, error: 'not in the preview' }),
-      install: async () => ({ ok: false, error: 'not in the preview' }),
+      docker: async () => ({ docker: false, daemon: false, version: null, error: 'not available from a phone: it runs on the host' }),
+      install: async () => ({ ok: false, error: 'not available from a phone: it runs on the host' }),
       onInstallProgress: () => () => {},
     },
 
@@ -517,8 +604,8 @@
 
     app: {
       info: async () => ({
-        version: '1.0.16 on a phone (preview)',
-        storePath: 'this browser',
+        version: 'WorkBuro on a phone',
+        storePath: 'on the host',
         platform: 'web',
         endpoint: store.config?.baseUrl,
         real: true,
@@ -577,8 +664,8 @@
     apps: {
       list: async () => ({ ok: true, apps: [], needsKey: true }),
       connections: async () => ({ ok: true, connections: [], needsKey: true }),
-      connect: async () => ({ ok: false, error: 'Composio is not wired up in this preview', needsKey: true }),
-      status: async () => ({ ok: false, error: 'not in the preview' }),
+      connect: async () => ({ ok: false, error: 'Composio signs in on the host, not from a phone', needsKey: true }),
+      status: async () => ({ ok: false, error: 'not available from a phone: it runs on the host' }),
     },
 
     local: {
@@ -596,7 +683,7 @@
         running: null,
       }),
       install: async () => ({ ok: false, error: 'a local model runs in the app, not behind a page' }),
-      start: async () => ({ ok: false, error: 'not in the preview' }),
+      start: async () => ({ ok: false, error: 'not available from a phone: it runs on the host' }),
       stop: async () => ({ ok: true }),
       detect: async () => ({ found: [], tried: [] }),
       open: async () => '',
@@ -626,7 +713,7 @@
       install: async () => ({
         installed: true,
         busy: false,
-        error: 'Pi runs on the PC and is installed there. Manage it in the app under Settings, Agent.',
+        error: 'Pi runs on the host and is installed there. Manage it in the app under Settings, Agent.',
       }),
       uninstall: async () => ({ installed: true }),
       // a phone has no folder picker: the workspace is the one the app is set to
@@ -642,7 +729,7 @@
         sessionHandlers.add(handler)
         return () => sessionHandlers.delete(handler)
       },
-      openWorkspace: async () => ({ ok: false, error: 'the workspace folder is on the PC' }),
+      openWorkspace: async () => ({ ok: false, error: 'the workspace folder is on the host' }),
 
       /*
        * A real agent turn. Pi runs on the PC with its own tools and workspace; this page only shows
@@ -664,7 +751,7 @@
                 protocol: 'agent',
                 model: req.model,
                 workspace: req.workspace || store.config?.agent?.workspace,
-                note: 'Pi is running on the PC; this window is the front end',
+                note: 'Pi is running on the host; this window is the front end',
               },
             })
             await sse(
@@ -709,12 +796,12 @@
 
     mcp: {
       status: async () => ({ enabled: false, servers: [], tools: [] }),
-      start: async () => ({ ok: false, error: 'not in the preview' }),
+      start: async () => ({ ok: false, error: 'not available from a phone: it runs on the host' }),
       stop: async () => ({ ok: false }),
     },
   }
 
   window.zen = zen
-  window.__workburoPreview = 'live'
-  console.info('[WorkBuro] live bridge: real model, real settings, real images. No key on this page.')
+  window.__workburoWeb = 'live'
+  console.info('[WorkBuro] web bridge: the app\'s own conversations, models and images, from another device. No provider key on this page.')
 })()

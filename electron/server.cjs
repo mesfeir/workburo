@@ -143,7 +143,7 @@ function headersFor(cfg, accept, keyOverride) {
     host = new URL(String(cfg.baseUrl || '').replace(/\/+$/, '')).hostname
   } catch {}
   if (cfg.sendAffinity !== false && /opencode\.ai$/i.test(host)) {
-    h['x-opencode-session'] = cfg.affinityId || 'wb-preview'
+    h['x-opencode-session'] = cfg.affinityId || 'wb-web'
   }
   return h
 }
@@ -384,6 +384,89 @@ function storeIn(body) {
   }
   return { ok: true, changed: before !== after, conversations: (current.conversations || []).length }
 }
+
+/* ---------------------------------------------------------------- pairing */
+
+/*
+ * Nobody should have to type a 43-character key on a phone, and a key in a URL ends up in history and
+ * in bookmarks. So the settings pane shows a six-digit code that is good for five minutes; the phone
+ * opens /pair, types it once, and receives the key into its own storage. The code is single use and
+ * dies after a handful of wrong guesses, which is what makes six digits enough.
+ */
+const PAIR_TTL_MS = 5 * 60 * 1000
+const PAIR_TRIES = 5
+let pair = { code: '', at: 0, tries: 0 }
+
+function issuePairCode() {
+  pair = { code: String(crypto.randomInt(100000, 1000000)), at: Date.now(), tries: 0 }
+  return { code: pair.code, expiresAt: pair.at + PAIR_TTL_MS, seconds: PAIR_TTL_MS / 1000 }
+}
+
+function pairState() {
+  const left = Math.max(0, Math.round((pair.at + PAIR_TTL_MS - Date.now()) / 1000))
+  return { active: Boolean(pair.code) && left > 0, expiresIn: left, triesLeft: Math.max(0, PAIR_TRIES - pair.tries) }
+}
+
+/* Returns the key on a good code, null otherwise. Single use, and it burns out after PAIR_TRIES. */
+function redeemPairCode(given) {
+  const left = pair.at + PAIR_TTL_MS - Date.now()
+  if (!pair.code || left <= 0) return null
+  if (String(given || '').trim() !== pair.code) {
+    pair.tries += 1
+    if (pair.tries >= PAIR_TRIES) pair = { code: '', at: 0, tries: 0 }
+    return null
+  }
+  pair = { code: '', at: 0, tries: 0 }
+  return apiKey
+}
+
+/* The page a phone opens to pair: one field, one button, and it keeps the key in its own storage
+ * rather than in the address bar. */
+const PAIR_PAGE = `<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Pair with WorkBuro</title>
+<style>
+  html,body{margin:0;height:100%;background:#121212;color:#f2f2f2;
+    font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    display:flex;align-items:center;justify-content:center}
+  main{width:100%;max-width:340px;padding:24px}
+  h1{font-size:19px;margin:0 0 6px}
+  p{margin:0 0 20px;color:#a6a6a6;font-size:14px}
+  input{width:100%;box-sizing:border-box;padding:14px;font-size:24px;letter-spacing:.24em;text-align:center;
+    background:#1c1c1c;color:#f2f2f2;border:1px solid #333;border-radius:10px;margin-bottom:12px}
+  button{width:100%;padding:14px;font-size:16px;font-weight:600;color:#fff;background:#2f6feb;border:0;border-radius:10px}
+  button:disabled{opacity:.5}
+  .note{margin-top:16px;font-size:13px;color:#a6a6a6;min-height:20px}
+</style></head>
+<body><main>
+  <h1>Pair this phone</h1>
+  <p>Type the six digits shown in WorkBuro, under Settings, Server.</p>
+  <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000">
+  <button id="go">Pair</button>
+  <div class="note" id="note"></div>
+</main>
+<script>
+  var note = document.getElementById('note'), go = document.getElementById('go'), field = document.getElementById('code');
+  field.focus();
+  go.onclick = async function () {
+    go.disabled = true; note.textContent = 'Checking...';
+    try {
+      var r = await fetch('/api/pair', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: field.value.trim() }) });
+      var j = await r.json();
+      if (!r.ok || !j.key) throw new Error(j.error || 'That code was not accepted.');
+      localStorage.setItem('wb-server-key', j.key);
+      note.textContent = 'Paired. Opening WorkBuro...';
+      location.replace('/');
+    } catch (err) {
+      note.textContent = err.message;
+      go.disabled = false;
+    }
+  };
+</script>
+</body></html>`
 
 /* ---------------------------------------------------------------- attachments and titles */
 
@@ -781,6 +864,10 @@ function phoneManifest(res) {
 function staticFile(req, res, url) {
   let rel = decodeURIComponent(url.pathname)
   if (rel === '/' || rel === '') return phonePage(res)
+  if (rel === '/pair' || rel === '/pair/') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
+    return res.end(PAIR_PAGE)
+  }
   if (rel === '/manifest.webmanifest') return phoneManifest(res)
 
   /* the bridge and the icons ship beside this file; everything else comes out of the app's build */
@@ -806,6 +893,19 @@ function staticFile(req, res, url) {
 const ROUTES = {
   '/api/config': { GET: (_req, res) => json(res, 200, publicConfig()) },
   '/api/health': { GET: (_req, res) => json(res, 200, status()) },
+  '/api/pair': {
+    POST: (req, res) => {
+      /* bodyText hands back the raw body -- the parsing belongs here, next to the field being read */
+      let code = ''
+      try { code = (JSON.parse(bodyText(req) || '{}') || {}).code } catch { code = '' }
+      const key = redeemPairCode(code)
+      if (!key) {
+        logRequest(req, 401, Date.now(), 'bad pairing code')
+        return json(res, 401, { ok: false, error: 'That code was not accepted. Check the six digits in the app.' })
+      }
+      json(res, 200, { ok: true, key })
+    }
+  },
   '/api/log': { GET: (_req, res) => json(res, 200, { entries: requestLog.slice(-120), refusals: failedAttempts }) },
   '/api/store': {
     GET: (_req, res) => json(res, 200, storeOut()),
@@ -852,10 +952,11 @@ async function handle(req, res) {
 
   /*
    * Everything under /api is the user's own machine and their own keys, so it is all behind the key.
-   * The one exception is health, which the settings pane uses to check its own server from the
-   * outside without holding the key.
+   * Two exceptions, both deliberate: health, which the settings pane uses to check its own server
+   * from the outside, and pair, whose whole job is to hand the key to a device that does not have
+   * one yet -- the single-use code in the request body is the credential there.
    */
-  if (p !== '/api/health' && !authorised(req, url)) {
+  if (p !== '/api/health' && p !== '/api/pair' && !authorised(req, url)) {
     logRequest(req, 401, Date.now() - started, 'wrong or missing key')
     return json(res, 401, { ok: false, error: 'This server needs the API key. Add it in the app under Settings, Server.' })
   }
@@ -911,6 +1012,9 @@ function status() {
     agentAllowed,
     keySet: Boolean(apiKey),
     keyLength: apiKey.length,
+    // The last few requests, for the settings pane. Never the key: only who asked for what, and what
+    // they got.
+    requests: requestLog.slice(-25),
   }
 }
 
@@ -947,7 +1051,15 @@ async function start(opts = {}) {
   })
 
   const bound = listening.address().port
-  addresses = [`http://127.0.0.1:${bound}/`, ...lanAddresses().map((ip) => `http://${ip}:${bound}/`)]
+  /*
+   * Only the addresses it is actually listening on. A LAN address printed for a server bound to
+   * localhost is a link that cannot work but looks like it can, which is worse than no link.
+   */
+  const onLan = bind === '0.0.0.0' || bind === '::'
+  addresses = [
+    `http://127.0.0.1:${bound}/`,
+    ...(onLan ? lanAddresses().map((ip) => `http://${ip}:${bound}/`) : []),
+  ]
   return status()
 }
 
@@ -964,5 +1076,5 @@ function keygen() {
   return crypto.randomBytes(32).toString('base64url')
 }
 
-module.exports = { start, stop, status, keygen, PHONE_ASSETS: 'webclient' }
+module.exports = { start, stop, status, keygen, issuePairCode, pairState, PHONE_ASSETS: 'webclient' }
 

@@ -39,6 +39,41 @@ export interface ImageGenResult {
   seed?: number | null
 }
 
+export interface ServerSettings {
+  enabled: boolean
+  port: number
+  /** 'all' is this network; 'localhost' is this computer only. */
+  bind: 'localhost' | 'all'
+  key: string
+}
+
+export interface ServerRequest {
+  at: number
+  method: string
+  path: string
+  ip: string
+  status: number
+  ms: number
+  note: string
+}
+
+export interface ServerStatus {
+  running: boolean
+  port: number | null
+  addresses: string[]
+  lan: string[]
+  devices: { ip: string; at: number }[]
+  refusals: number
+  lastRefusal: { at: number; ip: string } | null
+  agentAllowed: boolean
+  keySet: boolean
+  keyLength: number
+  requests: ServerRequest[]
+  settings: ServerSettings
+  pair: { active: boolean; expiresIn: number; triesLeft: number }
+  agentEnabled: boolean
+}
+
 export interface ZenApi {
   theme: {
     apply: (name: string) => Promise<boolean>
@@ -48,6 +83,22 @@ export interface ZenApi {
     get: () => Promise<StoreShape>
     save: (data: StoreShape) => Promise<boolean>
     flush: (data: StoreShape) => Promise<boolean>
+    /* Another device wrote to the same conversations. The handler re-reads them. */
+    onChanged: (handler: () => void) => () => void
+  }
+
+  /*
+   * Server mode: this app serving itself to a phone or another computer. The pane asks for a status,
+   * switches it on and off, and shows a pairing code. The key is never handed to the page -- only
+   * whether one is set, and how long it is.
+   */
+  server: {
+    status: () => Promise<ServerStatus>
+    start: () => Promise<{ ok: boolean; error?: string; status: ServerStatus }>
+    stop: () => Promise<{ ok: boolean; status: ServerStatus }>
+    settings: (patch: Partial<ServerSettings>) => Promise<{ settings: ServerSettings; restartNeeded: boolean }>
+    newKey: () => Promise<{ settings: ServerSettings }>
+    pair: () => Promise<{ code: string; expiresAt: number; seconds: number }>
   }
   // MCP servers: status and a test. The page never touches a child process itself.
   mcp?: {

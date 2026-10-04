@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import AppsPane from './AppsPane'
 import McpPane from './McpPane'
+import ServerPane from './ServerPane'
 import {
   Check,
   Eye,
@@ -28,7 +29,7 @@ const INSTRUCTION_PRESETS = [
   'Ask before assuming.',
 ]
 
-type Tab = 'general' | 'api' | 'chat' | 'models' | 'images' | 'apps' | 'mcp' | 'tools' | 'agent' | 'about'
+type Tab = 'general' | 'api' | 'chat' | 'models' | 'images' | 'apps' | 'mcp' | 'tools' | 'agent' | 'server' | 'about'
 
 export type SettingsTab = Tab
 
@@ -42,6 +43,7 @@ const TAB_LABELS: Record<Tab, string> = {
   mcp: 'MCP servers',
   tools: 'Tools',
   agent: 'Agent',
+  server: 'Server',
   about: 'About',
 }
 
@@ -793,7 +795,7 @@ export default function SettingsModal({
 
         <div className="flex min-h-0 flex-1">
           <div className="w-[150px] shrink-0 border-r border-[var(--rule)] p-2">
-            {(['general', 'api', 'chat', 'models', 'images', 'apps', 'mcp', 'tools', 'agent', 'about'] as Tab[]).map((t) => (
+            {(['general', 'api', 'chat', 'models', 'images', 'apps', 'mcp', 'tools', 'agent', 'server', 'about'] as Tab[]).map((t) => (
               <button
                 key={t}
                 data-settings-tab={t}
@@ -1506,6 +1508,7 @@ export default function SettingsModal({
 
             {tab === 'apps' && <AppsPane config={config} onConfig={onConfig} />}
             {tab === 'mcp' && <McpPane config={config} onConfig={onConfig} />}
+            {tab === 'server' && <ServerPane />}
 
             {tab === 'tools' && (
               <div className="space-y-5">

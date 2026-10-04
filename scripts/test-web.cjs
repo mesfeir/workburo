@@ -41,6 +41,17 @@ function check(name, cond, detail) {
  */
 const DESKTOP_ONLY = {
   'theme:apply': 'the phone has its own system theme',
+  /*
+   * Managing the server is the one thing that must not be on the web: these channels switch the
+   * listener on and off, choose where it listens, and issue and replace the key. Exposed over HTTP
+   * they would let anything holding the key mint itself a new one, which is the whole door.
+   */
+  'server:status': 'the server is managed in the app; a device is told what it exists by using it',
+  'server:start': 'starting the listener is the host owner\'s decision',
+  'server:stop': 'stopping the listener is the host owner\'s decision',
+  'server:settings': 'port and reach are decided on the host',
+  'server:newkey': 'replacing the key is the host owner\'s decision',
+  'server:pair': 'issuing pairing codes happens in the app, in front of the person',
   'chat:abort': 'not yet routed -- streams are ended by the phone closing them',
   'pi:install': 'installing the agent needs a native binary and a network of its own',
   'pi:uninstall': 'the agent belongs to the host machine',
@@ -152,6 +163,16 @@ async function main() {
   const wronglyRouted = Object.entries(ROUTED).filter(([c]) => DESKTOP_ONLY[c])
   check('no channel is both routed and excluded', wronglyRouted.length === 0, wronglyRouted.map(([c]) => c).join(', '))
 
+  /*
+   * The window's copy of the settings is stale by definition -- it is from whenever it last read the
+   * store -- so a renderer save is a place where host-owned settings get silently undone. It already
+   * happened once, to server mode: the toggle said on, the server ran, and the file said off.
+   */
+  const mainSrc = fs.readFileSync(path.join(ROOT, 'electron', 'main.cjs'), 'utf8')
+  check('a renderer save cannot switch the server off', /config\.server = serverSettings\(\)/.test(mainSrc))
+  check('writing the store keeps the parts main owns', /const merged = \{ \.\.\.keep, \.\.\.data \}/.test(mainSrc))
+  check('starting the server is not on the web', !/\/api\/server/.test(routes.join(' ')))
+
   /* behaviour: really start it */
   const server = require(path.join(ROOT, 'electron', 'server.cjs'))
   const key = server.keygen()
@@ -173,6 +194,11 @@ async function main() {
   })
   check('the server reports it is running', status.running === true)
   check('it knows an address to print', Array.isArray(status.addresses) && status.addresses.length > 0, JSON.stringify(status.addresses))
+  /*
+   * This run is bound to 127.0.0.1, so the only address offered must be the loopback one: offering a
+   * LAN address here would be a confident link that cannot work.
+   */
+  check('bound to this computer, it offers no address it is not listening on', status.addresses.every((a) => /127\.0\.0\.1/.test(a)), JSON.stringify(status.addresses))
   check('the key is held, never returned', status.keySet === true && !JSON.stringify(status).includes(key))
 
   const base = { host: '127.0.0.1', port: 8391 }
@@ -226,6 +252,62 @@ async function main() {
   try { entries = JSON.parse(log.body) } catch {}
   check('the refusals were counted', entries.refusals >= 2, String(entries.refusals))
   check('the log records what happened, without the key', Array.isArray(entries.entries) && entries.entries.length > 4 && !log.body.includes(key))
+
+  /* ---------------------------------------------------------------- pairing */
+
+  const pairPage = await request({ ...base, path: '/pair', method: 'GET' })
+  check('the pairing page is served', pairPage.status === 200 && /text\/html/.test(pairPage.headers['content-type'] || ''), `${pairPage.status} ${pairPage.headers['content-type']}`)
+  check('the pairing page asks for the six digits', pairPage.body.includes('Pair this phone') && pairPage.body.includes('maxlength="6"'))
+  check('the pairing page carries no key', !pairPage.body.includes(key))
+  check('the pairing page is never cached', /no-store/.test(pairPage.headers['cache-control'] || ''), String(pairPage.headers['cache-control']))
+
+  const issued = server.issuePairCode()
+  check('a pairing code is six digits', /^\d{6}$/.test(issued.code), issued.code)
+  check('a code expires in five minutes', issued.seconds === 300, String(issued.seconds))
+  check('a code is reported as live', server.pairState().active === true)
+
+  const post = (path, payload) =>
+    request(
+      { ...base, path, method: 'POST', headers: { 'content-type': 'application/json' } },
+      JSON.stringify(payload),
+    )
+
+  const wrongCode = await post('/api/pair', { code: '000000' === issued.code ? '111111' : '000000' })
+  check('a wrong pairing code is refused', wrongCode.status === 401, String(wrongCode.status))
+  check('and the refusal does not hand out the key', !wrongCode.body.includes(key))
+
+  const goodCode = await post('/api/pair', { code: issued.code })
+  check('the right pairing code is accepted', goodCode.status === 200, String(goodCode.status))
+  let pairedKey = ''
+  try { pairedKey = JSON.parse(goodCode.body).key || '' } catch {}
+
+  /* The point of pairing is a usable credential, so use it rather than compare it. */
+  const withPairedKey = await request({ ...base, path: '/api/config', method: 'GET', headers: { authorization: `Bearer ${pairedKey}` } })
+  check('what pairing hands back really opens the door', withPairedKey.status === 200, String(withPairedKey.status))
+
+  const reused = await post('/api/pair', { code: issued.code })
+  check('a pairing code works once and only once', reused.status === 401, String(reused.status))
+
+  const burned = server.issuePairCode()
+  for (let i = 0; i < 5; i++) await post('/api/pair', { code: '000000' === burned.code ? '111111' : '000000' })
+  const afterGuessing = await post('/api/pair', { code: burned.code })
+  check('guessing a code five times kills it', afterGuessing.status === 401, String(afterGuessing.status))
+  check('and it is no longer reported as live', server.pairState().active === false)
+
+  /* ------------------------------------------------------------- the bridge */
+
+  check('the bridge no longer knows the old per-link token', !bridge.body.includes('x-preview-token') && !bridge.body.includes('wb-preview'))
+  check('the bridge sends the key as a bearer header', bridge.body.includes("Authorization: `Bearer ${KEY}`"))
+  check('a device with no key is sent to pair', /if \(!KEY\)[\s\S]{0,80}location\.replace\('\/pair'\)/.test(bridge.body))
+  check('the bridge reads the app\'s conversations through the API', bridge.body.includes("api('/api/store')") && bridge.body.includes("api('/api/store', { conversations: store.conversations })"))
+
+  /*
+   * The one mistake in this area that would lose something: arriving with an empty list and saving it
+   * over every conversation on the host. The gate has to be there, and it has to be before the push.
+   */
+  const gate = bridge.body.indexOf('if (!storeLoaded) return')
+  const push = bridge.body.indexOf("api('/api/store', { conversations: store.conversations })")
+  check('the bridge cannot push before it has read', gate > -1 && gate < push, `gate at ${gate}, push at ${push}`)
 
   const stopped = await server.stop()
   check('the server stops cleanly', stopped.running === false)
