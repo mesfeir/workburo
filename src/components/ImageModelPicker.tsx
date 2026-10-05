@@ -17,15 +17,23 @@ export default function ImageModelPicker({
   config,
   onChange,
   onConfigure,
+  inline,
+  field = 'model',
+  onPicked,
 }: {
   config: Config
   onChange: (id: string) => void
   onConfigure: () => void
+  /* Rendered inside someone else's panel: no button of its own, no placement of its own. */
+  inline?: boolean
+  /* Which model in the config this list is choosing: the one that draws, or the one that edits. */
+  field?: 'model' | 'editModel'
+  onPicked?: () => void
 }) {
   const ig = config.imageGen
   const key = ig?.falKey || ''
   const enabled = Boolean(ig?.enabled)
-  const current = ig?.model || ''
+  const current = (field === 'editModel' ? ig?.editModel : ig?.model) || ''
 
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
@@ -136,29 +144,41 @@ export default function ImageModelPicker({
   }
 
   return (
-    <div className="relative no-drag" ref={box}>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        data-image-model
-        title={
-          current
-            ? `Image model: ${current}${priceOf(current) ? ` · ${priceOf(current)}` : ''}`
-            : 'Choose the model that draws pictures'
-        }
-        className="flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1.5 text-[13.5px] text-[var(--text-mid)] transition hover:bg-[var(--raised-2)]"
-      >
-        <ImageIcon size={14} className="shrink-0 text-faint" />
-        <span className="max-w-[210px] truncate">{current ? short(current) : 'Choose image model'}</span>
-        {current && priceOf(current) ? (
-          <span data-image-model-price className="shrink-0 text-[11px] text-faint">
-            {priceOf(current)}
+    <div className={inline ? '' : 'relative no-drag'} ref={box}>
+      {!inline && (
+        <button
+          onClick={() => setOpen((o) => !o)}
+          data-image-model
+          title={
+            current
+              ? `${field === 'editModel' ? 'Image edit model' : 'Image model'}: ${current}${priceOf(current) ? ` · ${priceOf(current)}` : ''}`
+              : field === 'editModel'
+                ? 'Choose the model that changes a picture it is given'
+                : 'Choose the model that draws pictures'
+          }
+          className="flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1.5 text-[13.5px] text-[var(--text-mid)] transition hover:bg-[var(--raised-2)]"
+        >
+          <ImageIcon size={14} className="shrink-0 text-faint" />
+          <span className="max-w-[210px] truncate">
+            {current ? short(current) : field === 'editModel' ? 'Choose edit model' : 'Choose image model'}
           </span>
-        ) : null}
-        <ChevronDown size={14} className="shrink-0 text-faint" />
-      </button>
+          {current && priceOf(current) ? (
+            <span data-image-model-price className="shrink-0 text-[11px] text-faint">
+              {priceOf(current)}
+            </span>
+          ) : null}
+          <ChevronDown size={14} className="shrink-0 text-faint" />
+        </button>
+      )}
 
-      {open && (
-        <div className="absolute left-0 top-[38px] z-40 w-[460px] overflow-hidden rounded-2xl border border-[var(--rule)] bg-[var(--raised)] shadow-2xl">
+      {(inline || open) && (
+        <div
+          className={
+            inline
+              ? 'overflow-hidden'
+              : 'absolute left-0 top-[38px] z-40 w-[460px] overflow-hidden rounded-2xl border border-[var(--rule)] bg-[var(--raised)] shadow-2xl'
+          }
+        >
           <div className="flex items-center gap-2 border-b border-[var(--rule)] px-3 py-2">
             <Search size={14} className="text-faint" />
             <input
@@ -193,6 +213,7 @@ export default function ImageModelPicker({
                     onClick={() => {
                       onChange(m.id)
                       setOpen(false)
+                      onPicked?.()
                     }}
                     className="flex w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-[var(--raised)]"
                   >

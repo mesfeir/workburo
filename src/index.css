@@ -202,11 +202,20 @@
 /* A word arriving from the model fades in from the left, so a streaming answer reads as if it is
    being written rather than appearing in chunks. Only opacity and transform animate, so this stays
    on the compositor. Words are inline-block only because a transform does nothing on a plain
-   inline box; line breaking is unaffected because the spaces between them stay plain text. */
+   inline box; line breaking is unaffected because the spaces between them stay plain text.
+
+   It is deliberately quick. At 240ms a word was still fading when the next arrived, so a burst from
+   the model landed as a legible row of half-transparent words -- chunks of words being written.
+   A short fade reads as speed, and the small offsets below spread one burst over about 70ms so it
+   cascades instead of appearing in one piece.
+
+   The offsets are on nth-child because that is stateless: words already on screen have finished
+   their animation and keep their nodes, so only what is new can restart one, and nothing needs to
+   remember which words those are. */
 @keyframes word-in {
   from {
     opacity: 0;
-    transform: translateX(-3px);
+    transform: translateX(-2px);
   }
   to {
     opacity: 1;
@@ -215,10 +224,22 @@
 }
 .word-in {
   display: inline-block;
-  animation: word-in 240ms ease-out both;
+  animation: word-in 140ms ease-out both;
+}
+.word-in:nth-child(4n + 2) {
+  animation-delay: 20ms;
+}
+.word-in:nth-child(4n + 3) {
+  animation-delay: 40ms;
+}
+.word-in:nth-child(4n + 4) {
+  animation-delay: 60ms;
 }
 @media (prefers-reduced-motion: reduce) {
-  .word-in {
+  .word-in,
+  .word-in:nth-child(4n + 2),
+  .word-in:nth-child(4n + 3),
+  .word-in:nth-child(4n + 4) {
     animation: none;
   }
 }

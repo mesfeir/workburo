@@ -21,6 +21,8 @@ export default function ModelPicker({
   onProbe,
   probingId,
   onConfigure,
+  inline,
+  onPicked,
 }: {
   models: ModelInfo[]
   groups?: ModelGroup[]
@@ -32,6 +34,9 @@ export default function ModelPicker({
   onProbe: (id: string) => void
   probingId: string | null
   onConfigure: () => void
+  /* Rendered inside someone else's panel: no button of its own, no placement of its own. */
+  inline?: boolean
+  onPicked?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
@@ -58,21 +63,29 @@ export default function ModelPicker({
   const total = shown.reduce((n, g) => n + g.models.length, 0)
 
   return (
-    <div className="relative no-drag" ref={box}>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1.5 text-[13.5px] transition hover:bg-[var(--raised-2)]"
-      >
-        {current ? (
-          <span className="max-w-[280px] truncate text-[var(--text-mid)]">{current}</span>
-        ) : (
-          <span className="text-faint">Select a model</span>
-        )}
-        <ChevronDown size={14} className="text-faint" />
-      </button>
+    <div className={inline ? '' : 'relative no-drag'} ref={box}>
+      {!inline && (
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className="flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1.5 text-[13.5px] transition hover:bg-[var(--raised-2)]"
+        >
+          {current ? (
+            <span className="max-w-[280px] truncate text-[var(--text-mid)]">{current}</span>
+          ) : (
+            <span className="text-faint">Select a model</span>
+          )}
+          <ChevronDown size={14} className="text-faint" />
+        </button>
+      )}
 
-      {open && (
-        <div className="absolute left-0 top-[38px] z-40 w-[350px] overflow-hidden rounded-2xl border border-[var(--rule)] bg-[var(--raised)] shadow-2xl">
+      {(inline || open) && (
+        <div
+          className={
+            inline
+              ? 'overflow-hidden'
+              : 'absolute left-0 top-[38px] z-40 w-[350px] overflow-hidden rounded-2xl border border-[var(--rule)] bg-[var(--raised)] shadow-2xl'
+          }
+        >
           <div className="flex items-center gap-2 border-b border-[var(--rule)] px-3 py-2">
             <Search size={14} className="text-faint" />
             <input
@@ -139,6 +152,7 @@ export default function ModelPicker({
                         g.baseUrl ? { baseUrl: g.baseUrl, key: g.key, affinity: g.affinity } : undefined,
                       )
                       setOpen(false)
+                      onPicked?.()
                     }}
                     className="flex min-w-0 flex-1 items-center gap-2 px-1 py-2 text-left"
                   >

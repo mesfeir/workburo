@@ -3,8 +3,7 @@ import { PanelLeft, Settings2, TriangleAlert, X } from 'lucide-react'
 import Sidebar from './components/Sidebar'
 import ChatView from './components/ChatView'
 import Composer from './components/Composer'
-import ModelPicker from './components/ModelPicker'
-import ImageModelPicker from './components/ImageModelPicker'
+import ModelPanel from './components/ModelPanel'
 import SettingsModal, { type SettingsTab } from './components/SettingsModal'
 import GalleryModal from './components/GalleryModal'
 import { probeImage, readFilesAsImages, shrinkImage } from './lib/image'
@@ -1362,26 +1361,22 @@ export default function App() {
               <PanelLeft size={16} />
             </button>
           )}
-          <ModelPicker
+          {/* One control for all three models, rather than a button each: what answers, what draws,
+              what edits. */}
+          <ModelPanel
+            config={config}
             models={models}
             groups={modelGroups}
             unavailable={modelsUnavailable}
-            current={config.model}
-            config={config}
             onSelect={(id, from) => patchConfig(pickModel(id, from))}
             onRefresh={refreshModels}
             onProbe={probeModel}
             probingId={probing}
             onConfigure={() => setSettingsOpen(true)}
-          />
-          {/* the image model sits beside the chat model: same decision, same place, with what it
-              costs per picture in the small text next to the name */}
-          <ImageModelPicker
-            config={config}
-            onChange={(id) =>
-              patchConfig({ imageGen: { ...(config.imageGen || {}), model: id } })
+            onImageChange={(id, field) =>
+              patchConfig({ imageGen: { ...(config.imageGen || {}), [field]: id } })
             }
-            onConfigure={() => {
+            onConfigureImages={() => {
               setSettingsTab('images')
               setSettingsOpen(true)
             }}

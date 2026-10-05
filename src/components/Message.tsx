@@ -26,6 +26,31 @@ import {
 import Markdown from '../lib/Markdown'
 import type { Attachment, ChatMessage, Source, ToolActivity } from '../types'
 
+/**
+ * The same word-by-word fade the answer uses, for text that is not markdown.
+ *
+ * Thinking is a scratchpad: it holds line breaks and half-finished code fences, so running it through
+ * the markdown renderer would change what it says. This splits it into words and leaves the whitespace
+ * as plain text, which is all the animation needs. React reconciles by position, so the words already
+ * on screen keep their nodes and only the new ones play the animation -- the same reason the markdown
+ * path does it this way.
+ */
+function Words({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(/(\s+)/).map((part, i) =>
+        part === '' ? null : /^\s+$/.test(part) ? (
+          <span key={i}>{part}</span>
+        ) : (
+          <span key={i} className="word-in">
+            {part}
+          </span>
+        ),
+      )}
+    </>
+  )
+}
+
 function Reasoning({ text, streaming, ms }: { text: string; streaming?: boolean; ms?: number }) {
   const [open, setOpen] = useState(false)
   const secs = ms ? Math.max(1, Math.round(ms / 1000)) : null
@@ -47,7 +72,10 @@ function Reasoning({ text, streaming, ms }: { text: string; streaming?: boolean;
       </button>
       {open && text.trim() && (
         <div className="mt-1 border-l-2 border-[var(--rule)] pl-3 text-[13.5px] leading-[1.65] whitespace-pre-wrap text-[var(--text-dim)]">
-          {text}
+          {/* Thinking is written the way the answer is written: the same fade, so the wait reads as
+              something happening rather than a block arriving. Once it has stopped, plain text -- a
+              finished thought should be still. */}
+          {streaming ? <Words text={text} /> : text}
         </div>
       )}
     </div>
