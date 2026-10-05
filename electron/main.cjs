@@ -2857,6 +2857,43 @@ ipcMain.handle('app:openStore', () => shell.showItemInFolder(storePath()))
 ipcMain.handle('images:options', () => ({ sizes: falImages.SIZE_PRESETS }))
 
 /**
+ * What has actually been produced: the files in the images folder, newest first.
+ *
+ * The store only remembers paths, and a conversation can be deleted while its picture stays on disk,
+ * so listing the folder is the only way to answer "what have I generated" truthfully. Everything in
+ * there is a thing this app made — attached files are never copied in.
+ */
+ipcMain.handle('images:files', async () => {
+  const dir = imagesDir()
+  const files = []
+  let names = []
+  try {
+    names = await fs.promises.readdir(dir)
+  } catch (err) {
+    // No folder yet means nothing has been drawn, which is not an error worth showing anyone.
+    return { ok: true, dir, files: [], empty: true }
+  }
+  for (const name of names) {
+    const full = path.join(dir, name)
+    try {
+      const st = await fs.promises.stat(full)
+      if (!st.isFile()) continue
+      files.push({
+        name,
+        path: full,
+        size: st.size,
+        mtime: st.mtimeMs,
+        ext: path.extname(name).slice(1).toLowerCase(),
+      })
+    } catch {
+      // A file that vanished between listing and reading is simply not listed.
+    }
+  }
+  files.sort((a, b) => b.mtime - a.mtime)
+  return { ok: true, dir, files }
+})
+
+/**
  * What the selected model charges for the selected size.
  *
  * fal's own rate for the endpoint is the answer when it has one, which covers models the public

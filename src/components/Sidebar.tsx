@@ -60,6 +60,7 @@ export default function Sidebar({
   onPin,
   onOpenSettings,
   onOpenImages,
+  onOpenLibrary,
   onCollapse,
   agentSessions,
   onStopAgent,
@@ -75,6 +76,7 @@ export default function Sidebar({
   onPin: (id: string) => void
   onOpenSettings: () => void
   onOpenImages: () => void
+  onOpenLibrary: () => void
   onCollapse: () => void
   /** agent sessions running now — a chat with one gets a stop button in its row */
   agentSessions: RunningSession[]
@@ -169,7 +171,12 @@ export default function Sidebar({
           onClick={onOpenImages}
           title="Every picture you have attached or drawn, and the settings behind them"
         />
-        <NavRow icon={<Library size={17} />} label="Library" disabled title="Saved outputs — coming soon" />
+        <NavRow
+          icon={<Library size={17} />}
+          label="Library"
+          onClick={onOpenLibrary}
+          title="Everything this app has made — the files in your outputs folder"
+        />
         <NavRow icon={<CalendarClock size={17} />} label="Scheduled" disabled title="Scheduled prompts — coming soon" />
         <NavRow icon={<Plug size={17} />} label="Plugins" disabled title="Plugins — coming soon" />
         <NavRow icon={<FolderOpen size={17} />} label="Projects" disabled title="Projects — coming soon" />

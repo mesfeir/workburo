@@ -6,6 +6,8 @@ import Composer from './components/Composer'
 import ModelPanel from './components/ModelPanel'
 import SettingsModal, { type SettingsTab } from './components/SettingsModal'
 import GalleryModal from './components/GalleryModal'
+import LibraryModal from './components/LibraryModal'
+import { readImageIntent, type ImageIntent } from './lib/imageIntent'
 import { probeImage, readFilesAsImages, shrinkImage } from './lib/image'
 import type {
   Attachment,
@@ -161,8 +163,13 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null)
   /** composer is aimed at the image generator instead of the chat model */
   const [imageMode, setImageMode] = useState(false)
-  /** a reference image is edited at fal by default, or read by the model on request */
-  const [refEdit, setRefEdit] = useState(true)
+  /** the words did not say what the picture is for: ask, rather than spend credits or misread it */
+  const [askIntent, setAskIntent] = useState(false)
+  /** what the previous turn did, so "again" and "same but" can mean the same thing */
+  const lastWasEdit = useRef(false)
+  /** set when the user has just answered that question, so it is not asked a second time */
+  const forcedIntent = useRef<ImageIntent | null>(null)
+  const [libraryOpen, setLibraryOpen] = useState(false)
   const [focusNonce, setFocusNonce] = useState(0)
   /** which settings tab to open on, when something other than us asks for it */
   const [settingsTab, setSettingsTab] = useState<SettingsTab | undefined>(undefined)
@@ -233,11 +240,7 @@ export default function App() {
   const stopAgentSession = useCallback((requestId: string) => {
     window.zen.pi.stop(requestId)
   }, [])
-  const pickAgentWorkspace = useCallback(async () => {
-    const dir = await window.zen.pi.pickWorkspace()
-    if (!dir) return
-    setConversations((prev) => prev.map((c) => (c.id === activeId ? { ...c, agentWorkspace: dir } : c)))
-  }, [activeId])
+
 
   /* ---------------------------------------------------------------- load */
 
@@ -628,9 +631,8 @@ export default function App() {
     }
     setImages([{ ...im, url }])
     setImageMode(false)
-    setRefEdit(true)
     setFocusNonce((n) => n + 1)
-    setToast('Picture attached as the reference — say what to change, then press Enter.')
+    setToast('Picture attached as the reference — ask about it, or say what to change.')
     setTimeout(() => setToast(null), 6000)
   }, [])
 
@@ -646,8 +648,7 @@ export default function App() {
     const r = await window.zen.images.dataUrl(first.path)
     if (!r?.ok || !r.url) return
     setImages([{ name: first.name || 'last-image.png', url: r.url }])
-    setRefEdit(true)
-    setToast('That picture is now the reference — say what to change about it.')
+    setToast('That picture is now the reference — ask about it, or say what to change about it.')
     setTimeout(() => setToast(null), 6000)
   }, [])
 
@@ -744,9 +745,24 @@ export default function App() {
       const attached = overrideText ? [] : images
       if ((!text && attached.length === 0) || busy) return
 
-      // An attached reference is an edit request: it goes to fal with the user's own
-      // words. The "Ask about it" switch keeps the ordinary vision path available.
-      const editing = attached.length > 0 && refEdit
+      /*
+       * With a picture attached, the words decide what happens to it. "Make the sky blue" is an edit,
+       * "what does this say" is a look, and "here is the mockup" is neither -- so the app asks rather
+       * than guessing, because guessing wrong either spends fal credits or hands the picture to a
+       * text model that never looks at it. A picture with no words at all is a look, never a redraw.
+       */
+      let intent: ImageIntent | null = null
+      if (attached.length > 0) {
+        intent = forcedIntent.current || readImageIntent(text, lastWasEdit.current)
+        forcedIntent.current = null
+        if (intent === 'unsure') {
+          setAskIntent(true)
+          return
+        }
+        setAskIntent(false)
+        lastWasEdit.current = intent === 'edit'
+      }
+      const editing = intent === 'edit'
       if (editing && !text) {
         setToast('Say what to change about the image — that text becomes the fal prompt.')
         setTimeout(() => setToast(null), 5000)
@@ -821,7 +837,7 @@ export default function App() {
 
       runRequest(convId, history)
     },
-    [input, images, busy, activeId, conversations, runRequest, refEdit, runFalEdit],
+    [input, images, busy, activeId, conversations, runRequest, runFalEdit],
   )
 
   /* ---------------------------------------------------- image generation */
@@ -850,11 +866,6 @@ export default function App() {
   useEffect(() => {
     if (!config.imageGen?.enabled && imageMode) setImageMode(false)
   }, [config.imageGen?.enabled, imageMode])
-
-  // the edit/ask switch belongs to the attached reference and starts on "edit"
-  useEffect(() => {
-    if (images.length === 0 && !refEdit) setRefEdit(true)
-  }, [images.length, refEdit])
 
   const generateImage = useCallback(async () => {
     const cfg = configRef.current
@@ -960,11 +971,22 @@ export default function App() {
     )
   }, [input, busy, activeId, conversations, referenceLastImage])
 
-  // the composer's send goes to whichever mode is armed
+  // the composer's send goes to whichever mode is armed -- but a picture in the composer is never a
+  // request to draw a new one, whatever the Image switch happens to say
   const submit = useCallback(() => {
-    if (imageMode) void generateImage()
+    if (imageMode && images.length === 0) void generateImage()
     else send()
-  }, [imageMode, generateImage, send])
+  }, [imageMode, generateImage, send, images.length])
+
+  /** the answer to "change it or tell me about it", then the turn goes through */
+  const chooseIntent = useCallback(
+    (mode: 'edit' | 'look') => {
+      forcedIntent.current = mode
+      setAskIntent(false)
+      send()
+    },
+    [send],
+  )
 
   const regenerate = useCallback(
     (messageId: string) => {
@@ -1346,6 +1368,7 @@ export default function App() {
               onPin={pinConv}
               onOpenSettings={() => setSettingsOpen(true)}
               onOpenImages={() => setGalleryOpen(true)}
+              onOpenLibrary={() => setLibraryOpen(true)}
               onCollapse={() => setSidebarOpen(false)}
             />
       </div>
@@ -1445,7 +1468,6 @@ export default function App() {
         <Composer
         agentSession={activeSession}
         onStopAgent={stopAgentSession}
-        onPickAgentWorkspace={pickAgentWorkspace}
           value={input}
           onChange={setInput}
           onSend={submit}
@@ -1463,8 +1485,8 @@ export default function App() {
           imageMode={imageMode}
           onToggleImageMode={() => setImageMode((v) => !v)}
           imageModeAvailable={Boolean(config.imageGen?.enabled)}
-          refEdit={refEdit}
-          onSetRefEdit={setRefEdit}
+          askIntent={askIntent}
+          onChooseIntent={chooseIntent}
           speed={active?.messages.filter((m) => m.streaming).slice(-1)[0]?.speed || null}
           focusNonce={focusNonce}
           agentMode={agentMode}
@@ -1478,6 +1500,8 @@ export default function App() {
           modelLabel={modelLabel}
         />
       </main>
+
+      {libraryOpen && <LibraryModal onClose={() => setLibraryOpen(false)} />}
 
       {settingsOpen && (
         <SettingsModal

@@ -219,6 +219,14 @@ export interface ZenApi {
       forCount?: string
     }>
     options: () => Promise<{ sizes: { id: string; label: string; width: number; height: number }[] }>
+    /** everything this app has generated: the files in the images folder, newest first */
+    outputs: () => Promise<{
+      ok: boolean
+      dir: string
+      files: { name: string; path: string; size: number; mtime: number; ext: string }[]
+      empty?: boolean
+      error?: string
+    }>
     generate: (req: {
       requestId: string
       key: string

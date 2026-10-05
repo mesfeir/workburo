@@ -80,6 +80,7 @@ const DESKTOP_ONLY = {
   'window:resetBounds': 'there is no window geometry',
   'app:openStore': 'opens a folder on the host',
   'images:cost': 'not yet routed',
+  'images:files': 'lists a folder on the host — the phone has no business reading the disk',
   'images:prices': 'not yet routed',
   'images:dataUrl': 'not yet routed -- the phone receives data URLs with the picture',
   'open:external': 'not yet routed',

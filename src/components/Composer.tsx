@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
-import { ArrowUp, Brain, FileText, Image as ImageIcon, Mic, Plus, Square, Terminal, X, FolderOpen } from 'lucide-react'
+import { ArrowUp, Brain, FileText, Image as ImageIcon, Mic, Plus, Square, Terminal, X } from 'lucide-react'
 
 /** The rule between two mode switches. */
 function ModeDivider() {
@@ -89,15 +89,14 @@ export default function Composer({
   imageMode,
   onToggleImageMode,
   imageModeAvailable,
-  refEdit,
-  onSetRefEdit,
+  askIntent,
+  onChooseIntent,
   agentMode,
   onToggleAgent,
   agentAvailable,
   agentWorkspace,
   agentSession,
   onStopAgent,
-  onPickAgentWorkspace,
   modelLabel,
   disabled,
   focusNonce,
@@ -124,9 +123,9 @@ export default function Composer({
   onToggleImageMode: () => void
   /** only offered when a hosted image provider is configured and switched on */
   imageModeAvailable: boolean
-  /** with a reference attached: edit it at fal, or let the model read it */
-  refEdit: boolean
-  onSetRefEdit: (v: boolean) => void
+  /** set when the words did not say whether to change the picture or look at it */
+  askIntent: boolean
+  onChooseIntent: (mode: 'edit' | 'look') => void
   /** bumped when something wants the caret put back in the input, e.g. after attaching a picture */
   focusNonce?: number
   /** live tokens per second while an answer streams, shown bottom-right in small text */
@@ -140,7 +139,6 @@ export default function Composer({
   agentWorkspace?: string
   agentSession?: RunningSession | null
   onStopAgent: (requestId: string) => void
-  onPickAgentWorkspace: () => void
   modelLabel: string
   disabled?: boolean
 }) {
@@ -241,30 +239,37 @@ export default function Composer({
               </div>
             ))}
 
-            {/* what happens to the reference: fal edits it, or the model reads it */}
-            <div data-refmode className="flex items-center gap-0.5 rounded-full border border-[var(--rule)] p-0.5">
-              <button
-                onClick={() => onSetRefEdit(true)}
-                title="Send this image and your words straight to fal.ai to be changed"
-                className={`rounded-full px-2.5 py-1 text-[12px] transition ${
-                  refEdit ? 'bg-[var(--accent-bg)] text-[var(--accent-soft)]' : 'text-faint hover:bg-[var(--raised-2)]'
-                }`}
+            {/* The words usually say what the picture is for, so this only appears when they do not.
+                A question costs nothing; guessing wrong either spends fal credits or sends the
+                picture to a text model that never looks at it. */}
+            {askIntent && (
+              <div
+                data-ask-intent
+                className="flex w-full items-center gap-2 rounded-2xl border border-[var(--rule)] bg-[var(--raised)] px-2.5 py-1.5"
               >
-                Edit image
-              </button>
-              <button
-                onClick={() => onSetRefEdit(false)}
-                title="Let the chat model look at the image instead of editing it"
-                className={`rounded-full px-2.5 py-1 text-[12px] transition ${
-                  !refEdit ? 'bg-[var(--raised-2)] text-ink' : 'text-faint hover:bg-[var(--raised-2)]'
-                }`}
-              >
-                Ask about it
-              </button>
-            </div>
-            <span data-refhint className="text-[11.5px] text-faint">
-              {refEdit ? 'your words become the fal prompt' : 'the model reads the image'}
-            </span>
+                <span className="text-[12.5px] text-[var(--text-mid)]">
+                  Not sure what you want with this picture.
+                </span>
+                <div className="ml-auto flex shrink-0 items-center gap-0.5">
+                  <button
+                    onClick={() => onChooseIntent('edit')}
+                    data-intent-edit
+                    title="Send this image and your words to fal.ai to be changed"
+                    className="rounded-full px-2.5 py-1 text-[12px] text-[var(--text-mid)] transition hover:bg-[var(--raised-2)]"
+                  >
+                    Change it
+                  </button>
+                  <button
+                    onClick={() => onChooseIntent('look')}
+                    data-intent-look
+                    title="Let the chat model read the image"
+                    className="rounded-full bg-[var(--raised-2)] px-2.5 py-1 text-[12px] text-ink"
+                  >
+                    Tell me about it
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -296,8 +301,8 @@ export default function Composer({
             placeholder={
               imageMode
                 ? 'Describe the image you want'
-                : refEdit && images.length > 0
-                  ? 'Describe the change you want'
+                : images.length > 0
+                  ? 'Ask about this picture, or say what to change'
                   : 'Ask anything'
             }
             className="max-h-[208px] flex-1 resize-none bg-transparent px-1 py-[9px] text-[15.5px] leading-[1.5] placeholder:text-[var(--text-dim)] disabled:opacity-60"
@@ -377,23 +382,6 @@ export default function Composer({
                     : 'Hand this turn to Pi, which can read, write and run things in your workspace folder'
               }
             />
-
-            {agentMode && (
-              <button
-                onClick={onPickAgentWorkspace}
-                title={
-                  agentWorkspace
-                    ? `Pi works in ${agentWorkspace} for this chat. Click to choose another folder.`
-                    : 'Choose the folder Pi may work in for this chat'
-                }
-                className="flex h-8 max-w-[200px] items-center gap-1.5 rounded-full border border-[var(--rule)] px-2.5 text-[13px] text-[var(--text-mid)] transition hover:bg-[var(--raised-2)]"
-              >
-                <FolderOpen size={14} />
-                <span className="truncate">
-                  {agentWorkspace ? agentWorkspace.split(/[\\/]/).filter(Boolean).pop() : 'Folder'}
-                </span>
-              </button>
-            )}
 
             {agentSession && (
               <button

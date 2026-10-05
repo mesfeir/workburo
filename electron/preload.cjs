@@ -115,6 +115,8 @@ contextBridge.exposeInMainWorld('zen', {
     prices: (key, models, size) => ipcRenderer.invoke('images:prices', { key, models, ...(size || {}) }),
     cost: (req) => ipcRenderer.invoke('images:cost', req),
     options: () => ipcRenderer.invoke('images:options'),
+    /* everything this app has generated, read off disk rather than remembered */
+    outputs: () => ipcRenderer.invoke('images:files'),
     generate: (req) => ipcRenderer.invoke('images:generate', req),
     dataUrl: (path) => ipcRenderer.invoke('images:dataUrl', { path }),
     saveAs: (file) => ipcRenderer.invoke('images:saveAs', { file }),
