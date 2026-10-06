@@ -115,8 +115,6 @@ contextBridge.exposeInMainWorld('zen', {
     prices: (key, models, size) => ipcRenderer.invoke('images:prices', { key, models, ...(size || {}) }),
     cost: (req) => ipcRenderer.invoke('images:cost', req),
     options: () => ipcRenderer.invoke('images:options'),
-    /* everything this app has generated, read off disk rather than remembered */
-    outputs: () => ipcRenderer.invoke('images:files'),
     generate: (req) => ipcRenderer.invoke('images:generate', req),
     dataUrl: (path) => ipcRenderer.invoke('images:dataUrl', { path }),
     saveAs: (file) => ipcRenderer.invoke('images:saveAs', { file }),
@@ -126,6 +124,12 @@ contextBridge.exposeInMainWorld('zen', {
       ipcRenderer.on('images:progress', listener)
       return () => ipcRenderer.removeListener('images:progress', listener)
     },
+  },
+  /* everything this app has made or been handed, read off disk rather than remembered */
+  library: {
+    files: () => ipcRenderer.invoke('library:files'),
+    /* opens one of the Library's own folders; the main process refuses anything else */
+    openFolder: (dir) => ipcRenderer.invoke('library:openFolder', { dir }),
   },
   /* the local model: fetch it, start it, stop it. No key anywhere in this path. */
   local: {

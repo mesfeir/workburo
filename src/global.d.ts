@@ -206,6 +206,31 @@ export interface ZenApi {
     }>
     onInstallProgress: (handler: (p: { phase: string; message: string }) => void) => () => void
   }
+  /**
+   * What the app has made and what it has been handed, from the folders it writes to.
+   * The store only remembers paths and a path can go stale, so these are read off disk.
+   */
+  library: {
+    files: () => Promise<{
+      ok: boolean
+      /** the pictures folder — what the open-folder button points at */
+      dir: string
+      sources: { id: string; label: string; dir: string; count: number }[]
+      files: {
+        name: string
+        path: string
+        size: number
+        mtime: number
+        ext: string
+        source: string
+        sourceLabel: string
+      }[]
+      total: number
+      error?: string
+    }>
+    /** opens one of the folders above, and nothing else */
+    openFolder: (dir: string) => Promise<{ ok: boolean; error?: string }>
+  }
   images: {
     models: (key: string, categories?: string) => Promise<{ ok: boolean; models?: FalModel[]; total?: number; error?: string; status?: number }>
     /** what the selected model charges for the selected size, resolved in the main process */
@@ -219,14 +244,6 @@ export interface ZenApi {
       forCount?: string
     }>
     options: () => Promise<{ sizes: { id: string; label: string; width: number; height: number }[] }>
-    /** everything this app has generated: the files in the images folder, newest first */
-    outputs: () => Promise<{
-      ok: boolean
-      dir: string
-      files: { name: string; path: string; size: number; mtime: number; ext: string }[]
-      empty?: boolean
-      error?: string
-    }>
     generate: (req: {
       requestId: string
       key: string

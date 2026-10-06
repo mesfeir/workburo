@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import Markdown from '../lib/Markdown'
 import type { Attachment, ChatMessage, Source, ToolActivity } from '../types'
+import { toolLabel, toolView } from '../lib/toolView'
 
 /**
  * The same word-by-word fade the answer uses, for text that is not markdown.
@@ -184,54 +185,107 @@ function toolDetail(t: ToolActivity): string {
   return ''
 }
 
-function ToolRun({ tools }: { tools: ToolActivity[] }) {
-  const [open, setOpen] = useState<string | null>(null)
-  if (!tools?.length) return null
+/** One line of the run: the icon, what it is doing, and what it found if it can be opened. */
+function ToolRow({ t, open, onToggle }: { t: ToolActivity; open: boolean; onToggle: () => void }) {
+  const Icon = TOOL_ICONS[t.name] || Wrench
+  const detail = toolDetail(t)
+  const running = t.status === 'running'
+  const failed = t.status === 'error'
+  const label = toolLabel(t)
+  const canExpand = Boolean(t.preview || t.error)
   return (
-    <div className="mb-1.5 space-y-0.5" data-tools>
-      {tools.map((t) => {
-        const Icon = TOOL_ICONS[t.name] || Wrench
-        const detail = toolDetail(t)
-        const running = t.status === 'running'
-        const failed = t.status === 'error'
-        const label = t.server ? 'Searched the web' : t.label || t.name
-        const canExpand = Boolean(t.preview || t.error)
-        return (
-          <div key={t.id}>
-            <button
-              onClick={() => canExpand && setOpen(open === t.id ? null : t.id)}
-              className={`flex w-full items-center gap-1.5 rounded-md py-1 text-left text-[13px] transition ${
-                failed ? 'text-[var(--err)]' : 'text-muted hover:text-ink'
-              }`}
-              title={failed ? t.error || '' : detail}
-            >
-              {running ? (
-                <Loader2 size={13} className="shrink-0 animate-spin text-faint" />
-              ) : failed ? (
-                <TriangleAlert size={13} className="shrink-0" />
-              ) : (
-                <Icon size={13} className="shrink-0 text-faint" />
-              )}
-              <span className="min-w-0 flex-1 truncate">
-                {label}
-                {detail ? `: ${detail}` : ''}
-              </span>
-              {canExpand && (
-                <ChevronDown size={12} className={`shrink-0 text-faint transition ${open === t.id ? 'rotate-180' : ''}`} />
-              )}
-            </button>
-            {open === t.id && (
-              <div className="mt-1 mb-1 border-l-2 border-[var(--rule)] pl-3 text-[12.5px] leading-[1.6] text-[var(--text-dim)]">
-                {t.error ? (
-                  <span className="text-[var(--err)]">{t.error}</span>
-                ) : (
-                  <span className="whitespace-pre-wrap">{t.preview}</span>
-                )}
-              </div>
-            )}
+    <div>
+      <button
+        onClick={() => canExpand && onToggle()}
+        className={`flex w-full items-center gap-1.5 rounded-md py-1 text-left text-[13px] transition ${
+          failed ? 'text-[var(--err)]' : 'text-muted hover:text-ink'
+        }`}
+        title={failed ? t.error || '' : detail}
+      >
+        {running ? (
+          <Loader2 size={13} className="shrink-0 animate-spin text-faint" />
+        ) : failed ? (
+          <TriangleAlert size={13} className="shrink-0" />
+        ) : (
+          <Icon size={13} className="shrink-0 text-faint" />
+        )}
+        <span className="min-w-0 flex-1 truncate">
+          {label}
+          {detail ? `: ${detail}` : ''}
+        </span>
+        {canExpand && (
+          <ChevronDown size={12} className={`shrink-0 text-faint transition ${open ? 'rotate-180' : ''}`} />
+        )}
+      </button>
+      {open && (
+        <div className="mt-1 mb-1 border-l-2 border-[var(--rule)] pl-3 text-[12.5px] leading-[1.6] text-[var(--text-dim)]">
+          {t.error ? (
+            <span className="text-[var(--err)]">{t.error}</span>
+          ) : (
+            <span className="whitespace-pre-wrap">{t.preview}</span>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * The tools a turn used, without turning the transcript into a log.
+ *
+ * While the turn runs, only the tool in hand is on screen — it is the only one that is changing —
+ * with a quiet count of the rest that opens on a click. Once it stops the whole run folds to a
+ * single line. Both the open list and the folded one are height-capped, so a turn that called forty
+ * tools can no longer fill the window whatever is expanded.
+ */
+function ToolRun({ tools, streaming }: { tools: ToolActivity[]; streaming?: boolean }) {
+  const [open, setOpen] = useState<string | null>(null)
+  const [showAll, setShowAll] = useState(false)
+  const view = toolView(tools, streaming)
+  if (view.empty || !view.current) return null
+
+  const row = (t: ToolActivity) => (
+    <ToolRow key={t.id} t={t} open={open === t.id} onToggle={() => setOpen(open === t.id ? null : t.id)} />
+  )
+
+  if (view.live) {
+    return (
+      <div className="mb-1.5" data-tools="live">
+        {row(view.current)}
+        {view.done.length > 0 && (
+          <button
+            onClick={() => setShowAll((v) => !v)}
+            className="mt-0.5 flex items-center gap-1 text-[12px] text-faint transition hover:text-muted"
+          >
+            <ChevronDown size={11} className={`transition ${showAll ? 'rotate-180' : ''}`} />
+            {view.done.length} earlier
+          </button>
+        )}
+        {showAll && view.done.length > 0 && (
+          <div className="mt-1 max-h-[30vh] space-y-0.5 overflow-y-auto border-l-2 border-[var(--rule)] pl-2">
+            {view.done.map(row)}
           </div>
-        )
-      })}
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="mb-1.5" data-tools="done">
+      <button
+        onClick={() => setShowAll((v) => !v)}
+        className="flex w-full items-center gap-1.5 rounded-md py-1 text-left text-[13px] text-muted transition hover:text-ink"
+        title={view.summary}
+      >
+        <Wrench size={13} className="shrink-0 text-faint" />
+        <span className="min-w-0 flex-1 truncate">{view.summary}</span>
+        <ChevronDown size={12} className={`shrink-0 text-faint transition ${showAll ? 'rotate-180' : ''}`} />
+      </button>
+      {showAll && (
+        <div className="mt-1 max-h-[40vh] space-y-0.5 overflow-y-auto">
+          {tools.map(row)}
+        </div>
+      )}
     </div>
   )
 }
@@ -391,7 +445,7 @@ export default function Message({
         <Reasoning text={msg.reasoning || ''} streaming={msg.streaming} ms={msg.elapsedMs} />
       )}
 
-      <ToolRun tools={msg.tools || []} />
+      <ToolRun tools={msg.tools || []} streaming={msg.streaming} />
 
       {/* generated images come back as their own attachment, above the text */}
       {!!(msg.images || []).length && (

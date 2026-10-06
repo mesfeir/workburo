@@ -2857,40 +2857,93 @@ ipcMain.handle('app:openStore', () => shell.showItemInFolder(storePath()))
 ipcMain.handle('images:options', () => ({ sizes: falImages.SIZE_PRESETS }))
 
 /**
- * What has actually been produced: the files in the images folder, newest first.
+ * The folders this app writes to, which is the whole of what the Library can show.
  *
- * The store only remembers paths, and a conversation can be deleted while its picture stays on disk,
- * so listing the folder is the only way to answer "what have I generated" truthfully. Everything in
- * there is a thing this app made — attached files are never copied in.
+ * It listed the pictures folder alone, so the Library opened onto drawings and nothing else: a
+ * document the app wrote and a file that was attached to the agent were both invisible in it, while
+ * the open-folder button landed in the images folder and made that look like the whole story.
+ *
+ * Kept as one function because two handlers need the same list, and because a folder that is opened
+ * has to be one of these — a caller must not be able to point the app at an arbitrary directory.
  */
-ipcMain.handle('images:files', async () => {
-  const dir = imagesDir()
+function librarySources() {
+  const workspace = (readStore().config.agent || {}).workspace
+  return [
+    { id: 'pictures', label: 'Pictures the app made', dir: imagesDir() },
+    { id: 'documents', label: 'Documents it wrote', dir: documentsDir() },
+    {
+      id: 'attachments',
+      label: 'What you attached to the agent',
+      dir: workspace ? path.join(workspace, 'attachments') : '',
+    },
+    {
+      id: 'uploads',
+      label: 'What your phone sent',
+      dir: path.join(app.getPath('userData'), 'server-uploads'),
+    },
+  ]
+}
+
+/**
+ * What has actually been produced, from every folder that can hold it.
+ *
+ * The store only remembers paths and a path can go stale, so the folders are read at the moment they
+ * are asked for — a file that appeared a second ago is there, and a file whose chat was deleted is
+ * still here.
+ */
+ipcMain.handle('library:files', async () => {
   const files = []
-  let names = []
-  try {
-    names = await fs.promises.readdir(dir)
-  } catch (err) {
-    // No folder yet means nothing has been drawn, which is not an error worth showing anyone.
-    return { ok: true, dir, files: [], empty: true }
-  }
-  for (const name of names) {
-    const full = path.join(dir, name)
-    try {
-      const st = await fs.promises.stat(full)
-      if (!st.isFile()) continue
-      files.push({
-        name,
-        path: full,
-        size: st.size,
-        mtime: st.mtimeMs,
-        ext: path.extname(name).slice(1).toLowerCase(),
-      })
-    } catch {
-      // A file that vanished between listing and reading is simply not listed.
+  const listed = []
+  const seen = new Set()
+
+  for (const source of librarySources()) {
+    let names = []
+    if (source.dir) {
+      try {
+        names = await fs.promises.readdir(source.dir)
+      } catch {
+        // A folder that is not there yet means nothing was made that way, which is not an error.
+        names = []
+      }
     }
+    let count = 0
+    for (const name of names) {
+      const full = path.join(source.dir, name)
+      if (seen.has(full)) continue
+      try {
+        const st = await fs.promises.stat(full)
+        if (!st.isFile()) continue
+        seen.add(full)
+        count += 1
+        files.push({
+          name,
+          path: full,
+          size: st.size,
+          mtime: st.mtimeMs,
+          ext: path.extname(name).slice(1).toLowerCase(),
+          source: source.id,
+          sourceLabel: source.label,
+        })
+      } catch {
+        // A file that vanished between listing and reading is simply not listed.
+      }
+    }
+    listed.push({ id: source.id, label: source.label, dir: source.dir, count })
   }
+
   files.sort((a, b) => b.mtime - a.mtime)
-  return { ok: true, dir, files }
+  const shown = files.slice(0, 500)
+  return { ok: true, dir: imagesDir(), sources: listed, files: shown, total: files.length }
+})
+
+/** Open one of the Library's own folders, and only one of those. */
+ipcMain.handle('library:openFolder', async (_e, req = {}) => {
+  const wanted = String((req && req.dir) || '')
+  if (!librarySources().some((s) => s.dir && s.dir === wanted)) {
+    return { ok: false, error: 'That is not one of the folders this app writes to.' }
+  }
+  const problem = await shell.openPath(wanted)
+  return problem ? { ok: false, error: problem } : { ok: true }
 })
 
 /**

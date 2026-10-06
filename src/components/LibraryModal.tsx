@@ -2,21 +2,33 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ExternalLink, FolderOpen, ImageOff, Loader2, RefreshCw, Search, X } from 'lucide-react'
 
 /**
- * Everything this app has made, read off disk.
+ * Everything this app has made or been handed, read off disk.
  *
- * The point is that it is the folder, not the conversation. A picture stays a file after its chat is
- * deleted, and a file dropped into the folder shows up here too, so this answers "what have I
- * generated" with what is actually there rather than with what the store still remembers.
+ * It used to be the pictures folder alone, which made the Library look like a gallery and made the
+ * folder button look like the whole of it: a document the app wrote, a file attached to the agent
+ * and a file sent from the phone were all invisible, because none of them live in that folder. Now
+ * every folder the app writes to is listed, and each file says which one it came from.
  *
- * Previews are fetched a few at a time rather than all at once: there are over a hundred files and
- * each one crosses the IPC boundary as a data URL, so loading the lot at once would stall the window
- * for a couple of seconds to show pictures nobody has scrolled to yet.
+ * The point is still that it is the folders, not the conversations. A file stays after its chat is
+ * deleted, and a file put in one of these folders by hand shows up here too.
+ *
+ * Previews are fetched a few at a time rather than all at once: each one crosses the IPC boundary as
+ * a data URL, so loading the lot would stall the window to show pictures nobody has scrolled to.
  */
 const IMAGE_EXT = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'avif', 'bmp', 'svg'])
 const SHOWN_AT_ONCE = 24
 const PREVIEW_BATCH = 6
 
-type OutFile = { name: string; path: string; size: number; mtime: number; ext: string }
+type LibSource = { id: string; label: string; dir: string; count: number }
+type OutFile = {
+  name: string
+  path: string
+  size: number
+  mtime: number
+  ext: string
+  source: string
+  sourceLabel: string
+}
 
 function ago(ms: number) {
   const s = Math.max(0, Math.round((Date.now() - ms) / 1000))
@@ -37,11 +49,12 @@ function size(bytes: number) {
 }
 
 export default function LibraryModal({ onClose }: { onClose: () => void }) {
-  const [dir, setDir] = useState('')
+  const [sources, setSources] = useState<LibSource[]>([])
   const [files, setFiles] = useState<OutFile[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [q, setQ] = useState('')
+  const [where, setWhere] = useState('all')
   const [shown, setShown] = useState(SHOWN_AT_ONCE)
   const [urls, setUrls] = useState<Record<string, string>>({})
   const asked = useRef(new Set<string>())
@@ -50,9 +63,9 @@ export default function LibraryModal({ onClose }: { onClose: () => void }) {
     setLoading(true)
     setError(null)
     try {
-      const res = await window.zen.images.outputs()
-      if (!res?.ok) throw new Error(res?.error || 'Could not read the folder')
-      setDir(res.dir)
+      const res = await window.zen.library.files()
+      if (!res?.ok) throw new Error(res?.error || 'Could not read the folders')
+      setSources(res.sources || [])
       setFiles(res.files || [])
     } catch (err) {
       setError((err as Error).message)
@@ -73,13 +86,22 @@ export default function LibraryModal({ onClose }: { onClose: () => void }) {
     return () => document.removeEventListener('keydown', h)
   }, [onClose])
 
+  /* Files this app has written, and only those — a source with no folder yet has nothing to show. */
+  const real = useMemo(() => sources.filter((s) => s.dir), [sources])
+
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase()
-    if (!needle) return files
-    return files.filter((f) => f.name.toLowerCase().includes(needle))
-  }, [files, q])
+    return files.filter((f) => {
+      if (where !== 'all' && f.source !== where) return false
+      if (needle && !f.name.toLowerCase().includes(needle)) return false
+      return true
+    })
+  }, [files, q, where])
 
   const visible = filtered.slice(0, shown)
+
+  /* The folder the button opens: the one being looked at, or the pictures folder for "everything". */
+  const activeDir = where === 'all' ? '' : real.find((s) => s.id === where)?.dir || ''
 
   /* Fetch previews for what is on screen, a few at a time, and never twice for the same file. */
   useEffect(() => {
@@ -111,6 +133,27 @@ export default function LibraryModal({ onClose }: { onClose: () => void }) {
   const openFile = (f: OutFile) => void window.zen.files.open(f.path)
   const revealFile = (f: OutFile) => void window.zen.files.reveal(f.path)
 
+  const chip = (id: string, label: string, count: number) => {
+    const on = where === id
+    return (
+      <button
+        key={id}
+        data-library-source={id}
+        onClick={() => {
+          setWhere(id)
+          setShown(SHOWN_AT_ONCE)
+        }}
+        className={`shrink-0 rounded-full border px-2.5 py-1 text-[12px] transition ${
+          on
+            ? 'border-[var(--accent)] bg-[var(--raised-2)] text-ink'
+            : 'border-[var(--rule)] text-muted hover:bg-[var(--raised-2)] hover:text-ink'
+        }`}
+      >
+        {label} <span className="text-faint">{count}</span>
+      </button>
+    )
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3" onMouseDown={onClose}>
       <div
@@ -121,7 +164,7 @@ export default function LibraryModal({ onClose }: { onClose: () => void }) {
         <div className="flex shrink-0 items-center gap-2 border-b border-[var(--rule)] px-4 py-3">
           <h2 className="text-[15px] text-ink">Library</h2>
           <span data-library-count className="text-[12px] text-faint">
-            {loading ? 'reading…' : `${files.length} file${files.length === 1 ? '' : 's'}`}
+            {loading ? 'reading…' : `${filtered.length} file${filtered.length === 1 ? '' : 's'}`}
           </span>
           <div className="ml-auto flex items-center gap-1.5">
             <div className="flex items-center gap-1.5 rounded-lg bg-[var(--raised)] px-2 py-1">
@@ -138,14 +181,16 @@ export default function LibraryModal({ onClose }: { onClose: () => void }) {
             </div>
             <button
               onClick={() => void load()}
-              title="Read the folder again"
+              title="Read the folders again"
               className="grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-[var(--raised-2)] hover:text-ink"
             >
               <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
             </button>
             <button
-              onClick={() => void window.zen.images.openFolder()}
-              title="Open this folder in Explorer"
+              onClick={() =>
+                void (activeDir ? window.zen.library.openFolder(activeDir) : window.zen.images.openFolder())
+              }
+              title={activeDir ? `Open ${activeDir}` : 'Open the pictures folder'}
               className="flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] text-muted transition hover:bg-[var(--raised-2)] hover:text-ink"
             >
               <FolderOpen size={14} /> Folder
@@ -159,18 +204,26 @@ export default function LibraryModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
+        {/* where each file came from — the app writes to four different folders */}
+        <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b border-[var(--rule)] px-4 py-2">
+          {chip('all', 'Everything', files.length)}
+          {real.map((s) => chip(s.id, s.label, s.count))}
+        </div>
+
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
           {error && <p className="text-[13px] text-[var(--text-dim)]">{error}</p>}
 
           {!error && !loading && files.length === 0 && (
             <p className="py-10 text-center text-[13px] text-faint">
-              Nothing here yet. Pictures you generate are written to this folder, and anything you put
-              in it shows up here.
+              Nothing here yet. Pictures you generate, documents it writes, files you attach and files
+              your phone sends all show up here.
             </p>
           )}
 
           {!error && files.length > 0 && filtered.length === 0 && (
-            <p className="py-10 text-center text-[13px] text-faint">No file matches “{q}”.</p>
+            <p className="py-10 text-center text-[13px] text-faint">
+              {q ? <>No file matches “{q}”.</> : <>Nothing in this folder yet.</>}
+            </p>
           )}
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
@@ -207,6 +260,7 @@ export default function LibraryModal({ onClose }: { onClose: () => void }) {
                     </p>
                     <p className="text-[10.5px] text-faint">
                       {size(f.size)} · {ago(f.mtime)}
+                      {where === 'all' ? ` · ${f.sourceLabel}` : ''}
                     </p>
                   </div>
                   <button
@@ -233,11 +287,9 @@ export default function LibraryModal({ onClose }: { onClose: () => void }) {
           )}
         </div>
 
-        {dir && (
-          <div className="shrink-0 truncate border-t border-[var(--rule)] px-4 py-2 text-[11px] text-faint">
-            {dir}
-          </div>
-        )}
+        <div className="shrink-0 truncate border-t border-[var(--rule)] px-4 py-2 text-[11px] text-faint">
+          {activeDir || real.map((s) => s.dir).join('  ·  ')}
+        </div>
       </div>
     </div>
   )

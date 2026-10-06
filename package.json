@@ -1,7 +1,7 @@
 {
   "name": "workburo",
   "private": true,
-  "version": "1.0.19",
+  "version": "1.0.20",
   "description": "WorkBuro, a desktop client for any OpenAI-compatible API (OpenCode Zen / Go, OpenAI, local LLMs)",
   "type": "module",
   "main": "electron/main.cjs",
@@ -33,13 +33,14 @@
     "test:documents": "node scripts/test-documents.cjs",
     "test:composio": "node scripts/test-composio.cjs",
     "test:create": "node scripts/test-create.cjs",
-    "test": "node scripts/check-syntax.cjs && npm run test:titles --silent && npm run test:agent --silent && npm run test:local --silent && npm run test:models --silent && npm run test:paths --silent && npm run test:outputs --silent && npm run test:image-tool --silent && npm run test:tools --silent && npm run test:searxng --silent && npm run test:files --silent && npm run test:documents --silent && npm run test:messages --silent && npm run test:errors --silent && npm run test:create --silent && npm run test:mcp --silent && npm run test:images --silent && npm run test:edit --silent && npm run test:pricing --silent && npm run test:composio --silent && npm run test:web --silent && npm run test:intent --silent",
+    "test": "node scripts/check-syntax.cjs && npm run test:titles --silent && npm run test:agent --silent && npm run test:local --silent && npm run test:models --silent && npm run test:paths --silent && npm run test:outputs --silent && npm run test:image-tool --silent && npm run test:tools --silent && npm run test:searxng --silent && npm run test:files --silent && npm run test:documents --silent && npm run test:messages --silent && npm run test:errors --silent && npm run test:create --silent && npm run test:mcp --silent && npm run test:images --silent && npm run test:edit --silent && npm run test:pricing --silent && npm run test:composio --silent && npm run test:web --silent && npm run test:intent --silent && npm run test:tool-view --silent",
     "test:searxng": "node scripts/test-searxng.cjs",
     "check:syntax": "node scripts/check-syntax.cjs",
     "predist": "npm run check:syntax",
     "check:packaged": "node scripts/check-packaged-files.cjs",
     "test:web": "node scripts/test-web.cjs",
-    "test:intent": "node scripts/test-intent.cjs"
+    "test:intent": "node scripts/test-intent.cjs",
+    "test:tool-view": "node scripts/test-tool-view.cjs"
   },
   "dependencies": {
     "docx": "^9.8.1",
