@@ -305,6 +305,9 @@ export default function SettingsModal({
 
   const removeComfyWorkflow = (id: string) => {
     setComfy({ workflows: comfy.workflows.filter((w) => w.id !== id) })
+    // The rows are drawn from main's own reading of the files, not from the config, so removing has
+    // to update both: editing the config alone left the row on screen until the tab was reopened.
+    setComfyList((list) => list.filter((w) => w.id !== id))
     setComfyNote('')
   }
 

@@ -207,6 +207,16 @@ function detect(graph) {
     }))
     .sort((a, b) => a.order - b.order)
 
+  // which save node holds the finished picture: the one furthest downstream
+  const d = depths(nodes)
+  let finalSave = null
+  for (const s of saves) {
+    const dep = d.get(s.id) || 0
+    if (!finalSave || dep > finalSave.depth || (dep === finalSave.depth && s.order > finalSave.order)) {
+      finalSave = { ...s, depth: dep }
+    }
+  }
+
   const missing = []
   if (!positive) missing.push('prompt')
   if (imageNode && !nodes[imageNode]?.inputs) missing.push('image')
@@ -220,8 +230,40 @@ function detect(graph) {
     image: imageNode ? { id: imageNode, field: 'image', value: String(nodes[imageNode]?.inputs?.image || '') } : null,
     seeds,
     saves,
+    /** the save node whose picture is the finished one, not an intermediate stage */
+    final: finalSave ? finalSave.id : null,
     kind: imageNode ? 'edit' : 'txt2img',
   }
+}
+
+/**
+ * How far downstream each node sits.
+ *
+ * These workflows save a base stage and then a hires stage, and the second is the picture the user
+ * asked for. Node numbering happens to put the hires save higher in the ones seen so far, but that
+ * is an accident of how the graph was built — depth is what actually says "this one came later".
+ */
+function depths(nodes) {
+  const memo = new Map()
+  const visiting = new Set()
+  const depth = (id) => {
+    if (memo.has(id)) return memo.get(id)
+    if (visiting.has(id)) return 0 // a cycle is not a graph, and this must not hang on one
+    visiting.add(id)
+    let best = 0
+    const ins = nodes[id]?.inputs || {}
+    for (const v of Object.values(ins)) {
+      if (!Array.isArray(v) || !v.length) continue
+      const up = String(v[0])
+      if (!nodes[up]) continue
+      best = Math.max(best, depth(up) + 1)
+    }
+    visiting.delete(id)
+    memo.set(id, best)
+    return best
+  }
+  for (const id of Object.keys(nodes)) depth(id)
+  return memo
 }
 
 /** Read a workflow file and describe it. Editor-format files get a message naming the fix. */
@@ -539,15 +581,20 @@ async function generate({
     })
   }
 
-  // the last stage saved is the finished picture; the earlier ones are kept as well
-  const primary = saved[saved.length - 1]
-  const ordered = [primary, ...saved.filter((s) => s !== primary)]
+  // One picture goes into the conversation: the finished stage. ComfyUI wrote the earlier stages to
+  // disk as well and they stay there, where the Library lists them — returning both put a 1024
+  // preview next to the 1536 result, which reads as the same picture posted twice.
+  const finished = saved.find((s) => s.node === d.final) || saved[saved.length - 1]
+  const earlier = saved.filter((s) => s !== finished)
 
   return {
     ok: true,
     provider: 'comfy',
     label,
-    images: ordered,
+    images: [finished],
+    /** every stage the run wrote, in the order the graph produced them; all of them are on disk */
+    stages: saved.map((s) => ({ node: s.node, path: s.path, bytes: s.bytes })),
+    earlierStages: earlier.length,
     promptId,
     seeds,
     uploaded,

@@ -69,6 +69,7 @@ console.log('\na graph that draws from words')
   check('the seed field is noise_seed', d.seeds.every((s) => s.field === 'noise_seed'))
   check('both save nodes are found', d.saves.map((s) => s.id).join(',') === '20,200', d.saves.map((s) => s.id).join(','))
   check('the later save is last, so it is the finished picture', d.saves[d.saves.length - 1].id === '200')
+  check('and it is named as the finished one', d.final === '200', d.final)
   check('nothing is reported missing', d.missing.length === 0, d.missing.join(','))
   check('it reports itself ok', d.ok === true)
 }
@@ -112,6 +113,21 @@ console.log('\nwalking back through conditioning')
 
 console.log('\nthe graphs that cannot be used, said plainly')
 {
+  // Node numbering is an accident of how the graph was built. A workflow whose hires stage happens
+  // to be numbered lower than its base stage must still hand back the hires picture, so the rule is
+  // how far downstream the save sits, not the size of its id.
+  const renumbered = txt2img()
+  renumbered['1'] = renumbered['20'] // the base save, moved to a low id
+  delete renumbered['20']
+  renumbered['20'] = renumbered['200'] // and the hires save given the higher one
+  delete renumbered['200']
+  const dr = comfy.detect(renumbered)
+  check('renumbering does not change which picture is finished', dr.final === '20', dr.final)
+
+  const onlyBase = txt2img()
+  delete onlyBase['200']
+  check('with one save that one is the finished picture', comfy.detect(onlyBase).final === '20')
+
   const noGuider = { '2': { class_type: 'CLIPTextEncode', inputs: { text: 'orphan' } }, '20': { class_type: 'SaveImage', inputs: { images: ['2', 0] } } }
   const d = comfy.detect(noGuider)
   check('with no guider the prompt is reported missing', d.missing.includes('prompt'), d.missing.join(','))
