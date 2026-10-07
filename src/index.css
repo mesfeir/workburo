@@ -226,20 +226,31 @@
   display: inline-block;
   animation: word-in 140ms ease-out both;
 }
-.word-in:nth-child(4n + 2) {
-  animation-delay: 20ms;
+/* A burst now arrives over the drain window rather than all at once, and this spreads what is left of
+   it: a slightly longer cycle than before, still well inside the 140ms duration so no word is ever
+   caught half-faded by the next one. */
+.word-in:nth-child(6n + 2) {
+  animation-delay: 15ms;
 }
-.word-in:nth-child(4n + 3) {
-  animation-delay: 40ms;
+.word-in:nth-child(6n + 3) {
+  animation-delay: 30ms;
 }
-.word-in:nth-child(4n + 4) {
+.word-in:nth-child(6n + 4) {
+  animation-delay: 45ms;
+}
+.word-in:nth-child(6n + 5) {
   animation-delay: 60ms;
+}
+.word-in:nth-child(6n + 6) {
+  animation-delay: 75ms;
 }
 @media (prefers-reduced-motion: reduce) {
   .word-in,
-  .word-in:nth-child(4n + 2),
-  .word-in:nth-child(4n + 3),
-  .word-in:nth-child(4n + 4) {
+  .word-in:nth-child(6n + 2),
+  .word-in:nth-child(6n + 3),
+  .word-in:nth-child(6n + 4),
+  .word-in:nth-child(6n + 5),
+  .word-in:nth-child(6n + 6) {
     animation: none;
   }
 }

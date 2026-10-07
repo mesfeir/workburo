@@ -78,16 +78,13 @@ export default function ChatView({
 }) {
   const scroller = useRef<HTMLDivElement>(null)
   const [stuck, setStuck] = useState(false)
-  const stuckRef = useRef(false)
-  stuckRef.current = stuck
-  // ignore the scroll events our own scroll-to-bottom produces, or they latch "stuck"
+  // ignore the scroll events our own scroll produces, or they latch "stuck"
   const lastPin = useRef(0)
   // markers on the right edge: one per message you sent, click to jump there
   const [rail, setRail] = useState<{ marks: Mark[]; overflowing: boolean }>({ marks: [], overflowing: false })
   const [hover, setHover] = useState<string | null>(null)
 
   const last = conversation?.messages[conversation.messages.length - 1]
-  const sig = (last?.content?.length || 0) + (last?.reasoning?.length || 0)
   const count = conversation?.messages.length || 0
 
   const measure = () => {
@@ -156,10 +153,28 @@ export default function ChatView({
     }
   }, [conversation?.id, count])
 
-  // follow the stream, but never yank the view if the user scrolled up
+  /**
+   * One reposition per reply, then the view belongs to whoever is scrolling.
+   *
+   * Following the text as it arrived is the thing this replaces: the view was pinned to the bottom on
+   * every growth, so a long answer scrolled itself past the reader. Now the start of a reply is brought
+   * into view once — so its opening lines are there to read — and after that nothing moves on its own.
+   * The rail and the pill are how you move on purpose.
+   */
+  const anchored = useRef('')
   useEffect(() => {
-    if (!stuck) pin()
-  }, [sig, stuck])
+    const m = conversation?.messages[conversation.messages.length - 1]
+    if (!m || !m.streaming || anchored.current === m.id) return
+    anchored.current = m.id
+    const el = scroller.current
+    const node = el?.querySelector(`[data-msg="${m.id}"]`) as HTMLElement | null
+    if (!el || !node) return
+    lastPin.current = Date.now()
+    const delta = node.getBoundingClientRect().top - el.getBoundingClientRect().top
+    el.scrollTop = Math.max(el.scrollTop + delta - 12, 0)
+    // there is more below the fold now, so offer the way down rather than taking it
+    setStuck(el.scrollHeight - el.scrollTop - el.clientHeight > 60)
+  }, [conversation?.messages.length, last?.streaming, last?.id])
 
   // late layout — images decoding, code highlighting — must not strand the view
   useEffect(() => {
@@ -168,10 +183,6 @@ export default function ChatView({
     if (!el || !inner || typeof ResizeObserver === 'undefined') return
     let queued = false
     const ro = new ResizeObserver(() => {
-      if (!stuckRef.current) {
-        lastPin.current = Date.now()
-        el.scrollTop = el.scrollHeight
-      }
       // content height moved, so the rail markers moved with it
       if (!queued) {
         queued = true
@@ -185,13 +196,14 @@ export default function ChatView({
     return () => ro.disconnect()
   }, [conversation?.id])
 
-  // the rail tracks your inputs as the transcript grows, reflows or is resized
+  // the rail tracks your inputs as the transcript grows, reflows or is resized. Not on every
+  // streamed token: the observer above already reports growth, and both at once is twice the layout.
   useEffect(() => {
     measureRef.current()
     const onResize = () => measureRef.current()
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
-  }, [conversation?.id, count, sig])
+  }, [conversation?.id, count])
 
   const onScroll = () => {
     const el = scroller.current

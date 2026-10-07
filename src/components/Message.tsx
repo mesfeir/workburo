@@ -24,59 +24,52 @@ import {
   Wrench,
 } from 'lucide-react'
 import Markdown from '../lib/Markdown'
+import { thinkingStatus } from '../lib/smoothText'
+import useSmoothText from '../lib/useSmoothText'
 import type { Attachment, ChatMessage, Source, ToolActivity } from '../types'
 import { toolLabel, toolView } from '../lib/toolView'
-
-/**
- * The same word-by-word fade the answer uses, for text that is not markdown.
- *
- * Thinking is a scratchpad: it holds line breaks and half-finished code fences, so running it through
- * the markdown renderer would change what it says. This splits it into words and leaves the whitespace
- * as plain text, which is all the animation needs. React reconciles by position, so the words already
- * on screen keep their nodes and only the new ones play the animation -- the same reason the markdown
- * path does it this way.
- */
-function Words({ text }: { text: string }) {
-  return (
-    <>
-      {text.split(/(\s+)/).map((part, i) =>
-        part === '' ? null : /^\s+$/.test(part) ? (
-          <span key={i}>{part}</span>
-        ) : (
-          <span key={i} className="word-in">
-            {part}
-          </span>
-        ),
-      )}
-    </>
-  )
-}
 
 function Reasoning({ text, streaming, ms }: { text: string; streaming?: boolean; ms?: number }) {
   const [open, setOpen] = useState(false)
   const secs = ms ? Math.max(1, Math.round(ms / 1000)) : null
-
-  // auto-open while it is the only thing happening, so the wait is legible
-  useEffect(() => {
-    if (streaming && !text.trim()) setOpen(true)
-  }, [streaming, text])
+  /**
+   * One word, and no thinking text drawn at all until it is asked for.
+   *
+   * This is the change that stops a turn hanging: the reasoning stream is thousands of words, and
+   * rendering it live — split into spans and animated — cost more than the answer it was describing.
+   * Nothing of it is in the DOM now, and the word is read off the thought rather than invented.
+   */
+  const status = thinkingStatus(text)
 
   return (
-    <div className="mb-2">
+    <div className="mb-2" data-reasoning data-reasoning-open={open ? 'yes' : 'no'}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="group flex items-center gap-1.5 rounded-md py-1 text-[13px] text-muted transition hover:text-ink"
+        aria-expanded={open}
+        className="group flex w-full items-center gap-1.5 rounded-md py-1 text-left text-[13px] text-muted transition hover:text-ink"
       >
-        <Brain size={13} className="text-faint" />
-        <span>{secs ? `Thought for ${secs}s` : streaming ? 'Thinking' : 'Thoughts'}</span>
-        <ChevronRight size={13} className={`transition ${open ? 'rotate-90' : ''}`} />
+        <Brain size={13} className="shrink-0 text-faint" />
+        <span className="shrink-0">
+          {secs ? `Thought for ${secs}s` : streaming ? 'Thinking' : 'Thoughts'}
+          {/* what it is doing, in one word, while there is a thought to describe */}
+          {streaming && status !== 'Thinking' ? (
+            <span data-thinking-word className="text-faint"> · {status}</span>
+          ) : null}
+        </span>
+        <span className="flex-1" />
+        <ChevronRight
+          size={13}
+          className={`ml-auto shrink-0 text-faint transition ${open ? 'rotate-90' : ''}`}
+        />
       </button>
       {open && text.trim() && (
-        <div className="mt-1 border-l-2 border-[var(--rule)] pl-3 text-[13.5px] leading-[1.65] whitespace-pre-wrap text-[var(--text-dim)]">
-          {/* Thinking is written the way the answer is written: the same fade, so the wait reads as
-              something happening rather than a block arriving. Once it has stopped, plain text -- a
-              finished thought should be still. */}
-          {streaming ? <Words text={text} /> : text}
+        <div
+          data-reasoning-body
+          className="mt-1 border-l-2 border-[var(--rule)] pl-3 text-[13.5px] leading-[1.65] whitespace-pre-wrap text-[var(--text-dim)]"
+        >
+          {/* Plain text, never split into words: a scratchpad is not worth animating, and this was
+              the expensive half of a long turn. */}
+          {text}
         </div>
       )}
     </div>
@@ -354,6 +347,8 @@ export default function Message({
   const [copied, setCopied] = useState(false)
   const [vote, setVote] = useState<1 | -1 | null>(null)
   const [fileNote, setFileNote] = useState('')
+  // the model hands over bursts of words; show them at a steady pace rather than in blocks
+  const answer = useSmoothText(msg.content || '', msg.streaming)
 
   // Open and reveal report back now. Before this the answer from main was thrown away, so a refusal
   // looked exactly like a dead button, which is what made an agent's files seem broken.
@@ -479,7 +474,7 @@ export default function Message({
 
       {msg.content && (
         <div className="relative">
-          <Markdown text={msg.content} streaming={msg.streaming} />
+          <Markdown text={answer} streaming={msg.streaming} />
           {msg.streaming && (
             <span className="ml-0.5 inline-block h-[15px] w-[8px] translate-y-[2px] animate-blink rounded-[1px] bg-[var(--text-mid)]" />
           )}
