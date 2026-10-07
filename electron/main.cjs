@@ -605,7 +605,7 @@ function withImageUrls (list) {
 }
 
 /** Pi's events, in the words the chat already knows how to render. */
-function agentEventFor (requestId, ev) {
+function agentEventFor (requestId, ev, producedImages) {
   switch (ev.kind) {
     case 'text':
       return { type: 'text', value: ev.delta }
@@ -643,7 +643,18 @@ function agentEventFor (requestId, ev) {
           // renderer already renders both (it is the built-in tools' own shape), so a document or
           // a picture the agent produced arrives the same way a picture from generate_image does.
           ...(ev.files && ev.files.length ? { files: ev.files } : {}),
-          ...(ev.images && ev.images.length ? { images: withImageUrls(ev.images) } : {})
+          ...(ev.images && ev.images.length ? { images: withImageUrls(ev.images) } : {}),
+          /*
+           * The picture the agent's own tool made, when the harness's result did not carry it.
+           *
+           * That tool calls the app to make the picture, so main has the result in hand and does not
+           * have to recognise whatever shape the harness reports a tool result in — which is exactly
+           * what went wrong: the file was written, the model truthfully said it had saved it, and the
+           * chat showed only the path as text. The picture is known here, so it is posted from here.
+           */
+          ...(ev.name === 'generate_image' && !(ev.images && ev.images.length) && producedImages && producedImages.length
+            ? { images: withImageUrls(producedImages) }
+            : {})
         }
       }
     }
@@ -822,12 +833,25 @@ async function runAgentTurn (req) {
   // own server instead. The token opens that one route for the length of this turn and is dropped
   // when the turn ends; without it the tool would have to be given the server key, which opens
   // every route there is.
+  /*
+   * Every picture the agent's tool makes is made by the app -- the tool calls the endpoint below --
+   * so what this turn produced is known here, not inferred from a tool result. The chat posts these.
+   */
+  const producedImages = []
+
   await serverLib
     .startInternal({
       store: storePath(),
       imagesDir: imagesDir(),
-      generateImage: (args) =>
-        runImageJob({ ...args, imagesDir: args.imagesDir || imagesDir() }),
+      generateImage: async (args) => {
+        const out = await runImageJob({ ...args, imagesDir: args.imagesDir || imagesDir() })
+        if (out && out.ok && Array.isArray(out.images)) {
+          for (const img of out.images) {
+            if (img && img.path && !producedImages.some((x) => x.path === img.path)) producedImages.push(img)
+          }
+        }
+        return out
+      },
     })
     .catch(() => 0)
 
@@ -856,7 +880,7 @@ async function runAgentTurn (req) {
     imageToken,
     timeoutMs: AGENT_TURN_LIMIT_MS,
     onEvent: ev => {
-      const mapped = agentEventFor(requestId, ev)
+      const mapped = agentEventFor(requestId, ev, producedImages)
       if (mapped) sendToRenderer('chat:event', { requestId, ...mapped })
     }
   })
