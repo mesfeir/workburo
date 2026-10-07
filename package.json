@@ -1,7 +1,7 @@
 {
   "name": "workburo",
   "private": true,
-  "version": "1.0.26",
+  "version": "1.0.28",
   "description": "WorkBuro, a desktop client for any OpenAI-compatible API (OpenCode Zen / Go, OpenAI, local LLMs)",
   "type": "module",
   "main": "electron/main.cjs",

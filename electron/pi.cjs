@@ -94,7 +94,15 @@ function summarize (name, args) {
 /** Pi returns structured tool results; a row wants the sentence inside. */
 function resultText (result) {
   if (typeof result === 'string') return result
-  const parts = result && Array.isArray(result.content) ? result.content : []
+  // Three shapes arrive here and all three have to be read: a message object with `content`, a bare
+  // content array, and something else entirely (which falls through to JSON below). Reading only
+  // `result.content` meant a bare array became a JSON string, so a path inside it came back with its
+  // backslashes escaped, resolved to a file that is not there, and the picture was never posted.
+  const parts = Array.isArray(result)
+    ? result
+    : result && Array.isArray(result.content)
+      ? result.content
+      : []
   const text = parts.filter(p => p && typeof p.text === 'string').map(p => p.text).join('\n').trim()
   if (text) return text
   try { return JSON.stringify(result) } catch { return '' }
@@ -775,6 +783,8 @@ function runTurn (opts) {
       WORKBURO_IMAGES_DIR: opts.imagesDir || '',
       WORKBURO_IMAGE_MODEL: opts.imageModel || '',
       WORKBURO_IMAGE_EDIT_MODEL: opts.imageEditModel || '',
+      WORKBURO_IMAGE_API: opts.imageApi || '',
+      WORKBURO_IMAGE_TOKEN: opts.imageToken || '',
       WORKBURO_WORKSPACE: opts.workspace || ''
     }
   })

@@ -20,6 +20,14 @@ const MODEL = process.env.WORKBURO_IMAGE_MODEL || 'fal-ai/flux-2/klein/9b'
 const EDIT_MODEL = process.env.WORKBURO_IMAGE_EDIT_MODEL || MODEL
 const IMAGES = process.env.WORKBURO_IMAGES_DIR || ''
 const WORKSPACE = process.env.WORKBURO_WORKSPACE || ''
+/**
+ * The app's own server, on this machine, and a token that opens one route on it for this one turn.
+ * When both are present the picture is made by the app rather than by this file: the same runner the
+ * composer uses, so a workflow from the user's own ComfyUI works in agent mode exactly as it does
+ * there, and nothing here has to know how that works.
+ */
+const API = process.env.WORKBURO_IMAGE_API || ''
+const TOKEN = process.env.WORKBURO_IMAGE_TOKEN || ''
 
 const SIZES = {
   square_hd: { width: 1024, height: 1024 },
@@ -118,6 +126,75 @@ function nameFor (prompt, index, total, ext) {
   return `${words || 'picture'}-${Date.now()}${tail}.${ext || 'png'}`
 }
 
+/**
+ * Make the picture through the app's own server.
+ *
+ * The model comes from the environment, so it is whichever the user picked in the bar -- one of
+ * their ComfyUI workflows included -- and an edit goes to the edit model for the same reason. The
+ * reference is sent as a path: the app reads it off this machine, which is where it already is.
+ */
+async function throughApp (params, onUpdate) {
+  const fs = await import('node:fs')
+  const path = await import('node:path')
+  const model = params.image_path ? EDIT_MODEL || MODEL : MODEL
+  const body: Record<string, unknown> = {
+    prompt: params.prompt,
+    count: params.count,
+    size: params.size,
+    model,
+    json: true
+  }
+
+  if (params.image_path) {
+    const given = String(params.image_path)
+    const abs = path.isAbsolute(given) ? given : path.join(WORKSPACE || process.cwd(), given)
+    if (!fs.existsSync(abs)) {
+      throw new Error(`There is no picture at ${abs}. Use a path from the list of pictures you were given.`)
+    }
+    onUpdate?.({ content: [{ type: 'text', text: `Changing ${path.basename(abs)}…` }] })
+    body.imageUrl = abs
+  } else {
+    onUpdate?.({ content: [{ type: 'text', text: 'Asking the app for the picture…' }] })
+  }
+
+  const res = await fetch(`${API}/api/image`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'x-workburo-image-token': TOKEN
+    },
+    body: JSON.stringify(body)
+  })
+  const text = await res.text()
+  let out: any
+  try {
+    out = JSON.parse(text)
+  } catch {
+    throw new Error(`The app answered with something unexpected: ${text.slice(0, 200)}`)
+  }
+  if (!out || !out.ok) throw new Error((out && out.error) || 'The app could not make the picture.')
+
+  const came: any[] = Array.isArray(out.images) ? out.images : []
+  const files = came.map((i) => i && i.path).filter(Boolean) as string[]
+  if (!files.length) throw new Error('The picture came back but no file was written.')
+  const first = came[0] || {}
+  return {
+    content: [
+      {
+        type: 'text',
+        text:
+          `Made ${files.length === 1 ? 'the picture' : `${files.length} pictures`} and saved ` +
+          `${files.length === 1 ? 'it' : 'them'} as:\n${files.map((f) => `- ${f}`).join('\n')}\n` +
+          `Size: ${first.width || '?'}x${first.height || '?'}` +
+          `${params.image_path ? `, changed from ${params.image_path}` : ''}. ` +
+          'Use the paths above if you need to refer to them.'
+      }
+    ],
+    details: { files, count: files.length, prompt: params.prompt }
+  }
+}
+
 export default function (pi) {
   pi.registerTool({
     name: 'generate_image',
@@ -149,6 +226,11 @@ export default function (pi) {
       )
     }),
     async execute (_toolCallId, params, _signal, onUpdate) {
+      // Asked through the app when the turn was given a way to reach it. This comes first on
+      // purpose: a picture drawn by one of the user's own ComfyUI workflows needs no fal key, so a
+      // key check before this would refuse to draw on a machine that is perfectly able to.
+      if (API && TOKEN) return await throughApp(params, onUpdate)
+
       if (!KEY) {
         return {
           content: [

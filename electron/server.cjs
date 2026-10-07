@@ -42,6 +42,25 @@ const pathsLib = require('./paths.cjs')             // agentContextNote: what th
  * would put them.
  */
 const where = {}
+
+/*
+ * Per-turn tokens for the agent's picture tool.
+ *
+ * The agent runs in its own process, so it cannot call main directly, and handing it the server key
+ * would hand it every route. These open exactly one -- /api/image -- and are dropped the moment the
+ * turn that minted them ends, so a stale token is worth nothing.
+ */
+const imageTokens = new Set()
+function addImageToken (token) {
+  if (token) imageTokens.add(String(token))
+  return String(token || '')
+}
+function removeImageToken (token) {
+  imageTokens.delete(String(token || ''))
+}
+function newImageToken () {
+  return require('node:crypto').randomBytes(24).toString('hex')
+}
 let apiKey = ''
 let agentAllowed = false
 const activeTurns = new Map()
@@ -79,8 +98,10 @@ function presentedKey(req, url) {
   return q ? String(q).trim() : ''
 }
 
-function authorised(req, url) {
+function authorised(req, url, path) {
   if (keyEquals(presentedKey(req, url))) return true
+  // the agent's picture tool: a token that opens this one route for the length of one turn
+  if (path === '/api/image' && imageTokens.has(String(req.headers['x-workburo-image-token'] || ''))) return true
   failedAttempts += 1
   lastRefusal = Date.now()
   return false
@@ -313,34 +334,63 @@ async function imageModels(res) {
   }
 }
 
-async function image(req, res) {
+/**
+ * Make a picture on the user's behalf, for a device that is not the desktop window.
+ *
+ * This goes through the app's own runner when main has handed one over, which is the same door the
+ * composer's Image switch uses. That matters for more than tidiness: a workflow from the user's own
+ * ComfyUI is drawn on their machine and needs no fal key at all, so a route that insisted on a key
+ * (or reached for fal directly) could never run one. The agent's picture tool comes in here too,
+ * which is how a ComfyUI workflow became usable in agent mode.
+ *
+ * The phone streams progress and so gets server-sent events; the agent wants one plain answer.
+ */
+async function image(body, res, wantsJson) {
   const cfg = config()
+  const model = String(body.model || cfg.imageGen?.model || 'fal-ai/flux/schnell')
+  const comfy = model.startsWith('comfy:')
   const key = String(cfg.imageGen?.falKey || process.env.ZEN_FAL_KEY || '').trim()
-  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store' })
-  const send = (type, value) => res.write(`data: ${JSON.stringify({ type, value })}\n\n`)
+  const run = typeof where.generateImage === 'function' ? where.generateImage : imagesLib.generate
 
-  if (!key) {
-    send('result', { ok: false, error: 'No fal.ai key saved in the app. Add one in Settings, Images.' })
-    return res.end()
+  if (!wantsJson) res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store' })
+  const send = (type, value) => {
+    if (!wantsJson) res.write(`data: ${JSON.stringify({ type, value })}\n\n`)
+  }
+  const finish = (payload) => {
+    if (wantsJson) return json(res, 200, payload)
+    send('result', payload)
+    res.end()
+  }
+
+  // a workflow on the user's own machine needs no hosted key; anything else does
+  if (!key && !comfy) {
+    return finish({ ok: false, error: 'No fal.ai key saved in the app. Add one in Settings, Images.' })
   }
 
   try {
-    const out = await imagesLib.generate({
+    const out = await run({
       key,
-      model: req.model || cfg.imageGen?.model || 'fal-ai/flux/schnell',
-      prompt: req.prompt || '',
-      count: req.count || cfg.imageGen?.count || 1,
-      size: req.size || cfg.imageGen?.size,
-      imageUrl: req.imageUrl || undefined,
-      strength: req.strength,
+      model,
+      prompt: body.prompt || '',
+      count: body.count || cfg.imageGen?.count || 1,
+      size: body.size || cfg.imageGen?.size,
+      imageUrl: body.imageUrl || undefined,
+      strength: body.strength,
       imagesDir: where.images,
       onProgress: (p) => send('progress', p),
     })
-    send('result', out)
+    finish(out)
   } catch (err) {
-    send('result', { ok: false, error: err.message })
+    finish({ ok: false, error: err.message })
   }
-  res.end()
+}
+
+/** The agent's tool asks for one plain answer; the phone streams progress. */
+function wantsJsonImage (req) {
+  return (
+    Boolean(req.headers['x-workburo-image-token']) ||
+    String(req.headers.accept || '').includes('application/json')
+  )
 }
 
 /* ---------------------------------------------------------------- the store, shared */
@@ -929,15 +979,21 @@ const ROUTES = {
   },
   '/api/pi/turn': { POST: (req, res) => agentTurn(JSON.parse(bodyText(req) || '{}'), res) },
   '/api/chat': { POST: (req, res) => chat(JSON.parse(bodyText(req) || '{}'), res) },
-  '/api/image': { POST: (req, res) => image(JSON.parse(bodyText(req) || '{}'), res) },
+  '/api/image': { POST: (req, res) => image(JSON.parse(bodyText(req) || '{}'), res, wantsJsonImage(req)) },
   '/api/title': { POST: (req, res) => title(JSON.parse(bodyText(req) || '{}'), res) },
   '/api/upload': { POST: (req, res, url) => upload(req, res, url) },
 }
 
-async function handle(req, res) {
+async function handle(req, res, internalCall) {
   const started = Date.now()
   const url = new URL(req.url, 'http://localhost')
   const p = url.pathname
+
+  // the internal endpoint exists for one route, and answers nothing else
+  if (internalCall && p !== '/api/image') {
+    logRequest(req, 404, Date.now() - started, 'internal: only /api/image')
+    return json(res, 404, { ok: false, error: 'no such route' })
+  }
 
   if (!p.startsWith('/api/')) {
     staticFile(req, res, url)
@@ -956,7 +1012,7 @@ async function handle(req, res) {
    * from the outside, and pair, whose whole job is to hand the key to a device that does not have
    * one yet -- the single-use code in the request body is the credential there.
    */
-  if (p !== '/api/health' && p !== '/api/pair' && !authorised(req, url)) {
+  if (p !== '/api/health' && p !== '/api/pair' && !authorised(req, url, p)) {
     logRequest(req, 401, Date.now() - started, 'wrong or missing key')
     return json(res, 401, { ok: false, error: 'This server needs the API key. Add it in the app under Settings, Server.' })
   }
@@ -1034,6 +1090,53 @@ function status() {
   }
 }
 
+/** Everything platform-specific the handlers need, without starting anything. */
+function prime (opts = {}) {
+  if (opts.rendererDir) where.renderer = opts.rendererDir
+  if (opts.store) where.store = opts.store
+  if (opts.imagesDir) where.images = opts.imagesDir
+  if (opts.piRoot) where.pi = opts.piRoot
+  if (opts.agentExt) where.agentExt = opts.agentExt
+  if (opts.uploadsDir) where.uploads = opts.uploadsDir
+  if (opts.generateImage) where.generateImage = opts.generateImage
+  if (opts.onStoreChanged) where.onStoreChanged = opts.onStoreChanged
+  if (opts.store && !where.uploads) where.uploads = path.join(path.dirname(opts.store), 'server-uploads')
+}
+
+/*
+ * An endpoint on this machine alone, for one caller: the agent's own picture tool.
+ *
+ * That tool runs in a separate process and cannot call main. Without this it would either need the
+ * server key -- which opens every route, including the one that runs commands -- or talk to a hosted
+ * API by itself, which is why a workflow from the user's own ComfyUI could not be used in agent mode.
+ *
+ * It is not the user's server: never advertised, never bound to the network, it refuses every route
+ * but /api/image, and the only credential it takes is a token that dies with the turn that minted it.
+ * It is started the first time agent mode needs it, whatever the server setting says.
+ */
+let internal = null
+let internalPort = 0
+
+async function startInternal (opts = {}) {
+  if (internal) return internalPort
+  prime(opts)
+  internal = http.createServer((req, res) => handle(req, res, true))
+  await new Promise((resolve, reject) => {
+    internal.once('error', reject)
+    internal.listen(0, '127.0.0.1', resolve)
+  })
+  internalPort = internal.address().port
+  return internalPort
+}
+
+function stopInternal () {
+  try {
+    if (internal) internal.close()
+  } catch {}
+  internal = null
+  internalPort = 0
+}
+
 /*
  * start() is what main.cjs calls when the setting is switched on. Everything platform-specific is
  * handed in: the renderer to serve, the store to read, where images, Pi and uploads live, the key
@@ -1042,13 +1145,7 @@ function status() {
 async function start(opts = {}) {
   if (listening) return status()
 
-  where.renderer = opts.rendererDir
-  where.store = opts.store
-  where.images = opts.imagesDir
-  where.pi = opts.piRoot
-  where.agentExt = opts.agentExt
-  where.uploads = opts.uploadsDir || path.join(path.dirname(opts.store), 'server-uploads')
-  where.onStoreChanged = opts.onStoreChanged
+  prime(opts)
 
   apiKey = String(opts.key || '').trim()
   if (!apiKey) throw new Error('server mode needs an API key')
@@ -1057,7 +1154,7 @@ async function start(opts = {}) {
 
   agentAllowed = opts.agent !== false
   addresses = []
-  listening = http.createServer(handle)
+  listening = http.createServer((req, res) => handle(req, res, false))
   const port = Number(opts.port || 8123)
   const bind = String(opts.bind || '0.0.0.0')
 
@@ -1092,5 +1189,25 @@ function keygen() {
   return crypto.randomBytes(32).toString('base64url')
 }
 
-module.exports = { start, stop, status, keygen, issuePairCode, pairState, PHONE_ASSETS: 'webclient' }
+/** Where the agent's picture tool can reach the app: the internal endpoint, on this machine only. */
+function loopback () {
+  return internalPort ? `http://127.0.0.1:${internalPort}` : ''
+}
+
+module.exports = {
+  start,
+  stop,
+  status,
+  keygen,
+  issuePairCode,
+  pairState,
+  // the agent's picture tool: an endpoint on this machine alone, and a token for one route, one turn
+  startInternal,
+  stopInternal,
+  addImageToken,
+  removeImageToken,
+  newImageToken,
+  loopback,
+  PHONE_ASSETS: 'webclient'
+}
 

@@ -818,6 +818,21 @@ async function runAgentTurn (req) {
   const localEndpoint = /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?(\/|$)/i.test(String(cfg.baseUrl || ''))
   const relayKey = String(cfg.apiKey || '').trim() || (localEndpoint ? 'local-server-no-key-needed' : '')
 
+  // The agent's picture tool runs in another process and cannot call main, so it reaches the app's
+  // own server instead. The token opens that one route for the length of this turn and is dropped
+  // when the turn ends; without it the tool would have to be given the server key, which opens
+  // every route there is.
+  await serverLib
+    .startInternal({
+      store: storePath(),
+      imagesDir: imagesDir(),
+      generateImage: (args) =>
+        runImageJob({ ...args, imagesDir: args.imagesDir || imagesDir() }),
+    })
+    .catch(() => 0)
+
+  const imageToken = serverLib.addImageToken(serverLib.newImageToken())
+
   const handle = pi.runTurn({
     piRoot: PI_ROOT(),
     workspace,
@@ -836,6 +851,9 @@ async function runAgentTurn (req) {
     imagesDir: imagesDir(),
     imageModel: (cfg.imageGen || {}).model || '',
     imageEditModel: (cfg.imageGen || {}).editModel || '',
+    // where the agent's own tool can reach the app, and the token that opens just that door
+    imageApi: serverLib.loopback(),
+    imageToken,
     timeoutMs: AGENT_TURN_LIMIT_MS,
     onEvent: ev => {
       const mapped = agentEventFor(requestId, ev)
@@ -858,6 +876,7 @@ async function runAgentTurn (req) {
   } finally {
     activeAgentTurns.delete(requestId)
     agentSessions.delete(requestId)
+    serverLib.removeImageToken(imageToken)
     broadcastSessions()
   }
   sendToRenderer('chat:event', { requestId, type: 'done' })
@@ -2870,6 +2889,20 @@ async function startServer() {
     bind: s.bind === 'all' ? '0.0.0.0' : '127.0.0.1',
     // Agent mode is the app's own setting, read from here, so a phone cannot switch it on by itself
     agent: Boolean((readStore().config || {}).agent?.enabled),
+    // The same runner the composer's Image switch and the model's picture tool use, so a device
+    // asking for a picture gets it the same way the window would -- including a workflow from the
+    // user's own ComfyUI, which is drawn on their machine and needs no hosted key.
+    generateImage: (args) =>
+      runImageJob({
+        key: args.key,
+        model: args.model,
+        prompt: args.prompt,
+        count: args.count,
+        size: args.size,
+        imageUrl: args.imageUrl,
+        imagesDir: args.imagesDir || imagesDir(),
+        onProgress: args.onProgress,
+      }),
     // A conversation written on the phone should show up on the desktop without a relaunch
     onStoreChanged: () => sendToRenderer('store:changed'),
   })
