@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import AppsPane from './AppsPane'
 import McpPane from './McpPane'
 import ServerPane from './ServerPane'
+import UpdatePane from './UpdatePane'
 import {
   Check,
   Eye,
@@ -2163,6 +2164,8 @@ export default function SettingsModal({
                   <strong className="font-medium">WorkBuro</strong> {info?.version} — a ChatGPT-style Windows client
                   that talks to any OpenAI-compatible endpoint you point it at.
                 </div>
+                {/* updating from inside the app: check, download, verify, then install or hand over */}
+                <UpdatePane config={config} onConfig={onConfig} />
                 <div className="rounded-xl border border-[var(--rule)] bg-[var(--app)] p-3">
                   <div className="mb-2 font-medium text-muted">Shortcuts</div>
                   <div className="grid grid-cols-2 gap-y-1.5">

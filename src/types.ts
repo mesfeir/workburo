@@ -219,6 +219,46 @@ export interface McpConfig {
 export type ThemeName = 'dark' | 'paper'
 
 /**
+ * How an update is going.
+ *
+ * Held in the main process and mirrored into the window, because a check that finishes while nothing
+ * is open must not be lost, and the About pane and the marker in the top bar have to agree.
+ */
+export type UpdatePhase = 'idle' | 'checking' | 'uptodate' | 'available' | 'downloading' | 'ready'
+
+export interface UpdateChecksum {
+  hasChecksum: boolean
+  ok: boolean
+  want: string
+  got: string
+}
+
+/** What may happen once a file has been downloaded and checked. Decided in the main process. */
+export interface UpdatePlan {
+  action: 'run-installer' | 'open-dmg' | 'open-folder' | 'open-release' | 'none'
+  why: string
+}
+
+export interface UpdateState {
+  phase: UpdatePhase
+  /** the version of the app that is running */
+  current: string
+  latest: string
+  newer: boolean
+  notes: string
+  notesUrl: string
+  asset: { name: string; url: string; size: number } | null
+  error: string
+  /** whether the last check was asked for, or the quiet one */
+  checkedBy: 'user' | 'auto' | ''
+  checkedAt: number
+  progress: { received: number; total: number; percent: number }
+  file: { path: string; bytes: number; sha256: string } | null
+  checksum: UpdateChecksum
+  plan: UpdatePlan | null
+}
+
+/**
  * The ways to search: the model provider's own search, your own SearXNG, a search API key, or the
  * reference sources on their own. Whatever is chosen falls back to the reference sources when it is
  * not available, so search is never a dead end.
@@ -246,6 +286,8 @@ export interface Config {
   alwaysOnTop?: boolean
   /** seconds out of focus before the window minimises itself; 0 never does (default 30) */
   autoMinimizeSec?: number
+  /** quietly ask GitHub for a newer release when the app starts (default true) */
+  update?: { autoCheck?: boolean }
   /** let the model call tools (web search, page reading, weather, time) */
   toolsEnabled: boolean
   /** per-tool on/off, keyed by tool name */

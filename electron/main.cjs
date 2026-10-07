@@ -1169,6 +1169,11 @@ app.whenReady().then(() => {
       .then((status) => console.info(`[server] listening on ${(status.addresses || []).join(' ')}`))
       .catch((err) => console.warn('[server] could not start:', err.message))
   }
+  /*
+   * A quiet check for a newer release. Started late enough not to compete with the first paint and
+   * skipped entirely when the person has switched it off. A failure here is silent by design.
+   */
+  scheduleUpdateCheck(12 * 1000)
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
@@ -2595,6 +2600,221 @@ ipcMain.handle('models:probe', async (_e, { cfg, model, testImage }) => {
  * phone" the same code as "the app on my PC serves my phone".
  */
 const serverLib = require('./server.cjs')
+
+/* ---------------------------------------------------------------- updates */
+
+const updater = require('./update.cjs')
+
+/*
+ * The update state lives in the main process rather than in the window, so the About pane and the
+ * marker in the sidebar show the same thing, and a check that finishes while nothing is open is not
+ * lost. Nothing in here is a secret, so the whole of it can go to the renderer.
+ */
+let updateState = {
+  phase: 'idle', // idle | checking | uptodate | available | downloading | ready
+  current: app.getVersion(),
+  latest: '',
+  newer: false,
+  notes: '',
+  notesUrl: '',
+  asset: null,
+  error: '',
+  checkedBy: '',
+  checkedAt: 0,
+  progress: { received: 0, total: 0, percent: 0 },
+  file: null,
+  checksum: { hasChecksum: false, ok: false, want: '', got: '' },
+  plan: null,
+}
+let updateAbort = null
+let updateTimer = null
+
+function updateSettings() {
+  const u = (readStore().config || {}).update || {}
+  // On unless it has been switched off: an app that never mentions a new version is the thing this
+  // was asked to fix. It sends nothing about this machine — one GET of a public releases endpoint.
+  return { autoCheck: u.autoCheck !== false }
+}
+
+/** A portable build has no installed app for an installer to replace. */
+function isPortable() {
+  return Boolean(process.env.PORTABLE_EXECUTABLE_DIR)
+}
+
+function updatesDir() {
+  return path.join(app.getPath('userData'), 'updates')
+}
+
+/**
+ * Keep one download. A 105 MB installer per version would otherwise sit in the data folder forever,
+ * and the only file worth keeping is the one about to be run or handed over.
+ */
+function cleanUpdates(keepPath) {
+  try {
+    for (const name of fs.readdirSync(updatesDir())) {
+      const full = path.join(updatesDir(), name)
+      if (keepPath && path.resolve(full) === path.resolve(keepPath)) continue
+      try {
+        fs.rmSync(full, { recursive: true, force: true })
+      } catch {
+        // A file that will not delete is not worth failing an update over.
+      }
+    }
+  } catch {
+    // No folder yet: there is nothing to clean.
+  }
+}
+
+function pushUpdateState() {
+  sendToRenderer('update:changed', updateState)
+}
+
+async function runUpdateCheck(by) {
+  if (updateState.phase === 'checking' || updateState.phase === 'downloading') return updateState
+  updateState = { ...updateState, phase: 'checking', checkedBy: by, error: '' }
+  pushUpdateState()
+
+  /*
+   * A testing hook, not a feature: WORKBURO_UPDATE_TEST_VERSION makes the comparison pretend this
+   * build is an older version, so the whole check-download-verify flow can be exercised against a
+   * real published release without publishing a new one. It affects only which version is compared,
+   * never the checksum check, and the window still reports the app's real version.
+   */
+  const realVersion = app.getVersion()
+  const res = await updater.checkForUpdate({
+    currentVersion: process.env.WORKBURO_UPDATE_TEST_VERSION || realVersion,
+    platform: process.platform,
+    portable: isPortable(),
+  })
+
+  updateState = {
+    ...updateState,
+    ...res,
+    current: realVersion,
+    // A failed automatic check is not the user's problem: it stays quiet and is only spoken about
+    // when they asked for it themselves.
+    phase: res.ok ? (res.newer ? 'available' : 'uptodate') : 'idle',
+    checkedAt: Date.now(),
+    file: null,
+    plan: null,
+    progress: { received: 0, total: 0, percent: 0 },
+    checksum: { hasChecksum: false, ok: false, want: '', got: '' },
+  }
+  pushUpdateState()
+  scheduleUpdateCheck(6 * 60 * 60 * 1000)
+  return updateState
+}
+
+function scheduleUpdateCheck(delay) {
+  if (updateTimer) clearTimeout(updateTimer)
+  updateTimer = null
+  if (!updateSettings().autoCheck) return
+  updateTimer = setTimeout(() => void runUpdateCheck('auto'), delay)
+  if (updateTimer.unref) updateTimer.unref()
+}
+
+async function runUpdateDownload() {
+  const { asset, latest } = updateState
+  if (!asset) return { ...updateState, error: 'There is nothing to download.' }
+
+  updateAbort = new AbortController()
+  updateState = {
+    ...updateState,
+    phase: 'downloading',
+    error: '',
+    progress: { received: 0, total: asset.size || 0, percent: 0 },
+  }
+  pushUpdateState()
+
+  try {
+    const dest = path.join(updatesDir(), asset.name)
+    cleanUpdates(dest)
+    const file = await updater.downloadAsset(asset.url, dest, {
+      signal: updateAbort.signal,
+      onProgress: (p) => {
+        updateState = { ...updateState, progress: p }
+        pushUpdateState()
+      },
+    })
+    const checksum = await updater.verifyDownload({
+      file,
+      assetName: asset.name,
+      version: latest,
+      platform: process.platform,
+      signal: updateAbort.signal,
+    })
+    const plan = updater.installPlan({
+      platform: process.platform,
+      portable: isPortable(),
+      checksumOk: checksum.ok,
+      hasChecksum: checksum.hasChecksum,
+      file,
+    })
+    updateState = {
+      ...updateState,
+      phase: 'ready',
+      file: { path: file.path, bytes: file.bytes, sha256: file.sha256 },
+      checksum,
+      plan,
+    }
+  } catch (err) {
+    updateState = {
+      ...updateState,
+      phase: 'available',
+      error: err && err.name === 'AbortError' ? '' : (err && err.message) || 'The download failed.',
+    }
+  } finally {
+    updateAbort = null
+    pushUpdateState()
+  }
+  return updateState
+}
+
+ipcMain.handle('update:state', () => ({ ...updateState, autoCheck: updateSettings().autoCheck, portable: isPortable() }))
+
+ipcMain.handle('update:check', () => runUpdateCheck('user'))
+
+ipcMain.handle('update:download', () => runUpdateDownload())
+
+ipcMain.handle('update:cancel', () => {
+  if (updateAbort) updateAbort.abort()
+  return { ok: true }
+})
+
+/**
+ * Do the thing the plan allows, and only that. The plan was decided after the checksum was checked,
+ * so nothing here re-decides whether the file is trustworthy.
+ */
+ipcMain.handle('update:install', async () => {
+  const plan = updateState.plan
+  const file = updateState.file
+  if (!plan || !file) return { ok: false, error: 'Nothing has been downloaded and checked yet.' }
+
+  if (plan.action === 'run-installer') {
+    updater.runWindowsInstaller(file.path)
+    // The installer replaces the files this process is running from, so it has to go.
+    setTimeout(() => app.quit(), 700)
+    return { ok: true, action: plan.action }
+  }
+  if (plan.action === 'open-dmg') {
+    const problem = await shell.openPath(file.path)
+    return { ok: !problem, action: plan.action, error: problem || '' }
+  }
+  if (plan.action === 'open-folder') {
+    shell.showItemInFolder(file.path)
+    return { ok: true, action: plan.action }
+  }
+  if (plan.action === 'open-release') {
+    await shell.openExternal(updateState.notesUrl || updater.RELEASES_PAGE)
+    return { ok: true, action: plan.action }
+  }
+  return { ok: false, error: plan.why }
+})
+
+ipcMain.handle('update:openRelease', async () => {
+  await shell.openExternal(updateState.notesUrl || updater.RELEASES_PAGE)
+  return { ok: true }
+})
 
 const SERVER_DEFAULT_PORT = 8765
 

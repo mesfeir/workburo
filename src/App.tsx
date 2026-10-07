@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { PanelLeft, Settings2, TriangleAlert, X } from 'lucide-react'
+import { ArrowDownToLine, PanelLeft, Settings2, TriangleAlert, X } from 'lucide-react'
 import Sidebar from './components/Sidebar'
 import ChatView from './components/ChatView'
 import Composer from './components/Composer'
@@ -22,7 +22,7 @@ import type {
   ToolActivity,
   RunningSession,
 } from './types'
-import type { Speed } from './types'
+import type { Speed, UpdateState } from './types'
 import type { HotkeyStatus } from './global'
 
 /**
@@ -178,6 +178,25 @@ export default function App() {
   const genRef = useRef(new Map<string, { convId: string; msgId: string }>())
 
   const streams = useRef(new Map<string, StreamState>())
+
+  /**
+   * Whether a newer release exists. The main process holds the state and tells the window when it
+   * changes, so a check that ran while the app was shut is already known by the time this mounts.
+   */
+  const [update, setUpdate] = useState<UpdateState | null>(null)
+  useEffect(() => {
+    let alive = true
+    void window.zen.update.state().then((s) => {
+      if (alive) setUpdate(s)
+    })
+    const off = window.zen.update.onChanged((s) => {
+      if (alive) setUpdate(s)
+    })
+    return () => {
+      alive = false
+      off?.()
+    }
+  }, [])
   const activeRequest = useRef<string | null>(null)
   const configRef = useRef(config)
   configRef.current = config
@@ -1405,6 +1424,21 @@ export default function App() {
             }}
           />
           <div className="flex-1" />
+          {/* Only there when there is something to do about it; clicking it lands on the update pane
+              rather than making the person go looking for it. */}
+          {update?.newer && update.phase === 'available' && (
+            <button
+              data-update-button
+              onClick={() => {
+                setSettingsTab('about')
+                setSettingsOpen(true)
+              }}
+              title={`WorkBuro ${update.latest} is available`}
+              className="no-drag mr-1 flex h-8 items-center gap-1.5 rounded-lg border border-[var(--accent)] px-2 text-[12px] text-ink transition hover:bg-[var(--raised-2)]"
+            >
+              <ArrowDownToLine size={13} /> {update.latest}
+            </button>
+          )}
           <button
             onClick={() => setSettingsOpen(true)}
             title="Settings (Ctrl+,)"

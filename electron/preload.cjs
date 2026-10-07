@@ -131,6 +131,20 @@ contextBridge.exposeInMainWorld('zen', {
     /* opens one of the Library's own folders; the main process refuses anything else */
     openFolder: (dir) => ipcRenderer.invoke('library:openFolder', { dir }),
   },
+  /* how this app updates itself: check the releases, download, verify, then hand over or install */
+  update: {
+    state: () => ipcRenderer.invoke('update:state'),
+    check: () => ipcRenderer.invoke('update:check'),
+    download: () => ipcRenderer.invoke('update:download'),
+    cancel: () => ipcRenderer.invoke('update:cancel'),
+    install: () => ipcRenderer.invoke('update:install'),
+    openRelease: () => ipcRenderer.invoke('update:openRelease'),
+    onChanged: (handler) => {
+      const listener = (_e, payload) => handler(payload)
+      ipcRenderer.on('update:changed', listener)
+      return () => ipcRenderer.removeListener('update:changed', listener)
+    },
+  },
   /* the local model: fetch it, start it, stop it. No key anywhere in this path. */
   local: {
     status: () => ipcRenderer.invoke('local:status'),

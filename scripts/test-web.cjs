@@ -82,6 +82,13 @@ const DESKTOP_ONLY = {
   'images:cost': 'not yet routed',
   'library:files': 'lists folders on the host — the phone has no business reading the disk',
   'library:openFolder': 'opens a folder on the host',
+  // updating runs an installer on the host: that is the desktop's business, never a phone's
+  'update:state': 'the phone is a client; it does not update the host',
+  'update:check': 'the phone is a client; it does not update the host',
+  'update:download': 'the phone is a client; it does not update the host',
+  'update:cancel': 'the phone is a client; it does not update the host',
+  'update:install': 'the phone is a client; it does not update the host',
+  'update:openRelease': 'the phone is a client; it does not update the host',
   'images:prices': 'not yet routed',
   'images:dataUrl': 'not yet routed -- the phone receives data URLs with the picture',
   'open:external': 'not yet routed',

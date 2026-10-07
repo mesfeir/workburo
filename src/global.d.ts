@@ -1,4 +1,4 @@
-import type { ChatEvent, SearchMode, StoreShape } from './types'
+import type { ChatEvent, SearchMode, StoreShape, UpdateState } from './types'
 
 export interface HotkeyStatus {
   requested: string
@@ -230,6 +230,16 @@ export interface ZenApi {
     }>
     /** opens one of the folders above, and nothing else */
     openFolder: (dir: string) => Promise<{ ok: boolean; error?: string }>
+  }
+  /** how the app updates itself: the state is kept in the main process, the window only shows it */
+  update: {
+    state: () => Promise<UpdateState & { autoCheck: boolean; portable: boolean }>
+    check: () => Promise<UpdateState>
+    download: () => Promise<UpdateState>
+    cancel: () => Promise<{ ok: boolean }>
+    install: () => Promise<{ ok: boolean; action?: string; error?: string }>
+    openRelease: () => Promise<{ ok: boolean }>
+    onChanged: (handler: (s: UpdateState) => void) => () => void
   }
   images: {
     models: (key: string, categories?: string) => Promise<{ ok: boolean; models?: FalModel[]; total?: number; error?: string; status?: number }>
