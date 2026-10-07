@@ -125,6 +125,13 @@ contextBridge.exposeInMainWorld('zen', {
       return () => ipcRenderer.removeListener('images:progress', listener)
     },
   },
+  /* ComfyUI on this machine: the user's own exported workflows, run by them, for them */
+  comfy: {
+    status: () => ipcRenderer.invoke('comfy:status'),
+    workflows: () => ipcRenderer.invoke('comfy:workflows'),
+    pick: () => ipcRenderer.invoke('comfy:pick'),
+    check: (path) => ipcRenderer.invoke('comfy:check', { path }),
+  },
   /* everything this app has made or been handed, read off disk rather than remembered */
   library: {
     files: () => ipcRenderer.invoke('library:files'),

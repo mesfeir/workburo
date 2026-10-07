@@ -67,7 +67,10 @@ export default function ModelPanel({
 
   const ig = config.imageGen
   /* The image tabs are only worth offering when there is a key to draw with. */
-  const imagesUsable = Boolean(ig?.enabled && ig?.falKey)
+  // A workflow from the user's own ComfyUI needs no key, so having one added is enough to make
+  // image making usable — the switch is still the user's, and still off until they turn it on.
+  const comfyWorkflows = (ig?.comfy?.workflows || []).length
+  const imagesUsable = Boolean(ig?.enabled && (ig?.falKey || comfyWorkflows > 0))
   const imageModel = ig?.model ? short(ig.model) : ''
   const editModel = ig?.editModel ? short(ig.editModel) : ''
 

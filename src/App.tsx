@@ -680,6 +680,8 @@ export default function App() {
     const cfg = configRef.current
     const im = cfg.imageGen
     const model = im?.editModel || 'fal-ai/nano-banana/edit'
+    // an edit can be done by a hosted endpoint or by one of the user's own ComfyUI workflows
+    const comfyEdit = String(model).startsWith('comfy:')
     const asstId = uid()
     const placeholder: ChatMessage = {
       id: asstId,
@@ -687,7 +689,7 @@ export default function App() {
       content: '',
       images: [],
       model,
-      note: 'fal · starting',
+      note: comfyEdit ? 'ComfyUI · starting' : 'fal · starting',
       createdAt: Date.now(),
       streaming: false,
       finished: false,
@@ -748,7 +750,11 @@ export default function App() {
                           }))
                         : [],
                       error: res.ok ? null : res.error || 'The edit failed.',
-                      note: res.ok ? `fal · ${((res.tookMs || 0) / 1000).toFixed(1)}s` : 'fal · reference',
+                      note: res.ok
+                        ? `${comfyEdit ? res.label || 'ComfyUI' : 'fal'} · ${((res.tookMs || 0) / 1000).toFixed(1)}s`
+                        : comfyEdit
+                          ? 'ComfyUI'
+                          : 'fal · reference',
                       finished: true,
                     },
               ),
@@ -787,8 +793,11 @@ export default function App() {
         setTimeout(() => setToast(null), 5000)
         return
       }
-      if (editing && !cfg.imageGen?.falKey) {
-        setToast('No fal.ai key saved — add one in Settings → Images to edit an image.')
+      // the edit is done by whichever model is chosen for editing: a hosted endpoint needs a key,
+      // one of the user's own ComfyUI workflows does not
+      const editIsComfy = String(cfg.imageGen?.editModel || '').startsWith('comfy:')
+      if (editing && !editIsComfy && !cfg.imageGen?.falKey) {
+        setToast('No fal.ai key saved — add one in Settings → Images, or choose one of your ComfyUI workflows in Edit.')
         setTimeout(() => setToast(null), 5000)
         return
       }
@@ -896,8 +905,12 @@ export default function App() {
       setTimeout(() => setToast(null), 5000)
       return
     }
-    if (!im.falKey) {
-      setToast('No fal.ai key saved — add one in Settings → Images.')
+    // A workflow from the user's own ComfyUI is drawn on their own machine, so it needs no fal key.
+    // Everything else about this path — the message it writes, the phases it reports, the picture it
+    // attaches — is identical whichever of the two drew it.
+    const comfyPick = String(im?.model || '').startsWith('comfy:')
+    if (!comfyPick && !im.falKey) {
+      setToast('No fal.ai key saved — add one in Settings → Images, or pick one of your ComfyUI workflows.')
       setTimeout(() => setToast(null), 5000)
       return
     }
@@ -981,7 +994,11 @@ export default function App() {
                           }))
                         : [],
                       error: res.ok ? null : res.error || 'Image generation failed.',
-                      note: res.ok ? `fal · ${((res.tookMs || 0) / 1000).toFixed(1)}s` : 'fal',
+                      note: res.ok
+                        ? `${comfyPick ? res.label || 'ComfyUI' : 'fal'} · ${((res.tookMs || 0) / 1000).toFixed(1)}s`
+                        : comfyPick
+                          ? 'ComfyUI'
+                          : 'fal',
                       finished: true,
                     },
               ),

@@ -3,7 +3,7 @@ import AppsPane from './AppsPane'
 import McpPane from './McpPane'
 import ServerPane from './ServerPane'
 import UpdatePane from './UpdatePane'
-import {
+import { Plus,
   Check,
   Eye,
   EyeOff,
@@ -249,6 +249,83 @@ export default function SettingsModal({
     })
   const setImageGen = (patch: Partial<typeof imageGen>) =>
     onConfig({ imageGen: { ...imageGen, ...patch } })
+
+  /* --- ComfyUI: the user's own machine ---------------------------------------------------------
+     Whether it is up and what it can run are asked of main every time this tab is opened, so a
+     ComfyUI started after the app is noticed without a restart. The port is found rather than
+     assumed: 8188 is ComfyUI's own default and the Desktop build listens on 8000. */
+  const comfy = imageGen.comfy || { host: '127.0.0.1', port: 0, workflows: [] }
+  const [comfyStatus, setComfyStatus] = useState<{
+    ok: boolean
+    port?: number
+    stats?: { version: string; device: string; vramTotal: number; vramFree: number; queueRemaining: number }
+    error?: string
+  } | null>(null)
+  const [comfyList, setComfyList] = useState<
+    { id: string; name: string; path: string; kind: string; ok: boolean; error: string; nodes: number }[]
+  >([])
+  const [comfyBusy, setComfyBusy] = useState(false)
+  const [comfyNote, setComfyNote] = useState('')
+  const [comfyChecks, setComfyChecks] = useState<Record<string, string>>({})
+
+  const setComfy = (patch: Partial<typeof comfy>) => setImageGen({ comfy: { ...comfy, ...patch } })
+
+  const loadComfy = async () => {
+    setComfyBusy(true)
+    try {
+      const [s, w] = await Promise.all([window.zen.comfy.status(), window.zen.comfy.workflows()])
+      setComfyStatus(s)
+      setComfyList(w?.workflows || [])
+    } catch {
+      setComfyStatus({ ok: false, error: 'The app could not ask about ComfyUI.' })
+    } finally {
+      setComfyBusy(false)
+    }
+  }
+
+  useEffect(() => {
+    if (tab === 'images') void loadComfy()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab])
+
+  const addComfyWorkflow = async () => {
+    const picked = await window.zen.comfy.pick()
+    if (picked.canceled) return
+    if (!picked.ok || !picked.workflow) {
+      setComfyNote(picked.error || 'That file could not be read.')
+      return
+    }
+    const wf = picked.workflow
+    setComfy({ workflows: [...comfy.workflows.filter((w) => w.path !== wf.path), wf] })
+    setComfyNote(
+      `Added ${wf.name} — ${wf.kind === 'edit' ? 'it changes a picture you give it, so it appears in Edit' : 'it draws from your words, so it appears in Picture'}.`,
+    )
+    void loadComfy()
+  }
+
+  const removeComfyWorkflow = (id: string) => {
+    setComfy({ workflows: comfy.workflows.filter((w) => w.id !== id) })
+    setComfyNote('')
+  }
+
+  /* Ask the server itself whether it can run this workflow: the node classes, then the model files
+     the loaders name. A missing custom node is the usual reason a shared workflow fails, and it is
+     worth knowing before a run rather than as a traceback. */
+  const checkComfyWorkflow = async (file: string) => {
+    setComfyChecks((c) => ({ ...c, [file]: 'checking…' }))
+    const res = await window.zen.comfy.check(file)
+    const msg = !res.ok
+      ? res.error || 'could not check it'
+      : res.missingNodes?.length || res.missingModels?.length
+        ? [
+            res.missingNodes?.length ? `missing nodes: ${res.missingNodes.join(', ')}` : '',
+            res.missingModels?.length ? `missing models: ${res.missingModels.map((mm) => mm.wanted).join(', ')}` : '',
+          ]
+            .filter(Boolean)
+            .join(' · ')
+        : `ready — all ${res.nodeCount} nodes and their model files are on this server`
+    setComfyChecks((c) => ({ ...c, [file]: msg }))
+  }
 
   /* --------------------------------------------------- agent mode (Pi) */
 
@@ -1837,11 +1914,113 @@ export default function SettingsModal({
                   </p>
                 </Field>
 
-                <div className="rounded-xl border border-[var(--rule)] bg-[var(--app)] p-3 text-[11.5px] leading-snug text-faint">
-                  <strong className="font-medium text-muted">Only hosted generation is wired in.</strong> The local SANA
-                  and Flux work is measured and written up in the repo docs, but nothing here loads a local pipeline
-                  yet — every image this app makes is drawn by fal.ai and billed to your fal account.
-                </div>
+                <Field
+                  label="ComfyUI"
+                  hint="Your own ComfyUI, as a second way to draw. Add a workflow you exported with Workflow → Export (API) and it appears in the Picture and Edit lists in the top bar, beside the hosted models. A workflow that takes a picture belongs in Edit; one that only draws from words belongs in Picture — which is which is read from the graph itself. Nothing here needs a fal key, and the picture is made on your machine."
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      className={`${inputCls} min-w-[150px] flex-1`}
+                      value={comfy.host || ''}
+                      spellCheck={false}
+                      placeholder="127.0.0.1"
+                      onChange={(e) => setComfy({ host: e.target.value })}
+                    />
+                    <input
+                      className={`${inputCls} w-24`}
+                      type="number"
+                      min={0}
+                      max={65535}
+                      value={Number.isFinite(comfy.port) ? comfy.port : 0}
+                      title="0 finds it: ComfyUI's own default (8188) and the Desktop app's port (8000) are both tried"
+                      onChange={(e) => setComfy({ port: Number(e.target.value) || 0 })}
+                    />
+                    <button
+                      onClick={() => void loadComfy()}
+                      disabled={comfyBusy}
+                      className="flex h-[38px] shrink-0 items-center gap-1.5 rounded-lg border border-[var(--rule)] px-3 text-[12.5px] text-muted transition hover:bg-[var(--raised)] hover:text-ink disabled:opacity-50"
+                    >
+                      <RefreshCw size={13} className={comfyBusy ? 'animate-spin' : ''} />
+                      Test
+                    </button>
+                  </div>
+
+                  <p data-comfy-status className="mt-2 text-[11.5px] leading-snug">
+                    {comfyStatus == null ? (
+                      <span className="text-faint">Not checked yet.</span>
+                    ) : comfyStatus.ok ? (
+                      <span className="text-[var(--ok)]">
+                        ComfyUI {comfyStatus.stats?.version || ''} is up on port {comfyStatus.port}
+                        {comfyStatus.stats?.device ? ` — ${comfyStatus.stats.device}` : ''}
+                        {comfyStatus.stats?.vramTotal
+                          ? `, ${(comfyStatus.stats.vramFree / 2 ** 30).toFixed(1)} GB of ${(comfyStatus.stats.vramTotal / 2 ** 30).toFixed(1)} GB free`
+                          : ''}
+                        .
+                      </span>
+                    ) : (
+                      <span className="text-[var(--warn)]">
+                        {comfyStatus.error} Start ComfyUI and press Test — the port is found by itself, so only set one
+                        above if it is somewhere unusual.
+                      </span>
+                    )}
+                  </p>
+
+                  <div className="mt-3 space-y-2">
+                    {comfyList.length === 0 ? (
+                      <p className="text-[11.5px] leading-snug text-faint">
+                        No workflows added yet. In ComfyUI, open the workflow you want and use{' '}
+                        <strong className="font-medium text-muted">Workflow → Export (API)</strong>, then add that file
+                        here. The file is read on every run, so editing it in ComfyUI and sending again uses the new
+                        version — there is no copy inside the app to go stale.
+                      </p>
+                    ) : (
+                      comfyList.map((w) => (
+                        <div
+                          key={w.id}
+                          data-comfy-row={w.id}
+                          className="rounded-xl border border-[var(--rule)] bg-[var(--app)] p-2.5"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-[13px] text-ink">{w.name}</span>
+                              <span className="block truncate text-[11px] text-faint" title={w.path}>
+                                {w.kind === 'edit' ? 'changes a picture you give it' : 'draws from your words'}
+                                {w.ok ? ` · ${w.nodes} nodes` : ''} · {w.path}
+                              </span>
+                            </span>
+                            <button
+                              onClick={() => void checkComfyWorkflow(w.path)}
+                              className="shrink-0 rounded-lg border border-[var(--rule)] px-2 py-1 text-[11.5px] text-muted transition hover:bg-[var(--raised)] hover:text-ink"
+                            >
+                              Check
+                            </button>
+                            <button
+                              onClick={() => removeComfyWorkflow(w.id)}
+                              title="Remove from the list — the file itself is left alone"
+                              className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-muted transition hover:bg-[var(--raised)] hover:text-ink"
+                            >
+                              <X size={13} />
+                            </button>
+                          </div>
+                          {!w.ok && w.error ? <p className="mt-1.5 text-[11.5px] text-[var(--err)]">{w.error}</p> : null}
+                          {comfyChecks[w.path] ? (
+                            <p data-comfy-check className="mt-1.5 text-[11.5px] text-faint">
+                              {comfyChecks[w.path]}
+                            </p>
+                          ) : null}
+                        </div>
+                      ))
+                    )}
+                    <button
+                      onClick={() => void addComfyWorkflow()}
+                      className="flex items-center gap-1.5 rounded-lg border border-[var(--rule)] px-3 py-1.5 text-[12.5px] text-muted transition hover:bg-[var(--raised)] hover:text-ink"
+                    >
+                      <Plus size={13} />
+                      Add a workflow…
+                    </button>
+                    {comfyNote ? <p className="text-[11.5px] leading-snug text-faint">{comfyNote}</p> : null}
+                  </div>
+                </Field>
 
                 <Field
                   label="fal.ai API key"

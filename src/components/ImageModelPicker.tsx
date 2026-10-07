@@ -44,6 +44,16 @@ export default function ImageModelPicker({
   const [size, setSize] = useState<{ width?: number; height?: number }>({})
   const box = useRef<HTMLDivElement>(null)
 
+  /* The user's own ComfyUI workflows. Read from main whenever the list opens, because a workflow
+     edited in ComfyUI since it was added may no longer be the same kind of thing — and the list is
+     where that should be visible rather than a run failing later. */
+  const [comfy, setComfy] = useState<{
+    ok: boolean
+    port?: number
+    stats?: { version: string; device: string }
+    workflows: { id: string; name: string; kind: string; ok: boolean; error: string; nodes: number }[]
+  } | null>(null)
+
   useEffect(() => {
     const h = (e: MouseEvent) => {
       if (open && box.current && !box.current.contains(e.target as Node)) setOpen(false)
@@ -51,6 +61,30 @@ export default function ImageModelPicker({
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
   }, [open])
+
+  useEffect(() => {
+    // Rendered inline — inside the top bar's model panel — the list is already on screen with
+    // nothing clicked, so the gate is "on screen", not "opened by its own button".
+    if (!open && !inline) return
+    let alive = true
+    Promise.all([window.zen.comfy.status(), window.zen.comfy.workflows()])
+      .then(([s, w]) => {
+        if (alive) setComfy({ ok: Boolean(s?.ok), port: s?.port, stats: s?.stats, workflows: w?.workflows || [] })
+      })
+      .catch(() => {
+        if (alive) setComfy({ ok: false, workflows: [] })
+      })
+    return () => {
+      alive = false
+    }
+  }, [open, inline])
+
+  /* Which of them belong in this list: the Edit tab can only use a workflow that takes a picture,
+     and the Picture tab only one that draws from words. */
+  const wantKind = field === 'editModel' ? 'edit' : 'txt2img'
+  const comfyShown = (comfy?.workflows || []).filter(
+    (w) => w.kind === wantKind && (!q.trim() || w.name.toLowerCase().includes(q.trim().toLowerCase())),
+  )
 
   // what the selected size costs the rate calculation, from the app's own presets
   useEffect(() => {
@@ -194,15 +228,52 @@ export default function ImageModelPicker({
           <div className="max-h-[340px] overflow-y-auto py-1">
             {error ? (
               <div className="px-3 py-3 text-[13px] text-[var(--err)]">{error}</div>
-            ) : list.length === 0 ? (
+            ) : list.length === 0 && comfyShown.length === 0 ? (
               <div className="px-3 py-3 text-[13px] text-faint">
                 {loading ? 'Loading fal’s catalogue…' : 'No image models matched.'}
               </div>
             ) : (
               <>
-                {/* One heading per provider, the same shape the chat model list uses. fal.ai is the
-                    only one today; grouping now means a second provider is a new entry in a list
-                    rather than a rewrite of the rows. */}
+                {/* The user's own ComfyUI workflows, above the hosted catalogue: they are the ones
+                    they built, they cost nothing to run, and they are what this list is for when
+                    there are any. */}
+                {comfyShown.length > 0 ? (
+                  <>
+                    <div className="px-3 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-faint">
+                      ComfyUI
+                      <span className="ml-1.5 font-normal normal-case tracking-normal opacity-60">{comfyShown.length}</span>
+                      {comfy && !comfy.ok ? (
+                        <span className="ml-1.5 font-normal normal-case tracking-normal text-[var(--warn,#d8a657)]">
+                          not running
+                        </span>
+                      ) : null}
+                    </div>
+                    {comfyShown.map((w) => (
+                      <button
+                        key={w.id}
+                        data-comfy-workflow={w.id}
+                        onClick={() => {
+                          onChange(`comfy:${w.id}`)
+                          setOpen(false)
+                          onPicked?.()
+                        }}
+                        className="flex w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-[var(--raised)]"
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[13.5px] text-ink">{w.name}</span>
+                          <span className="block truncate text-[11px] text-faint">
+                            {w.ok
+                              ? `${w.kind === 'edit' ? 'changes a picture you give it' : 'draws from your words'} · ${w.nodes} nodes · your machine`
+                              : w.error || 'that workflow file can no longer be read'}
+                          </span>
+                        </span>
+                        {`comfy:${w.id}` === current ? (
+                          <span className="shrink-0 text-[11px] text-accent">current</span>
+                        ) : null}
+                      </button>
+                    ))}
+                  </>
+                ) : null}
                 <div className="px-3 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-faint">
                   fal.ai
                   <span className="ml-1.5 font-normal normal-case tracking-normal opacity-60">{list.length}</span>
@@ -237,7 +308,11 @@ export default function ImageModelPicker({
           </div>
 
           <div className="flex items-center justify-between gap-2 border-t border-[var(--rule)] px-3 py-2 text-[11.5px] text-faint">
-            <span>Prices are fal’s own rates for the size selected in Settings → Images.</span>
+            <span>
+              {comfyShown.some((w) => `comfy:${w.id}` === current)
+                ? 'Your own ComfyUI draws this one — nothing is billed.'
+                : 'Prices are fal’s own rates for the size selected in Settings → Images.'}
+            </span>
             <button onClick={onConfigure} className="shrink-0 text-[var(--accent-bright)] hover:underline">
               Image settings
             </button>

@@ -17,6 +17,9 @@ const {
 const path = require('node:path')
 const fs = require('node:fs')
 const falImages = require('./images.cjs')
+// A second way to draw: the workflows the user exported from their own ComfyUI. Same contract as
+// fal's path, so both doors into image making keep working unchanged.
+const comfyImages = require('./comfy.cjs')
 const localModel = require('./local.cjs')
 const modelSources = require('./model-sources.cjs')
 const appPaths = require('./paths.cjs')
@@ -193,6 +196,10 @@ function defaultStore() {
         editModel: 'fal-ai/nano-banana/edit',
         count: 1,
         size: 'square_hd',
+        // ComfyUI, on the user's own machine. `port` 0 means "find it": both ComfyUI's own default
+        // and the port the Desktop build listens on are tried, and whichever answers is reported.
+        // `workflows` stays empty until someone adds one, and nothing runs until then.
+        comfy: { host: '127.0.0.1', port: 0, workflows: [] },
       },
       // MCP servers. Off until the user turns it on, and while it is off nothing is spawned at all,
       // so someone who does not use this never has child processes because of it.
@@ -3325,6 +3332,13 @@ async function runImageJob({ key, model, prompt, count, size, imageUrl, imagesDi
   // a picture being drawn counts as work: the window does not tuck itself away mid-run
   imageJobs += 1
   try {
+    // A workflow from the user's own ComfyUI runs on their own machine: the fal key and fal's
+    // catalogue have nothing to do with it. Everything above this line — validating the reference,
+    // holding the window awake, reporting phases — applies to both, which is why the branch is here
+    // and not in the callers.
+    if (isComfyModel(model)) {
+      return await runComfyJob({ model, prompt, reference, dir, onProgress })
+    }
     return await falImages.generate({
       key: String(key || ''),
       model: String(model || ''),
@@ -3341,6 +3355,93 @@ async function runImageJob({ key, model, prompt, count, size, imageUrl, imagesDi
   } finally {
     imageJobs -= 1
   }
+}
+
+/** A model id naming one of the user's own ComfyUI workflows rather than a hosted endpoint. */
+function isComfyModel(model) {
+  return String(model || '').startsWith('comfy:')
+}
+
+/** ComfyUI wants a file on disk; the app's reference is a data URL by the time it gets here. */
+function dataUrlToTempFile(dataUrl) {
+  const m = /^data:([^;]+);base64,(.*)$/s.exec(String(dataUrl || ''))
+  if (!m) return ''
+  const dir = path.join(app.getPath('userData'), 'comfy-input')
+  fs.mkdirSync(dir, { recursive: true })
+  const ext = /jpe?g/i.test(m[1]) ? 'jpg' : /webp/i.test(m[1]) ? 'webp' : 'png'
+  const file = path.join(dir, `reference-${Date.now()}.${ext}`)
+  fs.writeFileSync(file, Buffer.from(m[2], 'base64'))
+  return file
+}
+
+/**
+ * Run one of the user's exported workflows.
+ *
+ * The workflow file is read fresh on every run, so editing it in ComfyUI and pressing send again
+ * uses the new version — there is no copy inside the app to go stale. Which inputs to set is worked
+ * out from the graph itself (see comfy.cjs), and a workflow that cannot do what was asked says so
+ * rather than doing something else.
+ */
+async function runComfyJob({ model, prompt, reference, dir, onProgress }) {
+  const cfg = readStore().config || {}
+  const c = (cfg.imageGen && cfg.imageGen.comfy) || {}
+  const id = String(model).slice('comfy:'.length)
+  const workflows = Array.isArray(c.workflows) ? c.workflows : []
+  const wf = workflows.find((w) => String(w.id) === id)
+  if (!wf) {
+    return { ok: false, error: 'That ComfyUI workflow is no longer in the list. Add it again in Settings → Images.' }
+  }
+
+  const read = comfyImages.readWorkflow(wf.path)
+  if (!read.ok) return { ok: false, error: read.error }
+
+  onProgress({ phase: 'submitting', detail: 'looking for ComfyUI', label: 'Looking for ComfyUI…' })
+  const srv = await comfyImages.findServer({ host: c.host, port: c.port })
+  if (!srv.ok) {
+    return { ok: false, error: `${srv.error} Start ComfyUI, or set its port in Settings → Images.` }
+  }
+
+  let temp = ''
+  try {
+    if (reference) temp = dataUrlToTempFile(reference)
+    return await comfyImages.generate({
+      base: srv.base,
+      graph: read.graph,
+      prompt,
+      imagePath: temp,
+      imagesDir: dir,
+      label: wf.name || read.name,
+      onProgress,
+    })
+  } finally {
+    // ComfyUI keeps its own copy in its input folder, so the app's copy is only needed for the upload
+    if (temp) {
+      try {
+        fs.unlinkSync(temp)
+      } catch {
+        /* already gone */
+      }
+    }
+  }
+}
+
+/** Where the ComfyUI workflow files probably are, so the file picker opens somewhere useful. */
+function comfyWorkflowDir() {
+  const home = app.getPath('home')
+  const candidates = [
+    path.join(home, 'Documents', 'ComfyUI', 'user', 'default', 'workflows'),
+    path.join(home, 'comfy', 'ComfyUI', 'user', 'default', 'workflows'),
+    path.join(home, 'Documents', 'comfy', 'ComfyUI', 'user', 'default', 'workflows'),
+    path.join(home, 'ComfyUI', 'user', 'default', 'workflows'),
+  ]
+  for (const dir of candidates) {
+    try {
+      if (fs.statSync(dir).isDirectory()) return dir
+    } catch {
+      /* try the next one */
+    }
+  }
+  return home
 }
 
 /**
@@ -3529,6 +3630,72 @@ ipcMain.handle('files:add', async (event, req = {}) => {
     })
   }
   return { ok: true, added }
+})
+
+/* --- ComfyUI: the workflows the user exported, and whether the server is up ------------------ */
+
+/** Is ComfyUI answering, and on which port? The port is found, never assumed. */
+ipcMain.handle('comfy:status', async () => {
+  const c = (readStore().config?.imageGen?.comfy) || {}
+  const s = await comfyImages.findServer({ host: c.host, port: c.port })
+  return s.ok
+    ? { ok: true, host: s.host, port: s.port, base: s.base, stats: s.stats }
+    : { ok: false, host: c.host || '127.0.0.1', tried: s.tried || [], error: s.error }
+})
+
+/**
+ * The saved workflows, re-read from disk each time.
+ *
+ * Not from what was stored when they were added: a workflow edited in ComfyUI since then has a
+ * different shape, and the list is where the user finds that out before sending rather than after.
+ */
+ipcMain.handle('comfy:workflows', () => {
+  const c = (readStore().config?.imageGen?.comfy) || {}
+  const list = (Array.isArray(c.workflows) ? c.workflows : []).map((w) => {
+    const r = comfyImages.readWorkflow(w.path)
+    return {
+      id: w.id,
+      name: w.name || w.id,
+      path: w.path,
+      kind: r.ok ? r.kind : w.kind || 'txt2img',
+      ok: r.ok,
+      error: r.ok ? '' : r.error,
+      nodes: r.ok ? r.nodes : 0,
+      hasPrompt: r.ok ? Boolean(r.detect.positive) : false,
+      hasImage: r.ok ? Boolean(r.detect.image) : false,
+    }
+  })
+  return { ok: true, workflows: list }
+})
+
+/** Add one: pick the file, read it, hand the entry back for the renderer to save with the config. */
+ipcMain.handle('comfy:pick', async () => {
+  const r = await dialog.showOpenDialog(win, {
+    title: 'Add a ComfyUI workflow',
+    properties: ['openFile'],
+    filters: [{ name: 'ComfyUI workflow (API format)', extensions: ['json'] }],
+    defaultPath: comfyWorkflowDir(),
+  })
+  if (r.canceled || !r.filePaths?.length) return { ok: false, canceled: true }
+  const file = r.filePaths[0]
+  const read = comfyImages.readWorkflow(file)
+  if (!read.ok) return { ok: false, error: read.error }
+  return {
+    ok: true,
+    workflow: { id: `wf${Date.now().toString(36)}`, name: read.name, path: file, kind: read.kind },
+    detail: { nodes: read.nodes, kind: read.kind, hasPrompt: Boolean(read.detect.positive), hasImage: Boolean(read.detect.image) },
+  }
+})
+
+/** Can this server actually run this workflow? Node classes and model files, before a run. */
+ipcMain.handle('comfy:check', async (_e, { path: file }) => {
+  const c = (readStore().config?.imageGen?.comfy) || {}
+  const read = comfyImages.readWorkflow(file)
+  if (!read.ok) return { ok: false, error: read.error }
+  const s = await comfyImages.findServer({ host: c.host, port: c.port })
+  if (!s.ok) return { ok: false, error: s.error }
+  const check = await comfyImages.checkWorkflow(read.graph, { base: s.base })
+  return { ok: true, port: s.port, base: s.base, ...check }
 })
 
 ipcMain.handle('images:generate', async (_e, req) => {

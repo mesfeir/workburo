@@ -56,6 +56,16 @@ const DESKTOP_ONLY = {
   'pi:install': 'installing the agent needs a native binary and a network of its own',
   'pi:uninstall': 'the agent belongs to the host machine',
   'pi:pickWorkspace': 'there is no folder picker on a phone',
+  /*
+   * ComfyUI runs on the host and its workflows are added through a native file picker, so managing
+   * them belongs to whoever is sitting at the machine. Drawing with one is not blocked by this: the
+   * phone sends an ordinary image request, the host does the work, and the picture comes back by the
+   * same route a hosted one does.
+   */
+  'comfy:status': 'whether the host\'s ComfyUI is up is a fact about the host machine',
+  'comfy:workflows': 'the workflow list is a list of files on the host',
+  'comfy:pick': 'there is no file picker on a phone',
+  'comfy:check': 'asks the host\'s server which nodes and model files it has',
   'pi:openWorkspace': 'the folder is on the host, not the phone',
   'local:status': 'the local model runs on the host; status is shown through /api/models',
   'local:install': 'models are downloaded by the host',

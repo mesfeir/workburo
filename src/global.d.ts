@@ -34,6 +34,9 @@ export interface ImageGenResult {
   images?: GeneratedImage[]
   model?: string
   requestId?: string
+  /** 'comfy' for one of the user's own workflows, so the transcript can name what drew it */
+  provider?: string
+  label?: string
   tookMs?: number
   params?: string[]
   seed?: number | null
@@ -274,7 +277,52 @@ export interface ZenApi {
       size?: { width?: number; height?: number },
     ) => Promise<{ ok: boolean; prices: Record<string, { text: string; perImage: number | null }> }>
     openFolder: () => Promise<{ ok: boolean; error: string | null }>
-    onProgress: (handler: (p: { requestId: string; phase: string; detail?: string }) => void) => () => void
+    onProgress: (handler: (p: { requestId: string; phase: string; detail?: string; label?: string }) => void) => () => void
+  }
+  /**
+   * ComfyUI on this machine. The port is found rather than assumed — ComfyUI's own default is 8188
+   * and the Desktop build listens on 8000 — and each workflow is described from its own graph, so
+   * the pickers can say which ones edit a picture and which ones only draw new ones.
+   */
+  comfy: {
+    status: () => Promise<{
+      ok: boolean
+      host: string
+      port?: number
+      base?: string
+      stats?: { version: string; device: string; vramTotal: number; vramFree: number; queueRemaining: number }
+      tried?: number[]
+      error?: string
+    }>
+    workflows: () => Promise<{
+      ok: boolean
+      workflows: {
+        id: string
+        name: string
+        path: string
+        kind: 'txt2img' | 'edit'
+        ok: boolean
+        error: string
+        nodes: number
+        hasPrompt: boolean
+        hasImage: boolean
+      }[]
+    }>
+    pick: () => Promise<{
+      ok: boolean
+      canceled?: boolean
+      error?: string
+      workflow?: { id: string; name: string; path: string; kind: 'txt2img' | 'edit' }
+      detail?: { nodes: number; kind: string; hasPrompt: boolean; hasImage: boolean }
+    }>
+    check: (path: string) => Promise<{
+      ok: boolean
+      error?: string
+      port?: number
+      nodeCount?: number
+      missingNodes?: string[]
+      missingModels?: { class_type: string; field: string; wanted: string }[]
+    }>
   }
   /**
    * The local model. Nothing here needs an account, and nothing downloads until it is asked for:

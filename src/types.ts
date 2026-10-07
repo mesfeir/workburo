@@ -162,7 +162,7 @@ export interface Profile {
 export interface ImageGenConfig {
   /** shows the image mode toggle in the composer */
   enabled: boolean
-  provider: 'fal'
+  provider: 'fal' | 'comfy'
   /** fal.ai key — stored locally, sent only to fal.ai */
   falKey: string
   /** fal endpoint id, e.g. fal-ai/flux/schnell */
@@ -175,6 +175,30 @@ export interface ImageGenConfig {
   count: number
   /** size preset id, used only when the model declares image_size */
   size: string
+  /** ComfyUI on the user's own machine: workflows they exported, as another way to draw */
+  comfy?: ComfyConfig
+}
+
+/**
+ * One workflow the user added, by file rather than by copy.
+ *
+ * The path is kept and the file is read on every run, so editing the workflow in ComfyUI and
+ * pressing send again uses the new version. A workflow copied into the app would drift from the
+ * one the user is actually working on, and the drift would be invisible.
+ */
+export interface ComfyWorkflow {
+  id: string
+  name: string
+  path: string
+  /** decided by the graph itself: a LoadImage means it edits a picture you give it */
+  kind: 'txt2img' | 'edit'
+}
+
+export interface ComfyConfig {
+  host: string
+  /** 0 means "find it" — ComfyUI's own default and the Desktop build's port are both tried */
+  port: number
+  workflows: ComfyWorkflow[]
 }
 
 /** Agent mode: the optional hands-on engine. Off unless the user turns it on. */
