@@ -13,7 +13,11 @@ var RELEASE = WORKBURO_RELEASE;
 
   /* ---------------------------------------------------------------- downloads */
 
-  function fileUrl(key) { return RELEASE.repo + '/releases/latest/download/' + RELEASE.files[key].name; }
+  /* A file carries its own tag when it does not live in the newest release; otherwise latest. */
+  function fileUrl(key) {
+    var f = RELEASE.files[key];
+    return RELEASE.repo + '/releases/' + (f.tag ? 'download/' + f.tag : 'latest/download') + '/' + f.name;
+  }
   function sumsName() { return 'SHA256SUMS-' + RELEASE.version + '.txt'; }
   function sumsUrl() { return RELEASE.repo + '/releases/latest/download/' + sumsName(); }
   function sizeLabel(key) {
