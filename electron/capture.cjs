@@ -308,7 +308,7 @@ async function run({ win, storePath, readStore, writeStore, apiKey }) {
     activeId: null,
     models: [],
   }
-  writeStore(seeded)
+  await writeStore(seeded)
   console.log(`   seeded ${seeded.conversations.length} history entries into ${storePath}`)
 
   // reload so the renderer picks up the seeded store
@@ -469,7 +469,7 @@ async function run({ win, storePath, readStore, writeStore, apiKey }) {
     ...persisted.conversations,
   ]
   persisted.activeId = 'seed-image'
-  writeStore(persisted)
+  await writeStore(persisted)
   await win.webContents.reload()
   await sleep(4500)
   const after = await inPage(win, pageLastTurn).catch(() => null)
