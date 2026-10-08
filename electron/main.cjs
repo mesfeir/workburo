@@ -117,15 +117,90 @@ function imagesDir() {
 }
 
 /** generated images live on disk — never inline megabytes of base64 into the store */
+/**
+ * Where this picture could be read back from, best first.
+ *
+ * Pictures the app made are named, not pathed: the store says "zen-1791206231748-1.jpg" and the file
+ * is in the pictures folder. Without looking there, a stored picture looked unrestorable, so its
+ * bytes were kept in the conversation forever -- 36 MB of base64 in one user's store, rewritten on
+ * every save -- and the strip below never fired at all.
+ */
+function imageFileCandidates(im, ws) {
+  ws = ws || ''
+  const raw = [im && im.path, im && im.name].filter(Boolean).map((p) => path.basename(String(p)))
+  // both spellings: what the name is now, and what it was called before names were sanitised
+  const names = [...new Set([...raw, ...raw.map(safeImageName)])]
+  const out = []
+  if (im && im.path) out.push(String(im.path))
+  for (const n of names) out.push(path.join(imagesDir(), n))
+  if (ws) for (const n of names) out.push(path.resolve(ws, n))
+  return out.filter(Boolean)
+}
+
+/**
+ * Write a picture that only exists as bytes into the pictures folder.
+ *
+ * Something dragged in or pasted never had a file behind it, so its bytes were the only copy and the
+ * conversation had to keep them -- one pasted PNG was 3.5 MB of text in the store. Writing it out
+ * once lets the conversation keep a path instead, and the picture survives its original being moved.
+ * Returns the path, or an empty string when it could not be written (the bytes are then kept).
+ */
+function saveImageBytes(im) {
+  try {
+    const m = /^data:([^;]+);base64,([\s\S]*)$/.exec(String(im.url || ''))
+    if (!m) return ''
+    const ext = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp', 'image/gif': '.gif' }[m[1]] || '.png'
+    const stem = safeImageName(im.name).replace(/\.[^.]+$/, '').slice(0, 60) || 'picture'
+    const dir = imagesDir()
+    fs.mkdirSync(dir, { recursive: true })
+    let target = path.join(dir, stem + ext)
+    if (fs.existsSync(target)) target = path.join(dir, `${stem}-${Date.now()}${ext}`)
+    fs.writeFileSync(target, Buffer.from(m[2], 'base64'))
+    return target
+  } catch (err) {
+    console.error('[store] could not write a pasted picture', err)
+    return ''
+  }
+}
+
+/**
+ * How a picture is named on disk. A write and a lookup must use the same rule: they were written to
+ * differ, so a pasted picture was never found after being saved and a fresh copy was written on every
+ * save -- the same screenshot ended up on disk three times, growing with each one.
+ */
+function safeImageName(name) {
+  const base = path.basename(String(name || 'picture')).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').trim()
+  return (base || 'picture').slice(0, 120)
+}
+
+/** the first candidate that really is a file, or an empty string */
+function findImageFile(im, ws) {
+  for (const p of imageFileCandidates(im, ws)) {
+    try {
+      if (fs.existsSync(p) && fs.statSync(p).size > 0) return p
+    } catch {}
+  }
+  return ''
+}
+
 function stripInlineImages(store) {
+  const ws = (store?.config?.agent || {}).workspace
   for (const c of Array.isArray(store?.conversations) ? store.conversations : []) {
     for (const m of c.messages || []) {
       if (!Array.isArray(m.images)) continue
-      m.images = m.images.map((im) =>
-        im && im.path
-          ? { name: im.name, path: im.path, width: im.width, height: im.height, bytes: im.bytes, url: '' }
-          : im,
-      )
+      m.images = m.images.map((im) => {
+        if (!im || typeof im.url !== 'string' || !im.url.startsWith('data:')) return im
+        // A picture the app made is already a file, so it is found here. One that was dragged in or
+        // pasted has no file behind it, so its bytes are written out now -- and if even that fails,
+        // the bytes stay in the conversation. A picture is never dropped.
+        const file = findImageFile(im, ws) || saveImageBytes(im)
+        if (!file) return im
+        let bytes = im.bytes
+        try {
+          bytes = fs.statSync(file).size
+        } catch {}
+        return { name: im.name || path.basename(file), path: file, width: im.width, height: im.height, bytes, url: '' }
+      })
     }
   }
   return store
@@ -139,6 +214,7 @@ function restoreInlineImages(store) {
   const ws = (store?.config?.agent || {}).workspace
   const tries = (p) => [
     String(p),
+    path.join(imagesDir(), path.basename(String(p))),
     ws ? path.resolve(ws, String(p)) : '',
     path.resolve(documentsDir(), String(p)),
   ].filter(Boolean)
@@ -264,9 +340,41 @@ function readStore() {
 }
 
 let saveTimer = null
+let writeQueue = Promise.resolve()
+/* The last data the window handed us. A quit cannot wait for a promise, so the final save is done
+   synchronously from this -- otherwise the longer debounce would cost the last second of typing. */
+let lastStoreData = null
+
 function writeStore(data) {
+  lastStoreData = data
+  // Reading and writing the store happen on the thread that draws the window, and a blocked main
+  // process is a window that will not move. Both are async now, and queued, so two saves cannot
+  // interleave and the older one cannot land last.
+  const next = writeQueue.then(() => writeStoreNow(data))
+  writeQueue = next
+  return next
+}
+
+/** the last word: synchronous, so it completes while the app is closing */
+function flushStoreSync() {
+  if (!lastStoreData) return
   try {
     fs.mkdirSync(path.dirname(storePath()), { recursive: true })
+    let keep = {}
+    try {
+      keep = JSON.parse(fs.readFileSync(storePath(), 'utf8')) || {}
+    } catch {}
+    const merged = { ...keep, ...lastStoreData }
+    if (keep.config && lastStoreData.config) merged.config = { ...keep.config, ...lastStoreData.config }
+    fs.writeFileSync(storePath(), JSON.stringify(stripInlineImages(merged), null, 2), 'utf8')
+  } catch (err) {
+    console.error('[store] final write failed', err)
+  }
+}
+
+async function writeStoreNow(data) {
+  try {
+    await fs.promises.mkdir(path.dirname(storePath()), { recursive: true })
     /*
      * What the caller sent wins, and anything else the file already holds is kept. The window sends
      * the parts it owns -- settings, conversations, which chat was open -- and a writer that dropped
@@ -274,11 +382,11 @@ function writeStore(data) {
      */
     let keep = {}
     try {
-      keep = JSON.parse(fs.readFileSync(storePath(), 'utf8')) || {}
+      keep = JSON.parse(await fs.promises.readFile(storePath(), 'utf8')) || {}
     } catch {}
     const merged = { ...keep, ...data }
     if (keep.config && data && data.config) merged.config = { ...keep.config, ...data.config }
-    fs.writeFileSync(storePath(), JSON.stringify(stripInlineImages(merged), null, 2), 'utf8')
+    await fs.promises.writeFile(storePath(), JSON.stringify(stripInlineImages(merged), null, 2), 'utf8')
     return true
   } catch (err) {
     console.error('[store] write failed', err)
@@ -288,7 +396,7 @@ function writeStore(data) {
 
 function scheduleSave(data) {
   if (saveTimer) clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => writeStore(data), 400)
+  saveTimer = setTimeout(() => writeStore(data), 1500)
 }
 
 /* ----------------------------------------------------------------- window */
@@ -1245,6 +1353,7 @@ app.on('before-quit', (event) => {
 })
 
 app.on('will-quit', () => {
+  flushStoreSync()
   globalShortcut.unregisterAll()
   if (tray && !tray.isDestroyed()) tray.destroy()
   // The server is this app's own listener, so it goes when the app goes -- and with it, every
