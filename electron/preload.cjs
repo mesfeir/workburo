@@ -16,6 +16,43 @@ if (process.platform === 'darwin') {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mark)
 }
 
+/*
+ * Drop a picture's bytes before the store crosses IPC.
+ *
+ * The window holds every picture as an inline data URL, and this call happens whenever a
+ * conversation changes -- which, while a reply streams, is many times a second. Sending those bytes
+ * back each time meant cloning tens of megabytes in and out of the renderer, and the profiler put
+ * 14 of the 19 seconds a single reply took inside this one line. Main keeps a path for anything it
+ * can find, so the bytes add nothing on the way back. A picture with no file behind it is left
+ * alone: those bytes are still the only copy.
+ */
+function withoutPictureBytes(data) {
+  if (!data || !Array.isArray(data.conversations)) return data
+  let changed = false
+  const conversations = data.conversations.map((c) => {
+    if (!c || !Array.isArray(c.messages)) return c
+    let touched = false
+    const messages = c.messages.map((m) => {
+      if (!m || !Array.isArray(m.images)) return m
+      let hit = false
+      const images = m.images.map((im) => {
+        if (im && im.path && typeof im.url === 'string' && im.url.startsWith('data:')) {
+          hit = true
+          return { ...im, url: '' }
+        }
+        return im
+      })
+      if (!hit) return m
+      touched = true
+      return { ...m, images }
+    })
+    if (!touched) return c
+    changed = true
+    return { ...c, messages }
+  })
+  return changed ? { ...data, conversations } : data
+}
+
 // One narrow, explicit surface for the renderer. No node, no fs, no keys in the page.
 contextBridge.exposeInMainWorld('zen', {
   theme: {
@@ -24,8 +61,8 @@ contextBridge.exposeInMainWorld('zen', {
 
   store: {
     get: () => ipcRenderer.invoke('store:get'),
-    save: (data) => ipcRenderer.invoke('store:save', data),
-    flush: (data) => ipcRenderer.invoke('store:flush', data),
+    save: (data) => ipcRenderer.invoke('store:save', withoutPictureBytes(data)),
+    flush: (data) => ipcRenderer.invoke('store:flush', withoutPictureBytes(data)),
     /* Fired when another device -- a phone -- has written to the same conversations. */
     onChanged: (handler) => {
       const listener = () => handler()

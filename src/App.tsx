@@ -294,7 +294,10 @@ export default function App() {
 
   useEffect(() => {
     if (!ready) return
-    window.zen.store.save({ config, conversations, activeId, models: [] })
+    /* Settle first. Saving on every change meant a save per streamed beat, and each one cloned the
+       store across IPC -- the cost that made the window immovable while a reply was arriving. */
+    const t = setTimeout(() => window.zen.store.save({ config, conversations, activeId, models: [] }), 1200)
+    return () => clearTimeout(t)
   }, [ready, config, conversations, activeId, models])
 
   /* ------------------------------------------------------------- stream */
