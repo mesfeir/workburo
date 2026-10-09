@@ -3391,7 +3391,15 @@ ipcMain.handle('images:cost', async (_e, { pricing, model, width, height, count 
 })
 
 ipcMain.handle('images:models', async (_e, { key, categories }) => {
-  const fal = await falImages.listModels(String(key || ''), { categories: String(categories || '') })
+  // Each provider answers for itself: one that is unreachable or has no key must not empty the list
+  // the others filled. A missing fal key used to reject the whole handler, so the Gemini models the
+  // user had just configured disappeared from the picker.
+  let fal = []
+  try {
+    fal = await falImages.listModels(String(key || ''), { categories: String(categories || '') })
+  } catch {
+    /* fall through: the other providers still contribute */
+  }
   // Gemini's picture models are offered beside fal's, in the form the funnel dispatches on.
   let gemini = []
   try {
@@ -3593,7 +3601,13 @@ function referenceForGemini(reference) {
 /** Draw or edit one picture with Gemini, and land it on disk like every other provider does. */
 async function runGeminiJob({ key, model, prompt, reference, dir, onProgress }) {
   const cfg = readStore().config || {}
-  const useKey = String(key || '').trim() || geminiKeyFor(cfg)
+  // The key handed in belongs to the fal provider: the renderer sends imageGen.falKey with every
+  // picture request, Gemini models included, because fal was the only hosted provider when that call
+  // was written. For a Gemini model that key is simply the wrong credential and Google answers
+  // "API key not valid" — a 400 that names neither the key nor the provider. So the Gemini key the
+  // user configured wins, and the passed key is only a fallback for a caller that knows better.
+  const configured = geminiKeyFor(cfg)
+  const useKey = configured || String(key || '').trim()
   if (!useKey) {
     return { ok: false, error: 'No Gemini key. Add one in Settings under Google Gemini (one key runs both chat and pictures).' }
   }

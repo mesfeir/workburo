@@ -1894,8 +1894,8 @@ export default function SettingsModal({
             {tab === 'images' && (
               <div className="space-y-3">
                 <Field
-                  label="Image generation"
-                  hint="Hosted drawing through fal.ai. The key lives in your local store file and is sent only to fal.ai — never to your chat endpoint."
+                  label="Picture generation"
+                  hint="Three ways to make a picture, and none of them is the default. Draw through a hosted provider — fal.ai or Google Gemini — or on your own machine with ComfyUI. Set up whichever you want, or all of them: each provider has its own section below, its own key, and its own models in the picture list in the top bar. Keys live in your local store file and go only to the provider that owns them."
                 >
                   <label className="flex items-center gap-2.5">
                     <input
@@ -1913,10 +1913,31 @@ export default function SettingsModal({
                     generation by itself whenever you ask to see something — "create an image of…", "show me how it
                     would look" — and the picture lands in the conversation. That tool is switched off in{' '}
                     <strong className="font-medium text-muted">Tools</strong>, not here; this box only adds the manual
-                    button that sends your next message straight to fal.
+                    button that sends your next message straight to whichever picture model you have chosen.
                   </p>
                 </Field>
 
+                {/* --- provider 1: hosted, and the one that doubles as a chat provider -------------- */}
+                <div className="border-t border-[var(--rule)] pt-4">
+                  <h3 className="text-[13px] font-medium text-ink">Google Gemini</h3>
+                  <p className="mt-0.5 text-[11.5px] leading-snug text-faint">
+                    One key for both halves of Gemini: it draws with the Nano Banana picture models and it is the key
+                    the Google Gemini chat provider uses, so you only type it once. Create one at{' '}
+                    <span className="text-muted">aistudio.google.com/apikey</span>.
+                  </p>
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      className={inputCls}
+                      type={showFalKey ? 'text' : 'password'}
+                      placeholder="AIza…"
+                      value={imageGen.geminiKey || ''}
+                      spellCheck={false}
+                      onChange={(e) => setImageGen({ geminiKey: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                {/* --- provider 2: the user's own machine ----------------------------------------- */}
                 <Field
                   label="ComfyUI"
                   hint="Your own ComfyUI, as a second way to draw. Add a workflow you exported with Workflow → Export (API) and it appears in the Picture and Edit lists in the top bar, beside the hosted models. A workflow that takes a picture belongs in Edit; one that only draws from words belongs in Picture — which is which is read from the graph itself. Nothing here needs a fal key, and the picture is made on your machine."
@@ -2025,25 +2046,10 @@ export default function SettingsModal({
                   </div>
                 </Field>
 
+                {/* --- provider 3: the other hosted one ------------------------------------------ */}
                 <Field
-                  label="Google Gemini API key"
-                  hint="One key for both: it runs the Google Gemini chat provider and the Gemini picture models (Nano Banana). Create one at aistudio.google.com/apikey. Stored locally in zen-chat-store.json — never committed, never logged."
-                >
-                  <div className="flex gap-2">
-                    <input
-                      className={inputCls}
-                      type={showFalKey ? 'text' : 'password'}
-                      placeholder="AIza…"
-                      value={imageGen.geminiKey || ''}
-                      spellCheck={false}
-                      onChange={(e) => setImageGen({ geminiKey: e.target.value })}
-                    />
-                  </div>
-                </Field>
-
-                <Field
-                  label="fal.ai API key"
-                  hint="Create one at fal.ai/dashboard/keys. Stored locally in zen-chat-store.json — never committed, never logged."
+                  label="fal.ai"
+                  hint="The other hosted provider. Create a key at fal.ai/dashboard/keys. Its models sit in the picture list alongside the Gemini ones and your ComfyUI workflows. Stored locally in zen-chat-store.json — never committed, never logged."
                 >
                   <div className="flex gap-2">
                     <input
@@ -2093,7 +2099,7 @@ export default function SettingsModal({
                 )}
 
                 <Field
-                  label="Model"
+                  label="Picture model"
                   hint={
                     selectedFal
                       ? `${selectedFal.name} · ${selectedFal.category}${

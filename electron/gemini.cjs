@@ -195,6 +195,12 @@ async function generate({ key, model, prompt, reference, imagesDir, count = 1, t
   if (!key) throw new Error('No Gemini key. Add one in Settings, under Google Gemini.')
   const id = modelFromId(model)
   if (!id) throw new Error('No Gemini image model was chosen.')
+  // Google refuses a request that carries neither words nor a picture, and its 400 does not say so
+  // in plain terms. Say it plainly here instead. Either one alone is fine — an instruction, or an
+  // image to work on.
+  if (!String(prompt || '').trim() && !(reference && reference.data)) {
+    throw new Error('Gemini needs something to work with: describe what to draw or change, or attach a picture.')
+  }
 
   const body = {
     contents: [{ role: 'user', parts: parts({ prompt, reference }) }],
@@ -202,19 +208,29 @@ async function generate({ key, model, prompt, reference, imagesDir, count = 1, t
   }
 
   let reply
+  let firstError = null
   try {
     reply = await call(`${API}/models/${encodeURIComponent(id)}:generateContent`, { key, method: 'POST', body, timeout })
   } catch (e) {
-    // Google has moved this call to /interactions on newer models. Try that shape before giving up,
-    // but only when it looks like the route is wrong rather than the key or the model.
-    if (!(e.status === 404 || e.status === 400)) throw e
+    firstError = e
+    // Google has moved this call to /interactions on newer models, so a 404 — "no such route" — is
+    // worth a second attempt in the other shape. A 400 is not: it means Google read the request and
+    // refused it, and retrying it elsewhere only buries the real explanation under an unrelated one.
+    // That happened for real: an empty prompt 400'd, the fallback 404'd with "model not found", and
+    // the user was told a model that works perfectly well does not exist.
+    if (e.status !== 404) throw e
     const input = []
     const text = String(prompt || '').trim()
     if (text) input.push({ type: 'text', text })
     if (reference && reference.data) {
       input.push({ type: 'image', mime_type: reference.mimeType || 'image/png', data: reference.data })
     }
-    reply = await call(`${API}/interactions`, { key, method: 'POST', body: { model: id, input }, timeout })
+    try {
+      reply = await call(`${API}/interactions`, { key, method: 'POST', body: { model: id, input }, timeout })
+    } catch (second) {
+      // Neither route worked. The first one is the real story; the second is only context.
+      throw new Error(`${firstError.message} (the newer /interactions route also refused: ${second.message})`)
+    }
   }
 
   const found = findInlineImage(reply)
