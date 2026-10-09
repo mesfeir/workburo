@@ -162,9 +162,12 @@ export interface Profile {
 export interface ImageGenConfig {
   /** shows the image mode toggle in the composer */
   enabled: boolean
-  provider: 'fal' | 'comfy'
+  provider: 'fal' | 'comfy' | 'gemini'
   /** fal.ai key — stored locally, sent only to fal.ai */
   falKey: string
+  /** Google Gemini key — one key for both halves: the Gemini chat provider and the picture models.
+   *  Stored locally like every other key; never sent anywhere but Google. */
+  geminiKey?: string
   /** fal endpoint id, e.g. fal-ai/flux/schnell */
   model: string
   /** fal endpoint used when a message carries a reference image to edit */
@@ -337,6 +340,8 @@ export interface Config {
   mcp?: McpConfig
   /** agent mode: Pi runs in the backend with hands, in a folder the user picks */
   agent: AgentConfig
+  /** The single Gemini key, shared by chat and pictures (see ImageGenConfig.geminiKey). */
+  geminiKey?: string
   profiles: Profile[]
   modelPrefs: Record<string, ModelPref>
 }

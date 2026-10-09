@@ -2026,6 +2026,22 @@ export default function SettingsModal({
                 </Field>
 
                 <Field
+                  label="Google Gemini API key"
+                  hint="One key for both: it runs the Google Gemini chat provider and the Gemini picture models (Nano Banana). Create one at aistudio.google.com/apikey. Stored locally in zen-chat-store.json — never committed, never logged."
+                >
+                  <div className="flex gap-2">
+                    <input
+                      className={inputCls}
+                      type={showFalKey ? 'text' : 'password'}
+                      placeholder="AIza…"
+                      value={imageGen.geminiKey || ''}
+                      spellCheck={false}
+                      onChange={(e) => setImageGen({ geminiKey: e.target.value })}
+                    />
+                  </div>
+                </Field>
+
+                <Field
                   label="fal.ai API key"
                   hint="Create one at fal.ai/dashboard/keys. Stored locally in zen-chat-store.json — never committed, never logged."
                 >

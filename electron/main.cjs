@@ -20,6 +20,9 @@ const falImages = require('./images.cjs')
 // A second way to draw: the workflows the user exported from their own ComfyUI. Same contract as
 // fal's path, so both doors into image making keep working unchanged.
 const comfyImages = require('./comfy.cjs')
+// A third way to draw, hosted: Google's Nano Banana models. Same contract again, and it is also the
+// half of Gemini the OpenAI-compatible chat path cannot cover -- image endpoints are not OpenAI-shaped.
+const geminiImages = require('./gemini.cjs')
 const localModel = require('./local.cjs')
 const modelSources = require('./model-sources.cjs')
 const appPaths = require('./paths.cjs')
@@ -284,7 +287,12 @@ function defaultStore() {
         enabled: false,
         servers: [],
       },
+      // The one Gemini key, used by both halves: this chat profile and the Gemini image models.
+      // Kept beside the profiles because the app's own key box is per-endpoint, and a person who has
+      // typed the key once should not have to type it twice.
+      geminiKey: '',
       profiles: [
+        { name: 'Google Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', affinity: false },
         { name: 'OpenCode Zen (Go)', baseUrl: 'https://opencode.ai/zen/go/v1', affinity: true },
         { name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', affinity: false },
         { name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', affinity: false },
@@ -935,7 +943,13 @@ async function runAgentTurn (req) {
   // is the same lesson as the tool-return shape — fix it where the value is produced as well as
   // where it is passed on.
   const localEndpoint = /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?(\/|$)/i.test(String(cfg.baseUrl || ''))
-  const relayKey = String(cfg.apiKey || '').trim() || (localEndpoint ? 'local-server-no-key-needed' : '')
+  // The Gemini key is a single key for both halves of the app, so a Gemini endpoint accepts it from
+  // either place: the app's own key box, or the Gemini field in Settings.
+  const geminiEndpoint = /generativelanguage\.googleapis\.com/i.test(String(cfg.baseUrl || ''))
+  const relayKey =
+    String(cfg.apiKey || '').trim() ||
+    (geminiEndpoint ? String(cfg.geminiKey || '').trim() : '') ||
+    (localEndpoint ? 'local-server-no-key-needed' : '')
 
   // The agent's picture tool runs in another process and cannot call main, so it reaches the app's
   // own server instead. The token opens that one route for the length of this turn and is dropped
@@ -3376,9 +3390,25 @@ ipcMain.handle('images:cost', async (_e, { pricing, model, width, height, count 
   }
 })
 
-ipcMain.handle('images:models', async (_e, { key, categories }) =>
-  falImages.listModels(String(key || ''), { categories: String(categories || '') }),
-)
+ipcMain.handle('images:models', async (_e, { key, categories }) => {
+  const fal = await falImages.listModels(String(key || ''), { categories: String(categories || '') })
+  // Gemini's picture models are offered beside fal's, in the form the funnel dispatches on.
+  let gemini = []
+  try {
+    const g = await geminiImages.listImageModels(geminiKeyFor(readStore().config))
+    gemini = (g.models || []).map((m) => ({
+      id: `gemini:${m.id}`,
+      name: `Gemini \u00b7 ${m.name}`,
+      provider: 'gemini',
+      categories: ['image-to-image', 'text-to-image'],
+    }))
+  } catch {
+    /* a provider that cannot list must not empty the picker */
+  }
+  const base = Array.isArray(fal) ? fal : (fal && fal.models) || []
+  const merged = [...base, ...gemini]
+  return Array.isArray(fal) ? merged : { ...(fal && typeof fal === 'object' ? fal : {}), models: merged }
+})
 
 /**
  * What each of these endpoints charges per image, for the pickers.
@@ -3505,6 +3535,11 @@ async function runImageJob({ key, model, prompt, count, size, imageUrl, imagesDi
     if (isComfyModel(model)) {
       return await runComfyJob({ model, prompt, reference, dir, onProgress })
     }
+    // Gemini's image models are neither fal-shaped nor a local workflow, but they are still "a way
+    // of making a picture" and they belong in the same funnel for the same reason.
+    if (geminiImages.isImageModel(model)) {
+      return await runGeminiJob({ key, model, prompt, reference, dir, onProgress })
+    }
     return await falImages.generate({
       key: String(key || ''),
       model: String(model || ''),
@@ -3526,6 +3561,64 @@ async function runImageJob({ key, model, prompt, count, size, imageUrl, imagesDi
 /** A model id naming one of the user's own ComfyUI workflows rather than a hosted endpoint. */
 function isComfyModel(model) {
   return String(model || '').startsWith('comfy:')
+}
+
+/** The one key, from whichever of the two places it was typed. */
+function geminiKeyFor(cfg) {
+  const c = cfg || {}
+  const explicit = String(c.geminiKey || (c.imageGen || {}).geminiKey || '').trim()
+  if (explicit) return explicit
+  // A Gemini chat endpoint means the app's own key box already holds the Gemini key.
+  return /generativelanguage\.googleapis\.com/i.test(String(c.baseUrl || '')) ? String(c.apiKey || '').trim() : ''
+}
+
+/** Gemini takes the reference as base64 bytes rather than a URL or a file. */
+function referenceForGemini(reference) {
+  const s = String(reference || '')
+  const m = /^data:([^;]+);base64,(.*)$/s.exec(s)
+  if (m) return { mimeType: m[1], data: m[2] }
+  // A path on disk is accepted too, so a caller that resolved the picture itself still works.
+  try {
+    if (s && fs.existsSync(s)) {
+      const ext = path.extname(s).slice(1).toLowerCase()
+      const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp' : 'image/png'
+      return { mimeType: mime, data: fs.readFileSync(s).toString('base64') }
+    }
+  } catch {
+    /* not a readable file */
+  }
+  return null
+}
+
+/** Draw or edit one picture with Gemini, and land it on disk like every other provider does. */
+async function runGeminiJob({ key, model, prompt, reference, dir, onProgress }) {
+  const cfg = readStore().config || {}
+  const useKey = String(key || '').trim() || geminiKeyFor(cfg)
+  if (!useKey) {
+    return { ok: false, error: 'No Gemini key. Add one in Settings under Google Gemini (one key runs both chat and pictures).' }
+  }
+  const ref = reference ? referenceForGemini(reference) : null
+  if (reference && !ref) {
+    return { ok: false, error: 'Gemini could not read that reference picture. Attach it again as a PNG or JPEG.' }
+  }
+  const phase = (stage, note) => {
+    try {
+      if (typeof onProgress === 'function') onProgress({ stage, note })
+    } catch {
+      /* a listener that throws must not fail the job */
+    }
+  }
+  phase('generating', reference ? 'Gemini is editing your picture' : 'Gemini is drawing')
+  const out = await geminiImages.generate({
+    key: useKey,
+    model: String(model || ''),
+    prompt: String(prompt || ''),
+    reference: ref,
+    imagesDir: dir || imagesDir(),
+  })
+  phase('done', '')
+  // Same reply shape as the other providers: a list of items, each carrying a real file on disk.
+  return { ok: true, images: [{ path: out.file, url: out.file, model: out.model, revisedPrompt: out.text || '' }] }
 }
 
 /** ComfyUI wants a file on disk; the app's reference is a data URL by the time it gets here. */
