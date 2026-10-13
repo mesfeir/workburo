@@ -1,0 +1,34 @@
+WorkBuro
+Copyright 2026 Mel Sfeir
+
+This product includes software developed as WorkBuro.
+
+    https://github.com/mesfeir/workburo
+    https://workburo.dev/
+
+Trademarks
+----------
+
+The name "WorkBuro", the WorkBuro wordmark and the WorkBuro icon are names and
+marks of the copyright holder.
+
+The Apache License, Version 2.0 does not grant permission to use the trade
+names, trademarks, service marks or product names of the copyright holder,
+except as required for reasonable and customary use in describing the origin of
+the work and reproducing the content of this NOTICE file.
+
+Concretely: the licence gives you the code, and it gives you the code freely.
+You may fork it, change it, and redistribute it, including commercially and
+including in a closed-source product. What the licence does not give you is the
+name. If you publish a fork, give it a name of its own, and do not use the
+WorkBuro name or icon in a way that suggests this project is the source of it,
+maintains it, or endorses it. That is the whole intent, and it is not meant to
+narrow anything the licence grants.
+
+Third-party components
+----------------------
+
+None are bundled. WorkBuro runs on Electron, which is packaged with the
+application under its own licence and its own notices, and the local model
+runtime is downloaded by the application at the user's request rather than
+redistributed inside it.

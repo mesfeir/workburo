@@ -8,8 +8,9 @@
 
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?logo=windows&logoColor=white)](#install)
 [![Platform](https://img.shields.io/badge/platform-macOS%2011%2B%20Apple%20silicon-000000?logo=apple&logoColor=white)](#install)
-[![Electron](https://img.shields.io/badge/Electron-35-47848F?logo=electron&logoColor=white)](#build-from-source)
+[![Electron](https://img.shields.io/badge/Electron-44-47848F?logo=electron&logoColor=white)](#build-from-source)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](#build-from-source)
+[![Licence](https://img.shields.io/badge/licence-Apache--2.0-blue)](LICENSE)
 [![Telemetry](https://img.shields.io/badge/telemetry-none-brightgreen)](#privacy)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-blueviolet)](#contributing)
 
@@ -167,4 +168,10 @@ Run `npm run build`, which type-checks, before opening a pull request. And never
 
 ## Licence
 
-**Not chosen yet.** No `LICENSE` file has been added, so all rights are reserved for now.
+**Apache-2.0.** Use it, change it, ship it, including inside a closed-source
+product. The licence carries an explicit patent grant and requires notices to be
+kept, which is the usual price of a permissive licence. See [`LICENSE`](LICENSE).
+
+**The name is not part of the licence.** Fork the code and give your fork its own
+name. [`NOTICE`](NOTICE) says exactly what is granted and what is not, and the
+short version is that you may take everything except the WorkBuro name and icon.
