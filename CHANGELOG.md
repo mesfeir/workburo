@@ -7,10 +7,10 @@ A version number is shared across platforms only once both have been built, so a
 version can appear here before it is downloadable. The **Released** line on each
 entry says whether there is anything to download, and for which platform.
 
-## 1.1.0 — not published yet
+## 1.1.0 — 13 October 2026
 
 **Electron 44.** The runtime moves from Electron 35 to 44: Chromium 134 to 152,
-Node 22 to 24. Sixteen Chromium majors of rendering, JavaScript and security
+Node 22 to 24. Eighteen Chromium majors of rendering, JavaScript and security
 fixes underneath the same app.
 
 **Your own ComfyUI workflows become image models.** A workflow you already have
@@ -34,7 +34,7 @@ write. Both are gone.
 **Two window faults fixed.** Maximising no longer shows stale frames, and coming
 back from the taskbar no longer freezes the window while it is tucked away.
 
-**Released:** no. `1.0.23` is still the newest download.
+**Released:** Windows and macOS. The first release since 1.0.19 to carry both.
 
 ## 1.0.23 — 7 October 2026
 
@@ -61,6 +61,7 @@ writes to, and a turn that called seventy-five tools draws one line.
 
 | Version | Date | Platform |
 |---|---|---|
+| 1.1.0 | 13 October 2026 | Windows, macOS |
 | 1.0.19 | 5 October 2026 | Windows, macOS |
 | 1.0.17 | 3 October 2026 | Windows, macOS |
 | 1.0.16 | 2 October 2026 | Windows, macOS |
