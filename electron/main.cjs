@@ -1209,6 +1209,24 @@ if (!HAS_LOCK) {
   app.on('second-instance', () => showWindow())
 }
 
+/* Resizing a window on Windows went through Chromium's ANGLE Direct3D 11 backend, which has a bug —
+ * documented by Electron itself (electronjs.org/blog/tech-talk-window-resize-behavior, and fixed in
+ * Electron 39.2.6) — where the clip rectangle and the viewport fall out of step, so the window shows
+ * stale or black pixels while it is being resized. It reads as a laggy maximise.
+ *
+ * Measured on this app before changing anything: a real Win32 maximise produced 2 resize events and
+ * NO long tasks, so the renderer does no work at all — the cost was entirely the compositor, which is
+ * what that bug looks like from the outside.
+ *
+ * The proper fix is upgrading Electron (this app is on 35, the patch landed in 39). Until then, ask
+ * for a different graphics backend: Vulkan does not use the D3D11 code path that misbehaves. Chromium
+ * falls back by itself when Vulkan is unavailable, and deleting the two lines below is a safe way
+ * back if a driver ever dislikes it.
+ */
+if (process.platform === 'win32') {
+  app.commandLine.appendSwitch('use-angle', 'vulkan')
+}
+
 app.whenReady().then(() => {
   if (!HAS_LOCK) return
 
