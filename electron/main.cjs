@@ -474,6 +474,9 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      // timers and animation frames are not throttled while the window is out of sight, so a window
+      // that has been minimised or hidden does not have to wake up before it can answer a click
+      backgroundThrottling: false,
     },
   })
 
@@ -1226,6 +1229,20 @@ if (!HAS_LOCK) {
 if (process.platform === 'win32') {
   app.commandLine.appendSwitch('use-angle', 'vulkan')
 }
+
+/* Coming back from the taskbar took about a second, and it is not the app's code doing it.
+ *
+ * Measured: a real minimise/restore through Win32 produced no long tasks, no renderer freeze and
+ * 7ms frames right through the restore — the page never stops being responsive. What lags is the
+ * window having to start painting again, which Chromium stops doing for a minimised or occluded
+ * window. These two switches keep its renderer and window alive while it is tucked away, so the
+ * restore has something to show immediately instead of a blank frame to fill in.
+ *
+ * The cost is real: while minimised the app keeps a little more CPU than it otherwise would. For a
+ * app whose whole point is appearing the instant you reach for it, that is the right way round.
+ */
+app.commandLine.appendSwitch('disable-renderer-backgrounding')
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
 
 app.whenReady().then(() => {
   if (!HAS_LOCK) return
