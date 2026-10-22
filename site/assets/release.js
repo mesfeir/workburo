@@ -9,8 +9,8 @@ var WORKBURO_RELEASE = {
 
   /* bytes, shown in decimal MB. Use mb only for a file not published yet. */
   files: {
-    installer: { name: 'WorkBuro-Setup-1.1.1.exe',     bytes: 131059445 },
-    portable:  { name: 'WorkBuro-1.1.1-portable.exe',  bytes: 130810320 },
+    installer: { name: 'WorkBuro-Setup-1.1.1.exe',     bytes: 131075968 },
+    portable:  { name: 'WorkBuro-1.1.1-portable.exe',  bytes: 130826766 },
     /* Both platforms are in this release, so no file needs a tag pin: `latest` resolves to a
      * release that carries every one of these. */
     dmg:       { name: 'WorkBuro-1.1.1.dmg',           bytes: 155496828 },
