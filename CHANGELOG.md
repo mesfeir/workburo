@@ -7,6 +7,17 @@ A version number is shared across platforms only once both have been built, so a
 version can appear here before it is downloadable. The **Released** line on each
 entry says whether there is anything to download, and for which platform.
 
+## 1.1.1 — 22 October 2026
+
+**The phone stopped showing a blank screen.** Server mode was serving the page and every asset
+correctly, but the window never painted. The interface asks the updater for its state as it
+mounts, and a page served over the network has no updater, so the request threw before anything
+had been drawn. All that was left was the page background: the grey screen. The web bridge now
+provides that surface, and the window skips it when it is absent, so one missing capability can
+no longer take the whole interface down with it.
+
+**Released:** Windows and macOS.
+
 ## 1.1.0 — 13 October 2026
 
 **Electron 44.** The runtime moves from Electron 35 to 44: Chromium 134 to 152,
