@@ -52,12 +52,15 @@ export default function UpdatePane({
 
   useEffect(() => {
     let alive = true
-    void window.zen.update.state().then((s) => {
+    /* Same as App: the updater is the host's, and a network page may not have one at all. */
+    const upd = window.zen.update
+    if (!upd) return () => {}
+    void upd.state().then((s) => {
       if (!alive) return
       setU(s)
       setAuto(s.autoCheck)
     })
-    const off = window.zen.update.onChanged((s) => {
+    const off = upd.onChanged((s) => {
       if (alive) setU(s)
     })
     return () => {

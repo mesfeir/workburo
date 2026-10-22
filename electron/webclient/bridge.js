@@ -34,6 +34,9 @@
   const LS_STORE = 'wb-server-store'
   const LS_SEEDED = 'wb-server-v1'
 
+  /* Said plainly wherever a desktop-only surface is asked for from a phone. */
+  const HOST_ONLY = 'That is set up on the computer running WorkBuro, not on this page.'
+
   const authHeaders = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${KEY}` })
 
   const chatHandlers = []
@@ -340,6 +343,33 @@
 
   const zen = {
     theme: { apply: async () => true },
+
+    /*
+     * There is no updater here: the app is installed on the computer this page talks to, so a phone has
+     * nothing to download or install. The surface still has to exist. The renderer asks for it by name
+     * the moment it mounts, and while it was missing the call threw, React tore the tree down, and the
+     * page sat on a blank background with nothing to explain it.
+     */
+    update: {
+      state: async () => ({
+        phase: 'uptodate',
+        current: '',
+        latest: '',
+        newer: false,
+        notes: '',
+        notesUrl: '',
+        asset: null,
+        error: '',
+        checkedBy: '',
+        checkedAt: 0,
+      }),
+      check: async () => ({ ok: false, error: HOST_ONLY }),
+      download: async () => ({ ok: false, error: HOST_ONLY }),
+      cancel: async () => ({ ok: false }),
+      install: async () => ({ ok: false, error: HOST_ONLY }),
+      openRelease: async () => false,
+      onChanged: () => () => {},
+    },
 
     store: {
       get: async () => {

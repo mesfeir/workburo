@@ -186,10 +186,18 @@ export default function App() {
   const [update, setUpdate] = useState<UpdateState | null>(null)
   useEffect(() => {
     let alive = true
-    void window.zen.update.state().then((s) => {
+    /*
+     * The updater belongs to the installed app, not to this window. A page served by server mode is a
+     * second front end on a phone: there is nothing on the phone to update, so the surface may be
+     * absent. Asking for it unguarded threw inside this effect, and an uncaught throw in a mount
+     * effect unmounts the tree -- which is exactly how the phone ended up on a blank screen.
+     */
+    const upd = window.zen.update
+    if (!upd) return () => {}
+    void upd.state().then((s) => {
       if (alive) setUpdate(s)
     })
-    const off = window.zen.update.onChanged((s) => {
+    const off = upd.onChanged((s) => {
       if (alive) setUpdate(s)
     })
     return () => {
