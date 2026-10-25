@@ -7,6 +7,27 @@ A version number is shared across platforms only once both have been built, so a
 version can appear here before it is downloadable. The **Released** line on each
 entry says whether there is anything to download, and for which platform.
 
+## 1.1.2 — 25 October 2026
+
+**The phone's Settings had no providers in it.** Server mode was sending the page a config with an
+empty `profiles` list, so Settings → API showed no provider buttons and no key fields at all — the
+list had nowhere to come from. The host was asked for its config, and the answer simply left the
+providers out.
+
+The providers now travel, with every key replaced by the marker `held-on-the-pc`; the real keys
+never leave the computer. Saving is wired up as well, because a pane that renders and cannot save
+is worse than one that is missing: the store handler accepts an explicit list of the fields the pane
+owns and refuses everything else — including `protocol`, which only the desktop should set. A save
+that carries the marker keeps the stored key rather than overwriting it with the word.
+
+Two layout faults were behind the second half of the complaint. The settings modal was a fixed
+740 px wide, which is wider than the 480 px desktop window and much wider than a phone, so the key
+field was off the side of the screen; it now fits whatever it is drawn on. And a provider row put a
+fixed 168 px name beside a flexible input, so in a narrow pane the input was squeezed to nothing —
+it wraps onto its own line instead.
+
+**Released:** Windows and macOS.
+
 ## 1.1.1 — 22 October 2026
 
 **The phone stopped showing a blank screen.** Server mode was serving the page and every asset
