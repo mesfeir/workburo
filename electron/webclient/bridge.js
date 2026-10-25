@@ -66,6 +66,17 @@
       body: body === undefined ? undefined : JSON.stringify(body),
       signal,
     })
+    /*
+     * A key the host no longer honours is worse than no key at all. The page keeps its last view in
+     * storage, so it would draw a half-dead copy of the app -- old conversations, empty lists, every
+     * action failing quietly -- and look like a broken build rather than an unpaired device. A 401
+     * means this device is not paired (any more), so drop the key and go and get a new one.
+     */
+    if (res.status === 401) {
+      localStorage.removeItem('wb-server-key')
+      location.replace('/pair')
+      throw new Error('This device is no longer paired with the computer running WorkBuro.')
+    }
     const text = await res.text()
     let out
     try {
@@ -85,6 +96,12 @@
       body: JSON.stringify(body),
       signal,
     })
+    /* same as api(): an unpaired device goes to the pairing page rather than failing mid-sentence */
+    if (res.status === 401) {
+      localStorage.removeItem('wb-server-key')
+      location.replace('/pair')
+      throw new Error('This device is no longer paired with the computer running WorkBuro.')
+    }
     if (!res.ok) {
       const text = await res.text()
       let msg = text

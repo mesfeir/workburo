@@ -7,6 +7,21 @@ A version number is shared across platforms only once both have been built, so a
 version can appear here before it is downloadable. The **Released** line on each
 entry says whether there is anything to download, and for which platform.
 
+## 1.1.3 — 25 October 2026
+
+**A device that is not paired now goes straight to the pairing page.** Opening the address on a phone
+that had never paired, or that held a key the computer no longer accepts (a rotated key, or one from
+a different install), drew the app anyway: the page keeps its last view in its own storage, so it
+rendered old conversations with empty lists and every action failing quietly. That looked like a
+stale or broken build, and it was the thing sending people looking for a bug in the providers list.
+
+A refused key now means exactly what it says -- this device is not paired -- so the key is dropped
+and the page goes to `/pair` to fetch a new one. A refused request on the chat stream does the same,
+rather than failing mid-sentence. Pairing on success already returned to the app; this is the other
+half of that journey.
+
+**Released:** Windows and macOS.
+
 ## 1.1.2 — 25 October 2026
 
 **The phone's Settings had no providers in it.** Server mode was sending the page a config with an
