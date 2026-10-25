@@ -44,10 +44,20 @@ async function remove (tags) {
   for (const r of all) console.log(`   ${r.tag_name}  ${(r.assets || []).length} assets  ${r.published_at || ''}`)
 }
 
+/*
+ * Non-interactive on purpose. Git Credential Manager, when it cannot find a stored credential,
+ * tries to open a prompt; against a pipe that prints "stdin is not a tty" and returns nothing, so a
+ * failed publish looked like a successful one with a single cryptic line. With prompting off it
+ * either finds the credential or fails here, and the message below says which.
+ */
 const token = execFileSync(
   'git',
-  ['credential', 'fill'],
-  { input: 'protocol=https\nhost=github.com\n\n', encoding: 'utf8' }
+  ['-c', 'credential.interactive=false', 'credential', 'fill'],
+  {
+    input: 'protocol=https\nhost=github.com\n\n',
+    encoding: 'utf8',
+    env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never' },
+  }
 )
   .split('\n')
   .find((l) => l.startsWith('password='))
