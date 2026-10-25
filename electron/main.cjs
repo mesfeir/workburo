@@ -3093,7 +3093,6 @@ async function startServer() {
 ipcMain.handle('server:status', () => ({
   ...serverLib.status(),
   settings: serverSettings(),
-  pair: serverLib.pairState(),
   agentEnabled: Boolean((readStore().config || {}).agent?.enabled),
 }))
 
@@ -3125,8 +3124,23 @@ ipcMain.handle('server:stop', async () => {
 /* A fresh key for the same door: every device already holding the old one is out of it. */
 ipcMain.handle('server:newkey', () => ({ settings: saveServerSettings({ key: serverLib.keygen() }) }))
 
-/* The six digits a phone types once, instead of the key itself. */
-ipcMain.handle('server:pair', () => serverLib.issuePairCode())
+/*
+ * A link that pairs a device on the spot. Built here, where the key already lives, and put straight
+ * on the clipboard -- the page is handed a boolean and the plain address, never the link, so the key
+ * stays in the main process where every other key lives.
+ */
+ipcMain.handle('server:link', () => {
+  const { clipboard } = require('electron')
+  const st = serverLib.status()
+  const key = (serverSettings() || {}).key || ''
+  if (!key) return { ok: false, error: 'The server has no key yet. Save the settings, then try again.' }
+  if (!st.running) return { ok: false, error: 'Start the server first.' }
+  const lan = (st.addresses || []).find((a) => !/127\.0\.0\.1|localhost/.test(a))
+  if (!lan) return { ok: false, error: 'This computer is not on a network a device could reach.' }
+  const base = lan.replace(/\/$/, '')
+  clipboard.writeText(`${base}/?key=${encodeURIComponent(key)}`)
+  return { ok: true, address: base }
+})
 
 /* ------------------------------------------------------------- IPC: store */
 

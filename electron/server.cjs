@@ -480,40 +480,15 @@ function storeIn(body) {
 /* ---------------------------------------------------------------- pairing */
 
 /*
- * Nobody should have to type a 43-character key on a phone, and a key in a URL ends up in history and
- * in bookmarks. So the settings pane shows a six-digit code that is good for five minutes; the phone
- * opens /pair, types it once, and receives the key into its own storage. The code is single use and
- * dies after a handful of wrong guesses, which is what makes six digits enough.
+ * There is no code to type any more. Pairing is a link: the settings pane asks the main process for
+ * one, the main process builds it from the key it already holds and puts it on the clipboard, and
+ * opening it stores the key on that device. The key is still required -- it is what stops anything
+ * else on the network spending this machine's keys -- but nobody reads it out or retypes it, and it
+ * never passes through the page.
  */
-const PAIR_TTL_MS = 5 * 60 * 1000
-const PAIR_TRIES = 5
-let pair = { code: '', at: 0, tries: 0 }
 
-function issuePairCode() {
-  pair = { code: String(crypto.randomInt(100000, 1000000)), at: Date.now(), tries: 0 }
-  return { code: pair.code, expiresAt: pair.at + PAIR_TTL_MS, seconds: PAIR_TTL_MS / 1000 }
-}
-
-function pairState() {
-  const left = Math.max(0, Math.round((pair.at + PAIR_TTL_MS - Date.now()) / 1000))
-  return { active: Boolean(pair.code) && left > 0, expiresIn: left, triesLeft: Math.max(0, PAIR_TRIES - pair.tries) }
-}
-
-/* Returns the key on a good code, null otherwise. Single use, and it burns out after PAIR_TRIES. */
-function redeemPairCode(given) {
-  const left = pair.at + PAIR_TTL_MS - Date.now()
-  if (!pair.code || left <= 0) return null
-  if (String(given || '').trim() !== pair.code) {
-    pair.tries += 1
-    if (pair.tries >= PAIR_TRIES) pair = { code: '', at: 0, tries: 0 }
-    return null
-  }
-  pair = { code: '', at: 0, tries: 0 }
-  return apiKey
-}
-
-/* The page a phone opens to pair: one field, one button, and it keeps the key in its own storage
- * rather than in the address bar. */
+/* What a device sees if it lands on /pair on its own. Pairing is not something you type here any
+ * more: the link from the settings pane is what pairs, so this page explains where it comes from. */
 const PAIR_PAGE = `<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8">
@@ -533,31 +508,11 @@ const PAIR_PAGE = `<!doctype html>
   .note{margin-top:16px;font-size:13px;color:#a6a6a6;min-height:20px}
 </style></head>
 <body><main>
-  <h1>Pair this phone</h1>
-  <p>Type the six digits shown in WorkBuro, under Settings, Server.</p>
-  <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000">
-  <button id="go">Pair</button>
-  <div class="note" id="note"></div>
+  <h1>Pair this device</h1>
+  <p>On the computer running WorkBuro, open <strong>Settings</strong>, then <strong>Server</strong>, and press
+  <strong>Copy a pairing link</strong>. Open that link here and you are in.</p>
+  <div class="note">The link carries the key, so it pairs on the spot. There is no code to type.</div>
 </main>
-<script>
-  var note = document.getElementById('note'), go = document.getElementById('go'), field = document.getElementById('code');
-  field.focus();
-  go.onclick = async function () {
-    go.disabled = true; note.textContent = 'Checking...';
-    try {
-      var r = await fetch('/api/pair', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: field.value.trim() }) });
-      var j = await r.json();
-      if (!r.ok || !j.key) throw new Error(j.error || 'That code was not accepted.');
-      localStorage.setItem('wb-server-key', j.key);
-      note.textContent = 'Paired. Opening WorkBuro...';
-      location.replace('/');
-    } catch (err) {
-      note.textContent = err.message;
-      go.disabled = false;
-    }
-  };
-</script>
 </body></html>`
 
 /* ---------------------------------------------------------------- attachments and titles */
@@ -985,19 +940,6 @@ function staticFile(req, res, url) {
 const ROUTES = {
   '/api/config': { GET: (_req, res) => json(res, 200, publicConfig()) },
   '/api/health': { GET: (_req, res) => json(res, 200, publicHealth()) },
-  '/api/pair': {
-    POST: (req, res) => {
-      /* bodyText hands back the raw body -- the parsing belongs here, next to the field being read */
-      let code = ''
-      try { code = (JSON.parse(bodyText(req) || '{}') || {}).code } catch { code = '' }
-      const key = redeemPairCode(code)
-      if (!key) {
-        logRequest(req, 401, Date.now(), 'bad pairing code')
-        return json(res, 401, { ok: false, error: 'That code was not accepted. Check the six digits in the app.' })
-      }
-      json(res, 200, { ok: true, key })
-    }
-  },
   '/api/log': { GET: (_req, res) => json(res, 200, { entries: requestLog.slice(-120), refusals: failedAttempts }) },
   '/api/store': {
     GET: (_req, res) => json(res, 200, storeOut()),
@@ -1050,11 +992,11 @@ async function handle(req, res, internalCall) {
 
   /*
    * Everything under /api is the user's own machine and their own keys, so it is all behind the key.
-   * Two exceptions, both deliberate: health, which the settings pane uses to check its own server
-   * from the outside, and pair, whose whole job is to hand the key to a device that does not have
-   * one yet -- the single-use code in the request body is the credential there.
+   * One exception, deliberate: health, which the settings pane uses to check its own server from the
+   * outside. Pairing needs no exception any more -- a device pairs by opening a link that already
+   * carries the key, so there is nothing unauthenticated left to call.
    */
-  if (p !== '/api/health' && p !== '/api/pair' && !authorised(req, url, p)) {
+  if (p !== '/api/health' && !authorised(req, url, p)) {
     logRequest(req, 401, Date.now() - started, 'wrong or missing key')
     return json(res, 401, { ok: false, error: 'This server needs the API key. Add it in the app under Settings, Server.' })
   }
@@ -1241,8 +1183,6 @@ module.exports = {
   stop,
   status,
   keygen,
-  issuePairCode,
-  pairState,
   // the agent's picture tool: an endpoint on this machine alone, and a token for one route, one turn
   startInternal,
   stopInternal,

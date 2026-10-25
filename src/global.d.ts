@@ -101,7 +101,7 @@ export interface ZenApi {
     stop: () => Promise<{ ok: boolean; status: ServerStatus }>
     settings: (patch: Partial<ServerSettings>) => Promise<{ settings: ServerSettings; restartNeeded: boolean }>
     newKey: () => Promise<{ settings: ServerSettings }>
-    pair: () => Promise<{ code: string; expiresAt: number; seconds: number }>
+    link: () => Promise<{ ok: boolean; address?: string; error?: string }>
   }
   // MCP servers: status and a test. The page never touches a child process itself.
   mcp?: {

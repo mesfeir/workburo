@@ -33,7 +33,6 @@ export default function ServerPane() {
   const [error, setError] = useState('')
   const [note, setNote] = useState('')
   const [copied, setCopied] = useState('')
-  const [pair, setPair] = useState<{ code: string; expiresAt: number } | null>(null)
   const [, setTick] = useState(0)
 
   const refresh = useCallback(async () => {
@@ -81,7 +80,6 @@ export default function ServerPane() {
     setError('')
     try {
       await window.zen.server.stop()
-      setPair(null)
       setNote('Stopped. Nothing can reach this app now.')
       await refresh()
     } finally {
@@ -100,12 +98,15 @@ export default function ServerPane() {
     }
   }
 
-  const issuePair = async () => {
-    setBusy('pair')
+  const copyLink = async () => {
+    setBusy('link')
     setError('')
     try {
-      const p = await window.zen.server.pair()
-      setPair({ code: p.code, expiresAt: p.expiresAt })
+      const r = await window.zen.server.link()
+      if (!r.ok) throw new Error(r.error || 'Could not make a link.')
+      setNote(`A link that pairs ${r.address} is on the clipboard.`)
+      setCopied('link')
+      setTimeout(() => setCopied(''), 1600)
     } catch (err) {
       setError(String((err as Error).message || err))
     } finally {
@@ -121,7 +122,6 @@ export default function ServerPane() {
     setBusy('key')
     try {
       await window.zen.server.newKey()
-      setPair(null)
       setNote('New key. Devices have to pair again; nothing else changed.')
       await refresh()
     } finally {
@@ -139,10 +139,8 @@ export default function ServerPane() {
     }
   }
 
-  const pairSecondsLeft = pair ? Math.round((pair.expiresAt - Date.now()) / 1000) : 0
-  const pairLive = Boolean(pair) && pairSecondsLeft > 0
   const lanAddress = (status?.addresses || []).find((a) => !/127\.0\.0\.1|localhost/.test(a)) || ''
-  const pairUrl = lanAddress ? `${lanAddress.replace(/\/$/, '')}/pair` : '(this computer only)'
+  const pairUrl = lanAddress ? lanAddress.replace(/\/$/, '') : '(this computer only)'
 
   return (
     <div className="space-y-5" data-server-pane>
@@ -216,35 +214,21 @@ export default function ServerPane() {
           {/* ------------------------------------------------------------ pairing */}
           <div className="space-y-2.5 rounded-xl border border-[var(--rule)] bg-[var(--app)] p-3.5" data-server-pair>
             <span className="block text-[11.5px] uppercase tracking-wide text-faint">Pair a device</span>
-            {pairLive && pair ? (
-              <>
-                <div className="flex items-center gap-3">
-                  <span className="font-mono text-[30px] tracking-[0.22em] text-[var(--text-mid)]" data-pair-code>
-                    {pair.code}
-                  </span>
-                  <span className="text-[12px] text-faint">{clock(pairSecondsLeft)} left</span>
-                </div>
-                <span className="block text-[12px] leading-relaxed text-faint">
-                  On the device, open <code className="text-[var(--text-mid)]">{pairUrl}</code> and type those six
-                  digits. It gets the key and remembers it, so this is once per device.
-                </span>
-              </>
-            ) : (
-              <>
-                <button
-                  className="rounded-lg bg-[var(--accent-bg)] px-3 py-1.5 text-[12.5px] font-medium text-[var(--text-solid)]"
-                  disabled={busy !== ''}
-                  onClick={() => void issuePair()}
-                  data-server-pair-button
-                >
-                  {busy === 'pair' ? 'Making a code…' : 'Show a pairing code'}
-                </button>
-                <span className="block text-[12px] leading-relaxed text-faint">
-                  Six digits, good for five minutes, once. Beats typing a long key on a phone, and keeps the key out
-                  of the address bar where it would end up in history and bookmarks.
-                </span>
-              </>
-            )}
+            <button
+              className="rounded-lg bg-[var(--accent-bg)] px-3 py-1.5 text-[12.5px] font-medium text-[var(--text-solid)]"
+              disabled={busy !== '' || !status?.running}
+              onClick={() => void copyLink()}
+              data-server-pair-button
+            >
+              {busy === 'link' ? 'Copying…' : copied === 'link' ? 'On the clipboard' : 'Copy a pairing link'}
+            </button>
+            <span className="block text-[12px] leading-relaxed text-faint">
+              The link goes on your clipboard. Open it on the phone and you are in -- no code, nothing to read out and
+              retype. It carries the key, so send it the way you would send a password.
+            </span>
+            <span className="block text-[12px] text-faint">
+              Address: <code className="text-[var(--text-mid)]">{pairUrl}</code>
+            </span>
           </div>
 
           {/* ------------------------------------------------------------- shape */}

@@ -7,6 +7,13 @@ A version number is shared across platforms only once both have been built, so a
 version can appear here before it is downloadable. The **Released** line on each
 entry says whether there is anything to download, and for which platform.
 
+## 1.1.5 — 25 October 2026
+
+**No more pairing codes.** Press **Copy a pairing link** in Settings, Server and open that link on the
+phone: it pairs on the spot. The link carries the key, so it goes on the clipboard and never on screen,
+and the page takes the key back out of the address bar as soon as it has stored it. `/pair` explains
+where the link comes from instead of asking for six digits.
+
 ## 1.1.4 — 25 October 2026
 
 **Pressing "Picture" on a phone wiped the screen.** The model picker's Picture tab asks the app for

@@ -21,7 +21,16 @@
    * inconvenient.
    */
   const params = new URLSearchParams(location.search)
-  if (params.get('key')) localStorage.setItem('wb-server-key', params.get('key'))
+  if (params.get('key')) {
+    localStorage.setItem('wb-server-key', params.get('key'))
+    /*
+     * The link is how a device gets in now, so the key must not survive in the address bar, in history
+     * or in a bookmark. It is read once, put in storage, and taken back out of the URL immediately.
+     */
+    params.delete('key')
+    const rest = params.toString()
+    history.replaceState(null, '', location.pathname + (rest ? '?' + rest : '') + location.hash)
+  }
   const KEY = localStorage.getItem('wb-server-key') || ''
 
   /* Without a key there is nothing this page is allowed to do, so send the device to fetch one. */

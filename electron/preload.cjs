@@ -82,7 +82,7 @@ contextBridge.exposeInMainWorld('zen', {
     stop: () => ipcRenderer.invoke('server:stop'),
     settings: (patch) => ipcRenderer.invoke('server:settings', patch),
     newKey: () => ipcRenderer.invoke('server:newkey'),
-    pair: () => ipcRenderer.invoke('server:pair'),
+    link: () => ipcRenderer.invoke('server:link'),
   },
   // MCP servers: the page asks for a status and a test, and never touches a child process itself
   mcp: {

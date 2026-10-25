@@ -51,7 +51,7 @@ const DESKTOP_ONLY = {
   'server:stop': 'stopping the listener is the host owner\'s decision',
   'server:settings': 'port and reach are decided on the host',
   'server:newkey': 'replacing the key is the host owner\'s decision',
-  'server:pair': 'issuing pairing codes happens in the app, in front of the person',
+  'server:link': 'the pairing link is built where the key lives, and copied there',
   'chat:abort': 'not yet routed -- streams are ended by the phone closing them',
   'pi:install': 'installing the agent needs a native binary and a network of its own',
   'pi:uninstall': 'the agent belongs to the host machine',
@@ -293,14 +293,10 @@ async function main() {
 
   const pairPage = await request({ ...base, path: '/pair', method: 'GET' })
   check('the pairing page is served', pairPage.status === 200 && /text\/html/.test(pairPage.headers['content-type'] || ''), `${pairPage.status} ${pairPage.headers['content-type']}`)
-  check('the pairing page asks for the six digits', pairPage.body.includes('Pair this phone') && pairPage.body.includes('maxlength="6"'))
+  check('the pairing page no longer asks for any code', !pairPage.body.includes('maxlength="6"') && !/type those six|six digits/i.test(pairPage.body))
+  check('it says where the pairing link comes from', /Copy a pairing link/.test(pairPage.body) && /Settings/.test(pairPage.body))
   check('the pairing page carries no key', !pairPage.body.includes(key))
   check('the pairing page is never cached', /no-store/.test(pairPage.headers['cache-control'] || ''), String(pairPage.headers['cache-control']))
-
-  const issued = server.issuePairCode()
-  check('a pairing code is six digits', /^\d{6}$/.test(issued.code), issued.code)
-  check('a code expires in five minutes', issued.seconds === 300, String(issued.seconds))
-  check('a code is reported as live', server.pairState().active === true)
 
   const post = (path, payload) =>
     request(
@@ -308,27 +304,18 @@ async function main() {
       JSON.stringify(payload),
     )
 
-  const wrongCode = await post('/api/pair', { code: '000000' === issued.code ? '111111' : '000000' })
-  check('a wrong pairing code is refused', wrongCode.status === 401, String(wrongCode.status))
-  check('and the refusal does not hand out the key', !wrongCode.body.includes(key))
+  const noPairRoute = await request(
+    { ...base, path: '/api/pair', method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` } },
+    JSON.stringify({ code: '123456' }),
+  )
+  check('there is no code route to guess at any more', noPairRoute.status === 404, String(noPairRoute.status))
 
-  const goodCode = await post('/api/pair', { code: issued.code })
-  check('the right pairing code is accepted', goodCode.status === 200, String(goodCode.status))
-  let pairedKey = ''
-  try { pairedKey = JSON.parse(goodCode.body).key || '' } catch {}
+  /* The link carries the key, so what pairing hands over is a credential that has to work. */
+  const fromLink = await request({ ...base, path: '/api/config', method: 'GET', headers: { authorization: `Bearer ${key}` } })
+  check('a link carrying the key opens the door', fromLink.status === 200, String(fromLink.status))
 
-  /* The point of pairing is a usable credential, so use it rather than compare it. */
-  const withPairedKey = await request({ ...base, path: '/api/config', method: 'GET', headers: { authorization: `Bearer ${pairedKey}` } })
-  check('what pairing hands back really opens the door', withPairedKey.status === 200, String(withPairedKey.status))
-
-  const reused = await post('/api/pair', { code: issued.code })
-  check('a pairing code works once and only once', reused.status === 401, String(reused.status))
-
-  const burned = server.issuePairCode()
-  for (let i = 0; i < 5; i++) await post('/api/pair', { code: '000000' === burned.code ? '111111' : '000000' })
-  const afterGuessing = await post('/api/pair', { code: burned.code })
-  check('guessing a code five times kills it', afterGuessing.status === 401, String(afterGuessing.status))
-  check('and it is no longer reported as live', server.pairState().active === false)
+  check('the page takes the key out of the address once it has it', /params\.delete\('key'\)/.test(bridge.body) && /history\.replaceState/.test(bridge.body))
+  check('the page still needs a key to reach the api', (await request({ ...base, path: '/api/config', method: 'GET' })).status === 401)
 
   /* ------------------------------------------------------------- the bridge */
 
