@@ -3135,7 +3135,15 @@ ipcMain.handle('server:link', () => {
   const key = (serverSettings() || {}).key || ''
   if (!key) return { ok: false, error: 'The server has no key yet. Save the settings, then try again.' }
   if (!st.running) return { ok: false, error: 'Start the server first.' }
-  const lan = (st.addresses || []).find((a) => !/127\.0\.0\.1|localhost/.test(a))
+  /*
+   * A phone on the same wifi wants the home address, not the tailnet one: picking the first
+   * non-loopback address hands out 100.x, which only works for a device already on Tailscale.
+   * Prefer a private LAN address, and treat Tailscale as the fallback rather than the default.
+   */
+  const all = (st.addresses || []).filter((a) => !/127\.0\.0\.1|localhost/.test(a))
+  const isLan = (a) => /\/\/(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(a)
+  const isTailnet = (a) => /\/\/100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(a)
+  const lan = all.find(isLan) || all.find((a) => !isTailnet(a)) || all[0]
   if (!lan) return { ok: false, error: 'This computer is not on a network a device could reach.' }
   const base = lan.replace(/\/$/, '')
   clipboard.writeText(`${base}/?key=${encodeURIComponent(key)}`)
