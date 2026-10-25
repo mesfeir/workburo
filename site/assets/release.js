@@ -5,16 +5,16 @@
  */
 
 var WORKBURO_RELEASE = {
-  version: '1.1.4',
+  version: '1.1.5',
 
   /* bytes, shown in decimal MB. Use mb only for a file not published yet. */
   files: {
-    installer: { name: 'WorkBuro-Setup-1.1.4.exe',     bytes: 131076928 },
-    portable:  { name: 'WorkBuro-1.1.4-portable.exe',  bytes: 130827808 },
+    installer: { name: 'WorkBuro-Setup-1.1.5.exe',     bytes: 131076771 },
+    portable:  { name: 'WorkBuro-1.1.5-portable.exe',  bytes: 130827637 },
     /* Both platforms are in this release, so no file needs a tag pin: `latest` resolves to a
      * release that carries every one of these. */
-    dmg:       { name: 'WorkBuro-1.1.4.dmg',           bytes: 155487010 },
-    maczip:    { name: 'WorkBuro-1.1.4-arm64-mac.zip', bytes: 155761330 }
+    dmg:       { name: 'WorkBuro-1.1.5.dmg',           bytes: 155486620 },
+    maczip:    { name: 'WorkBuro-1.1.5-arm64-mac.zip', bytes: 155760176 }
   },
 
   /* What the app runs on, written into the structured data. Kept here so the page cannot drift
