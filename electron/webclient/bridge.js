@@ -635,6 +635,19 @@
       onInstallProgress: () => () => {},
     },
 
+    /*
+     * ComfyUI runs on the computer, and choosing a workflow means a file dialog on that computer.
+     * The object still has to exist: the image picker asks for its status and workflows as it mounts,
+     * and an absent object throws at that call -- which unmounts the whole app and leaves a blank
+     * screen, where an empty list would have been the truth. So it answers instead of being missing.
+     */
+    comfy: {
+      status: async () => ({ ok: false, error: HOST_ONLY }),
+      workflows: async () => ({ workflows: [] }),
+      pick: async () => ({ canceled: true, ok: false, error: HOST_ONLY }),
+      check: async () => ({ ok: false, error: HOST_ONLY }),
+    },
+
     images: {
       models: async () => {
         if (real.imageModels) return real.imageModels

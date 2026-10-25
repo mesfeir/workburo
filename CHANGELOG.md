@@ -7,6 +7,23 @@ A version number is shared across platforms only once both have been built, so a
 version can appear here before it is downloadable. The **Released** line on each
 entry says whether there is anything to download, and for which platform.
 
+## 1.1.4 — 25 October 2026
+
+**Pressing "Picture" on a phone wiped the screen.** The model picker's Picture tab asks the app for
+the state of ComfyUI as it mounts, and the phone's bridge had no ComfyUI surface at all -- so the
+call threw while the page was rendering. An exception there does not cost you one list; React tears
+down the whole tree, which is why the screen went blank rather than showing an empty tab.
+
+Two changes, because either alone would have hidden the other fault. The bridge now answers for
+ComfyUI the way it answers for every other surface that lives on the computer: honestly, and with
+a refusal rather than silence. And the picker no longer assumes the surface is there -- a missing or
+incomplete one now means "nothing to show", never "the page is gone".
+
+Found by driving the real page at phone width against the real server and watching the console,
+which is also where the exception gave up the exact line.
+
+**Released:** Windows and macOS.
+
 ## 1.1.3 — 25 October 2026
 
 **A device that is not paired now goes straight to the pairing page.** Opening the address on a phone

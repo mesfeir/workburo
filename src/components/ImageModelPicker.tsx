@@ -67,7 +67,17 @@ export default function ImageModelPicker({
     // nothing clicked, so the gate is "on screen", not "opened by its own button".
     if (!open && !inline) return
     let alive = true
-    Promise.all([window.zen.comfy.status(), window.zen.comfy.workflows()])
+    /*
+     * Asked defensively on purpose. This runs from an effect, so an exception thrown here unmounts
+     * the whole app: pressing Picture left a blank screen rather than an empty list. A missing or
+     * incomplete surface now means "nothing to show", never "the page is gone".
+     */
+    const comfyApi = window.zen?.comfy
+    if (!comfyApi || typeof comfyApi.status !== 'function') {
+      setComfy({ ok: false, workflows: [] })
+      return
+    }
+    Promise.all([comfyApi.status(), comfyApi.workflows()])
       .then(([s, w]) => {
         if (alive) setComfy({ ok: Boolean(s?.ok), port: s?.port, stats: s?.stats, workflows: w?.workflows || [] })
       })

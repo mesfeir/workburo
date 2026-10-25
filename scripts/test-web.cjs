@@ -336,6 +336,18 @@ async function main() {
    * honest without repeating the literal four times. */
   const PUSH = "{ conversations: store.conversations, config: store.config }"
 
+  /*
+   * The image picker asks ComfyUI for its status and workflows as it mounts. ComfyUI runs on the
+   * host, so the honest answer is "not from here" -- but the object has to exist: when it was absent
+   * the call threw inside an effect, which unmounted the app and left a blank screen where an empty
+   * list belonged. Every surface the page can reach must therefore answer, even if only to refuse.
+   */
+  const comfyBlock = bridge.body.slice(bridge.body.indexOf('comfy: {'))
+  check(
+    'the page is given a ComfyUI surface rather than a missing one',
+    bridge.body.includes('comfy: {') && ['status', 'workflows', 'pick', 'check'].every((k) => comfyBlock.slice(0, 700).includes(k + ':')),
+  )
+
 
   check('the bridge no longer knows the old per-link token', !bridge.body.includes('x-preview-token') && !bridge.body.includes('wb-preview'))
   check('the bridge sends the key as a bearer header', bridge.body.includes("Authorization: `Bearer ${KEY}`"))
