@@ -185,7 +185,8 @@
         workspace: config.agent?.workspace || '',
         enabled: Boolean(config.agent?.enabled),
       },
-      profiles: [],
+      /* The host's providers, already stripped of their keys by the server. */
+      profiles: config.profiles || [],
       modelPrefs: config.modelPrefs || {},
     }
   }
@@ -292,7 +293,7 @@
     }
     const sending = signatureOf(store)
     try {
-      await api('/api/store', { conversations: store.conversations })
+      await api('/api/store', { conversations: store.conversations, config: store.config })
       pushedSignature = sending
     } catch (err) {
       console.warn('could not save to the app', err.message)
@@ -314,8 +315,11 @@
     try {
       real.config = await api('/api/config')
       real.settingsLoaded = true
-      /* The host's settings, adapted for drawing this page. They are not saved back: the host's copy
-       * is the one that counts, and /api/store would not accept them anyway. */
+      /*
+       * The host's settings, adapted for drawing this page. Configuration edited here *is* saved back
+       * now -- /api/store accepts an explicit list of fields -- but only what the pane actually owns:
+       * the keys travel as markers and are never written over the host's own.
+       */
       store.config = seedConfig(real.config)
     } catch (err) {
       real.error = err.message
@@ -398,7 +402,7 @@
         if (storeLoaded) {
           const sending = signatureOf(store)
           try {
-            await api('/api/store', { conversations: store.conversations })
+            await api('/api/store', { conversations: store.conversations, config: store.config })
             pushedSignature = sending
           } catch {}
         }

@@ -864,7 +864,7 @@ export default function SettingsModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--scrim)] p-6" onMouseDown={onClose}>
       <div
-        className="flex h-[660px] max-h-[86vh] w-[740px] flex-col overflow-hidden rounded-2xl border border-[var(--rule)] bg-[var(--app)] shadow-2xl"
+        className="flex h-[660px] max-h-[86vh] w-[740px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-2xl border border-[var(--rule)] bg-[var(--app)] shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[var(--rule)] px-5 py-3.5">
@@ -1191,7 +1191,7 @@ export default function SettingsModal({
                       const active = config.baseUrl === p.baseUrl
                       const shown = reveal[p.baseUrl]
                       return (
-                        <div key={`${p.name}-${i}`} className="flex items-center gap-2">
+                        <div key={`${p.name}-${i}`} className="flex flex-wrap items-center gap-2">
                           <button
                             onClick={() =>
                               // Choosing a provider chooses its key as well, because two paid providers
@@ -1212,7 +1212,7 @@ export default function SettingsModal({
                             <span className="truncate">{p.name}</span>
                           </button>
 
-                          <div className="relative min-w-0 flex-1">
+                          <div className="relative min-w-0 flex-1 basis-[180px]">
                             <KeyRound
                               size={13}
                               className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint"

@@ -115,10 +115,24 @@ function config() {
 }
 
 /* What the page is allowed to know: settings, never secrets. */
+/*
+ * Stands in for a key that lives on this computer. The phone is told a key exists so the pane can show
+ * it, and the marker is recognised again on the way back -- so a save from a phone that only changed a
+ * model name cannot overwrite the real key with the placeholder.
+ */
+const KEY_HELD = 'held-on-the-pc'
+
 function publicConfig() {
   const c = config()
   return {
     baseUrl: c.baseUrl,
+    /*
+     * The saved providers, so the phone's API pane is the same pane, not an empty one. Every key is
+     * replaced: the list is configuration, the keys are credentials, and only the second may not
+     * cross the wire.
+     */
+    profiles: (c.profiles || []).map((p) => ({ ...p, apiKey: p.apiKey ? KEY_HELD : '' })),
+    apiKeySet: Boolean(c.apiKey),
     model: c.model,
     systemPrompt: c.systemPrompt || '',
     temperature: c.temperature,
@@ -423,10 +437,38 @@ function storeOut() {
 function storeIn(body) {
   const incoming = JSON.parse(body || '{}')
   const current = readStore()
-  const before = JSON.stringify(current.conversations || [])
+  const before = JSON.stringify({ c: current.conversations || [], cfg: current.config || {} })
   if (Array.isArray(incoming.conversations)) current.conversations = incoming.conversations
   if (typeof incoming.activeId === 'string' || incoming.activeId === null) current.activeId = incoming.activeId
-  const after = JSON.stringify(current.conversations || [])
+
+  /*
+   * Configuration used to be read-only from a device: only the conversation list was accepted, so the
+   * API pane sent changes that quietly went nowhere. It is writable now, but by an explicit list of
+   * fields, and a key that is the marker is never written back over the real one.
+   */
+  if (incoming.config && typeof incoming.config === 'object') {
+    const patchCfg = incoming.config
+    const cfg = { ...(current.config || {}) }
+    /*
+     * An explicit list, not a merge. The bridge seeds fields the host owns -- `protocol` among them --
+     * with its own defaults, so a blind merge would let a phone quietly reset the desktop's settings.
+     */
+    for (const k of ['baseUrl', 'model', 'systemPrompt', 'temperature', 'maxTokens', 'thinking']) {
+      if (patchCfg[k] !== undefined) cfg[k] = patchCfg[k]
+    }
+    if (typeof patchCfg.apiKey === 'string' && patchCfg.apiKey !== KEY_HELD) cfg.apiKey = patchCfg.apiKey
+    if (Array.isArray(patchCfg.profiles)) {
+      const prev = current.config?.profiles || []
+      cfg.profiles = patchCfg.profiles.map((p, i) => {
+        const prior = prev[i] || {}
+        const keepsKey = typeof p.apiKey === 'string' && p.apiKey !== KEY_HELD
+        return { ...p, apiKey: keepsKey ? p.apiKey : prior.apiKey || '' }
+      })
+    }
+    current.config = cfg
+  }
+
+  const after = JSON.stringify({ c: current.conversations || [], cfg: current.config || {} })
   if (before !== after) writeStoreAtomic(current)
   /* the desktop window is showing this list too, so it is told to re-read rather than guess */
   if (before !== after && typeof where.onStoreChanged === 'function') {

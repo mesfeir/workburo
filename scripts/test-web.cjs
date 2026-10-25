@@ -241,7 +241,19 @@ async function main() {
   check('a request with the key is served', rightKey.status === 200, String(rightKey.status))
   let cfg = {}
   try { cfg = JSON.parse(rightKey.body) } catch {}
-  check('the settings it returns carry no provider key', !JSON.stringify(cfg).includes('apiKey') && cfg.falKey === undefined)
+  /*
+   * The pane needs the provider *list* to draw a picker, so profiles travel now -- but never a key.
+   * Every key field must be empty or the marker; nothing that looks like a credential may appear.
+   */
+  const keyFields = [cfg.apiKey, ...(cfg.profiles || []).map((p) => p.apiKey)].filter((v) => v !== undefined)
+  check(
+    'the settings it returns carry no provider key',
+    keyFields.every((v) => v === '' || v === 'held-on-the-pc') &&
+      !JSON.stringify(cfg).includes('sk-') &&
+      cfg.falKey === undefined,
+    JSON.stringify(keyFields.filter((v) => v !== '' && v !== 'held-on-the-pc'))
+  )
+  check('but it does carry the providers themselves', Array.isArray(cfg.profiles) && cfg.profiles.length > 0)
   check('it reports whether images are possible without naming the key', typeof cfg.hasFalKey === 'boolean')
 
   const page = await request({ ...base, path: '/', method: 'GET' })
@@ -320,17 +332,22 @@ async function main() {
 
   /* ------------------------------------------------------------- the bridge */
 
+  /* The push now carries the config too, so the pane can save; one constant keeps the assertions above
+   * honest without repeating the literal four times. */
+  const PUSH = "{ conversations: store.conversations, config: store.config }"
+
+
   check('the bridge no longer knows the old per-link token', !bridge.body.includes('x-preview-token') && !bridge.body.includes('wb-preview'))
   check('the bridge sends the key as a bearer header', bridge.body.includes("Authorization: `Bearer ${KEY}`"))
   check('a device with no key is sent to pair', /if \(!KEY\)[\s\S]{0,80}location\.replace\('\/pair'\)/.test(bridge.body))
-  check('the bridge reads the app\'s conversations through the API', bridge.body.includes("api('/api/store')") && bridge.body.includes("api('/api/store', { conversations: store.conversations })"))
+  check('the bridge reads the app\'s conversations through the API', bridge.body.includes("api('/api/store')") && bridge.body.includes(PUSH))
 
   /*
    * The one mistake in this area that would lose something: arriving with an empty list and saving it
    * over every conversation on the host. The gate has to be there, and it has to be before the push.
    */
   const gate = bridge.body.indexOf('if (!storeLoaded) return')
-  const push = bridge.body.indexOf("api('/api/store', { conversations: store.conversations })")
+  const push = bridge.body.indexOf(PUSH)
   check('the bridge cannot push before it has read', gate > -1 && gate < push, `gate at ${gate}, push at ${push}`)
 
   /*
