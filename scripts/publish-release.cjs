@@ -103,7 +103,10 @@ async function main () {
       name: `WorkBuro ${VERSION}`,
       target_commitish: 'main',
       draft: false,
-      prerelease: false,
+      /* A build without every platform's files goes out as a pre-release, so `latest` keeps
+       * pointing at a release that carries every download the site links to. Promote it once the
+       * other platform is built. */
+      prerelease: process.argv.includes('--prerelease'),
       body: notes
     })
   })

@@ -55,3 +55,6 @@ desktop.ini
 # so it has never been served. It still holds a Cloudflare zone id and an account id, neither of which
 # belongs in a public repository, and one careless `git add -A` would put them here.
 /site/deploy.sh
+
+# local build output
+release2/
