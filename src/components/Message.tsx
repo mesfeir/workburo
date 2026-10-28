@@ -76,6 +76,9 @@ function Reasoning({ text, streaming, ms }: { text: string; streaming?: boolean;
   )
 }
 
+/* Pictures already read this session, so scrolling back up does not read the file again. */
+const pictureCache = new Map<string, string>()
+
 function ImageGrid({
   images,
   large,
@@ -88,29 +91,63 @@ function ImageGrid({
   onUseImage?: (im: Attachment) => void
 }) {
   const [zoom, setZoom] = useState<Attachment | null>(null)
+  const [loaded, setLoaded] = useState<Record<string, string>>({})
+
+  /*
+   * Pictures live on disk. Reading them all when the store was loaded cost about a gigabyte on a long
+   * history and killed the app a few seconds into launch, so each one is fetched when its picture is
+   * on screen -- once, and kept for the session.
+   */
+  const urlOf = (im: Attachment) => im.url || (im.path ? loaded[im.path] || pictureCache.get(im.path) || '' : '')
+
+  useEffect(() => {
+    let alive = true
+    const missing = images.filter((im) => !im.url && !im.missing && im.path && !pictureCache.has(im.path as string))
+    if (!missing.length) return
+    void (async () => {
+      const found: Record<string, string> = {}
+      for (const im of missing) {
+        try {
+          const r = await window.zen.images.dataUrl(im.path as string)
+          if (r?.ok && r.url) {
+            if (pictureCache.size > 48) pictureCache.clear()
+            pictureCache.set(im.path as string, r.url)
+            found[im.path as string] = r.url
+          }
+        } catch {
+          /* leave it to show as missing */
+        }
+      }
+      if (alive && Object.keys(found).length) setLoaded((prev) => ({ ...prev, ...found }))
+    })()
+    return () => {
+      alive = false
+    }
+  }, [images])
+
   if (!images?.length) return null
   return (
     <>
       <div className={`flex flex-wrap gap-2 ${images.length ? 'mb-2' : ''}`} data-images>
         {images.map((im, i) =>
-          !im.url || im.missing ? (
+          !urlOf(im) || im.missing ? (
             <div
               key={i}
               data-image-missing
               className="flex h-24 w-44 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-[var(--rule)] px-3 text-center text-[11.5px] text-faint"
             >
               <ImageOff size={15} />
-              <span>Image file missing</span>
+              <span>{im.missing ? 'Image file missing' : im.path ? 'Loading picture…' : 'Image file missing'}</span>
               <span className="w-full truncate font-mono text-[10px] opacity-70">{im.name}</span>
             </div>
           ) : (
             <div key={i} className="group/img relative">
               <button
-                onClick={() => setZoom(im)}
+                onClick={() => setZoom({ ...im, url: urlOf(im) })}
                 className="block overflow-hidden rounded-xl border border-[var(--rule-soft)]"
               >
                 <img
-                  src={im.url}
+                  src={urlOf(im)}
                   alt={im.name || 'attachment'}
                   width={im.width || undefined}
                   height={im.height || undefined}

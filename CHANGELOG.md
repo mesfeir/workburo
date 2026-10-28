@@ -7,6 +7,13 @@ A version number is shared across platforms only once both have been built, so a
 version can appear here before it is downloadable. The **Released** line on each
 entry says whether there is anything to download, and for which platform.
 
+## 1.1.6 — 25 October 2026
+
+**The app no longer dies a few seconds after opening on a long history.** Pictures were being read
+from disk and turned into base64 for every image of every conversation, every time the store was
+read — hundreds of megabytes on a real history, and the process was killed building them. Pictures
+now load when they are on screen, once each, and startup costs nothing.
+
 ## 1.1.5 — 25 October 2026
 
 **No more pairing codes.** Press **Copy a pairing link** in Settings, Server and open that link on the

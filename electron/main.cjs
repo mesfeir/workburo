@@ -210,38 +210,7 @@ function stripInlineImages(store) {
 }
 
 /** read the bytes back for display; a missing file is surfaced, never hidden */
-function restoreInlineImages(store) {
-  // The agent names a file the way it wrote it, often "villa-night.png" rather than a full path, and
-  // reading that from the app's own folder failed and showed the picture as missing even though the
-  // file was written correctly. Try the path as given, then the workspace, then the documents folder.
-  const ws = (store?.config?.agent || {}).workspace
-  const tries = (p) => [
-    String(p),
-    path.join(imagesDir(), path.basename(String(p))),
-    ws ? path.resolve(ws, String(p)) : '',
-    path.resolve(documentsDir(), String(p)),
-  ].filter(Boolean)
-  for (const c of Array.isArray(store?.conversations) ? store.conversations : []) {
-    for (const m of c.messages || []) {
-      if (!Array.isArray(m.images)) continue
-      m.images = m.images.map((im) => {
-        if (!im || !im.path || im.url) return im
-        for (const candidate of tries(im.path)) {
-          try {
-            const buf = fs.readFileSync(candidate)
-            const ext = path.extname(candidate).slice(1).toLowerCase()
-            const mime = ext === 'png' ? 'png' : ext === 'webp' ? 'webp' : 'jpeg'
-            return { ...im, path: candidate, url: `data:image/${mime};base64,${buf.toString('base64')}` }
-          } catch {
-            /* try the next place it could be */
-          }
-        }
-        return { ...im, missing: true }
-      })
-    }
-  }
-  return store
-}
+
 
 function defaultStore() {
   return {
@@ -336,12 +305,19 @@ function readStore() {
     const stored = String(cfg.model || '')
     const tidied = localModel.tidyModelId(stored)
     if (tidied !== stored) cfg.model = tidied
-    return restoreInlineImages({
+    /*
+     * Pictures are left as files on disk. They used to be read and turned into base64 here, for every
+     * image of every conversation, every time the store was read -- which on a long history meant
+     * hundreds of megabytes of strings and a process that died a few seconds into launch with no
+     * message. Each picture is now read when it is actually shown (window.zen.images.dataUrl), so
+     * startup costs nothing and memory follows what is on screen.
+     */
+    return {
       config: cfg,
       conversations: Array.isArray(parsed.conversations) ? parsed.conversations : [],
       activeId: parsed.activeId || null,
       models: Array.isArray(parsed.models) ? parsed.models : [],
-    })
+    }
   } catch {
     return defaultStore()
   }
@@ -3561,9 +3537,28 @@ function fileToDataUrl (file) {
   return `data:${mime};base64,${bytes.toString('base64')}`
 }
 
+/*
+ * A message may name its picture the way the agent wrote it -- "villa-night.png" -- rather than a
+ * full path, so look where it could have landed before giving up. This is the resolution the eager
+ * loader used to do at startup; it now happens for one picture, when that picture is on screen.
+ */
+function resolveStoredImage(file) {
+  const name = String(file || '')
+  const ws = (readStore().config?.agent || {}).workspace
+  const tries = [name, path.join(imagesDir(), path.basename(name)), ws ? path.resolve(ws, name) : '', path.resolve(documentsDir(), name)].filter(Boolean)
+  for (const candidate of tries) {
+    try {
+      if (fs.statSync(candidate).isFile()) return candidate
+    } catch {
+      /* not here */
+    }
+  }
+  return name
+}
+
 ipcMain.handle('images:dataUrl', (_e, { path: file }) => {
   try {
-    return { ok: true, url: fileToDataUrl(file) }
+    return { ok: true, url: fileToDataUrl(resolveStoredImage(file)) }
   } catch (err) {
     return { ok: false, error: err?.message || 'That image could not be read.' }
   }
