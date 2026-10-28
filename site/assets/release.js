@@ -11,10 +11,10 @@ var WORKBURO_RELEASE = {
   files: {
     installer: { name: 'WorkBuro-Setup-1.1.6.exe',     bytes: 131077094 },
     portable:  { name: 'WorkBuro-1.1.6-portable.exe',  bytes: 130827874 },
-    /* 1.1.6 carries Windows only, so the Mac files keep their tag pin. Without it they would be
-     * looked for in `latest` and 404. Remove the pin when a release carries both platforms again. */
-    dmg:       { name: 'WorkBuro-1.1.5.dmg',           bytes: 155486620, tag: 'v1.1.5' },
-    maczip:    { name: 'WorkBuro-1.1.5-arm64-mac.zip', bytes: 155760176, tag: 'v1.1.5' }
+    /* Both platforms are in this release, so no file needs a tag pin: `latest` resolves to a
+     * release that carries every one of these. */
+    dmg:       { name: 'WorkBuro-1.1.6.dmg',           bytes: 155486788 },
+    maczip:    { name: 'WorkBuro-1.1.6-arm64-mac.zip', bytes: 155760262 }
   },
 
   /* What the app runs on, written into the structured data. Kept here so the page cannot drift
