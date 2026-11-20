@@ -179,7 +179,13 @@ export default function Composer({
   // something asked for the caret (a picture attached from the transcript): put it back in the
   // input, because the next thing typed is the instruction that changes that picture
   useEffect(() => {
-    if (focusNonce) ref.current?.focus()
+    if (!focusNonce) return
+    const el = ref.current
+    if (!el) return
+    el.focus()
+    // Whatever is already there, the next thing typed belongs at the end of it.
+    const end = el.value.length
+    el.setSelectionRange(end, end)
   }, [focusNonce])
 
   const canSend = (value.trim().length > 0 || images.length > 0 || documents.length > 0) && !disabled

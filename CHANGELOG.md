@@ -7,6 +7,12 @@ A version number is shared across platforms only once both have been built, so a
 version can appear here before it is downloadable. The **Released** line on each
 entry says whether there is anything to download, and for which platform.
 
+## 1.1.7 — 28 October 2026
+
+**Summoning the app puts the caret in the composer.** Alt+Space brings the window up ready to type:
+the input takes focus as it appears, with the caret at the end of anything already in it, so the next
+keystroke is the first word of the question rather than a click.
+
 ## 1.1.6 — 25 October 2026
 
 **The app no longer dies a few seconds after opening on a long history.** Pictures were being read

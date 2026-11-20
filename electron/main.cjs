@@ -509,7 +509,16 @@ function showWindow() {
   if (win.isMinimized()) win.restore()
   win.show()
   win.focus()
-}
+  // The app is summoned to type into, not to look at: hand the caret straight to the composer.
+  // A window that is still loading queues the message until its renderer exists.
+  const nudge = () => {
+    try {
+      win.webContents.send('ui:action', 'focus-composer')
+    } catch {}
+  }
+  if (win.webContents.isLoading()) win.webContents.once('did-finish-load', nudge)
+  else nudge()
+  }
 
 function hideWindow() {
   if (win && !win.isDestroyed()) win.hide()

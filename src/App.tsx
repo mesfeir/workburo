@@ -1101,6 +1101,7 @@ export default function App() {
     const off = window.zen.app.onMenuAction((action) => {
       if (action === 'new-chat') newChat()
       if (action === 'settings') setSettingsOpen(true)
+      if (action === 'focus-composer') setFocusNonce((n) => n + 1)
     })
     return off
   }, [newChat])
